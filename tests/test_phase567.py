@@ -80,7 +80,7 @@ def fake_mail(monkeypatch):
     async def list_events(account, start, end, tz):
         from datetime import datetime, timedelta
         from zoneinfo import ZoneInfo
-        d = datetime.now(ZoneInfo(tz)).replace(hour=10, minute=0, second=0, microsecond=0)
+        d = datetime.now(ZoneInfo(tz)).replace(second=0, microsecond=0) + timedelta(minutes=5)   # always still ahead
         return [{"id": "e1", "account": "p", "provider": "google", "title": "Standup", "start": d.isoformat(), "end": (d + timedelta(minutes=30)).isoformat(), "all_day": False, "attendees": [], "location": ""},
                 {"id": "e2", "account": "p", "provider": "google", "title": "Overlap", "start": (d + timedelta(minutes=15)).isoformat(), "end": (d + timedelta(minutes=45)).isoformat(), "all_day": False, "attendees": [], "location": ""}]
 
@@ -198,6 +198,9 @@ def candles(n=200, start=1.08, step=0.0004):
 ORDERS = []
 
 
+DELETED: list[str] = []   # Cloudflare Workers removed during a test
+
+
 def router(req: httpx.Request) -> httpx.Response:
     h, path = req.url.host, req.url.path
     if h == "opensky-network.org":
@@ -235,6 +238,8 @@ def router(req: httpx.Request) -> httpx.Response:
     if h == "api.cloudflare.com":
         if path.endswith("/workers/subdomain"):
             return httpx.Response(200, json={"result": {"subdomain": "mani"}})
+        if req.method == "DELETE":
+            DELETED.append(path.rsplit("/", 1)[-1])
         return httpx.Response(200, json={"success": True, "result": {}})
     if h == "api-fxpractice.oanda.com":
         if "/candles" in path:
@@ -309,6 +314,10 @@ def test_web_designer_pipeline(tmp_path, web_mock, monkeypatch):
     assert not o.store.kv_has("leads", "p2")                              # has a website: competitor, not a lead
     pitch = [a for a in o.store.pending_approvals() if a["payload"]["kind"] == "proposal"][0]
     assert "CAD 500" in pitch["payload"]["message"] and "pitch waiting" in o.bus.state["reports"]["web"]
+    DELETED.clear()                                                       # rejecting the pitch takes the demo offline
+    o.store.decide_approval(pitch["id"], "rejected")
+    assert "demo site removed" in asyncio.run(o.execute_approval(pitch["id"], "rejected"))
+    assert DELETED == ["demo-jesse-s-plumbing"] and "url" not in o.store.kv_get("leads", "p1")
 
 
 def test_trading_desk_rules_and_guards(tmp_path, web_mock, monkeypatch):

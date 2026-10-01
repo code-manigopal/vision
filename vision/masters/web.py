@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+from urllib.parse import urlparse
 
 from ..agents import AgentResult, SubAgent, request_approval
 from ..config import ROOT, secret
@@ -192,11 +193,26 @@ class WebsiteBuilder(SubAgent):
         return AgentResult("done", f"{built} BUILT", f"Built {built} demo sites")
 
 
+async def remove_demo(url: str) -> bool:
+    """Take a rejected demo offline: delete its Worker. True when it is gone (or was never there)."""
+    tok, acct = secret("CLOUDFLARE_API_TOKEN"), secret("CLOUDFLARE_ACCOUNT_ID")
+    name = (urlparse(url).hostname or "").split(".")[0]
+    if not (tok and acct and name.startswith("demo-")):
+        return False
+    async with httpx.AsyncClient(timeout=40) as c:
+        r = await c.delete(f"https://api.cloudflare.com/client/v4/accounts/{acct}/workers/scripts/{name}",
+                           headers={"Authorization": f"Bearer {tok}"}, params={"force": "true"})
+    return r.status_code in (200, 404)
+
+
 class CloudflareDeployer(SubAgent):
     name, tier, note = "Cloudflare Deployer", "API", "Workers demo URL"
 
     async def run(self, ctx):
         tok, acct, store = secret("CLOUDFLARE_API_TOKEN"), secret("CLOUDFLARE_ACCOUNT_ID"), ctx["store"]
+        for l in [l for l in store.kv_list("leads", limit=1000) if l.get("status") == "parked" and l.get("url")]:
+            if await remove_demo(l["url"]):   # rejected earlier, or the removal failed at the time
+                store.kv_put("leads", l["_key"], {k: v for k, v in l.items() if k not in ("_key", "_ts", "url")})
         todo = [l for l in ctx.get("leads", []) if l.get("site") and not l.get("url")]
         if not todo:
             return AgentResult("done", "UP TO DATE", "Nothing new to deploy")
@@ -252,8 +268,14 @@ async def approve_pitch(row: dict, decision: str, ctx: dict) -> str:
     l = store.kv_get("leads", p["lead"]) or {}
     if decision != "approved":
         l["status"] = "parked"
-        store.kv_put("leads", p["lead"], l)
-        return "parked"
+        try:
+            gone = await remove_demo(l.get("url") or p["url"])
+        except httpx.HTTPError:
+            gone = False
+        if gone:
+            l.pop("url", None)
+        store.kv_put("leads", p["lead"], l)   # a demo that couldn't be removed keeps its url; the deployer retries
+        return "parked · demo site removed" if gone else "parked · demo site still up, will retry"
     l["status"] = "pitched"
     store.kv_put("leads", p["lead"], l)
     ctx["bus"].notice(f"pitch:{p['lead']}", f"Pitch for {l.get('name', 'the business')} is approved: call {p.get('phone') or 'them'} or drop by. Message is on the dashboard.", p["url"])
