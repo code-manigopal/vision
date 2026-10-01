@@ -21,6 +21,7 @@ def _logging() -> None:
     sh.setFormatter(fmt)
     logging.basicConfig(level=logging.INFO, handlers=[fh, sh])
     logging.getLogger("apscheduler").setLevel(logging.WARNING)
+    logging.getLogger("httpx").setLevel(logging.WARNING)   # its INFO lines print full URLs, incl. the Telegram bot token
 
 
 def check() -> int:
