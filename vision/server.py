@@ -139,10 +139,14 @@ def create_app(*, boot_on_start: bool = True, schedules: bool = True, telegram_o
     @app.post("/api/tts")
     async def tts(item: dict):
         try:
-            wav = await app.state.tts.synth(item.get("text") or "")
+            wav = await app.state.tts.synth(item.get("text") or "", item.get("voice"))
         except VoiceUnavailable as e:
             raise HTTPException(503, str(e))
         return Response(wav, media_type="audio/wav")
+
+    @app.get("/api/voices")
+    async def voices():
+        return await asyncio.to_thread(app.state.tts.voices)
 
     @app.post("/api/stt")
     async def stt(request: Request):

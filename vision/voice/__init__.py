@@ -36,6 +36,10 @@ class VoiceUnavailable(Exception):
     pass
 
 
+# Kokoro voice id prefix -> (accent shown on the dashboard, phonemizer language)
+KOKORO_ENGLISH = {"bf_": ("UK", "en-gb"), "bm_": ("UK", "en-gb"), "af_": ("US", "en-us"), "am_": ("US", "en-us")}
+
+
 # ======================= speaking =======================
 class TTS:
     def __init__(self, vcfg: dict) -> None:
@@ -57,19 +61,35 @@ class TTS:
             return False
         return False
 
-    async def synth(self, text: str) -> bytes:
+    async def synth(self, text: str, voice: str | None = None) -> bytes:
         if not self.available():
             raise VoiceUnavailable(f"TTS engine '{self.engine}' isn't installed")
         async with self._lock:  # one voice at a time
-            return await asyncio.to_thread(self._synth, text[:1500])
+            return await asyncio.to_thread(self._synth, text[:1500], voice)
 
-    def _synth(self, text: str) -> bytes:
+    def _load_kokoro(self):
+        from kokoro_onnx import Kokoro
+        if self._kokoro is None:
+            self._kokoro = Kokoro(str(ROOT / self.cfg.get("kokoro_model", "models/kokoro-v1.0.onnx")),
+                                  str(ROOT / self.cfg.get("kokoro_voices", "models/voices-v1.0.bin")))
+        return self._kokoro
+
+    def voices(self) -> dict:
+        """The voices the dashboard may switch between: Kokoro's English ones (UK first), nothing for other engines."""
+        default = self.cfg.get("kokoro_voice", "bf_emma")
+        if self.engine != "kokoro" or not self.available():
+            return {"engine": self.engine, "current": None, "voices": []}
+        ids = sorted((v for v in self._load_kokoro().get_voices() if v[:3] in KOKORO_ENGLISH), key=lambda v: (list(KOKORO_ENGLISH).index(v[:3]), v))
+        return {"engine": "kokoro", "current": default,
+                "voices": [{"id": v, "name": v[3:].title(), "accent": KOKORO_ENGLISH[v[:3]][0], "gender": "F" if v[1] == "f" else "M"} for v in ids]}
+
+    def _synth(self, text: str, voice: str | None = None) -> bytes:
         if self.engine == "kokoro":
-            from kokoro_onnx import Kokoro
-            if self._kokoro is None:
-                self._kokoro = Kokoro(str(ROOT / self.cfg.get("kokoro_model", "models/kokoro-v1.0.onnx")),
-                                      str(ROOT / self.cfg.get("kokoro_voices", "models/voices-v1.0.bin")))
-            samples, sr = self._kokoro.create(text, voice=self.cfg.get("kokoro_voice", "bf_emma"), speed=float(self.cfg.get("speed", 1.0)), lang="en-gb")
+            k = self._load_kokoro()
+            if not voice or voice[:3] not in KOKORO_ENGLISH or voice not in k.get_voices():
+                voice = self.cfg.get("kokoro_voice", "bf_emma")
+            lang = KOKORO_ENGLISH.get(voice[:3], ("UK", "en-gb"))[1]
+            samples, sr = k.create(text, voice=voice, speed=float(self.cfg.get("speed", 1.0)), lang=lang)
             return _wav(samples, sr)
         with tempfile.TemporaryDirectory() as d:
             out = Path(d) / "out.wav"

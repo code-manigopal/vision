@@ -210,13 +210,13 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
   </div>
 
   <sc-if value="{{voiceMenuOn}}" hint-placeholder-val="{{ false }}">
-  <div class="glass" style="position: absolute; right: 28px; top: 78px; width: 330px; z-index: 45; pointer-events: auto; gap: 8px">
+  <div class="glass" style="position: absolute; right: 28px; top: 78px; width: {{voiceMenuW}}; z-index: 45; pointer-events: auto; gap: 8px">
     <div style="display: flex; justify-content: space-between; align-items: center">
       <span style="font-family: 'Michroma', sans-serif; font-size: 11px; letter-spacing: 2px; color: #FBCA03">VISION VOICE</span>
       <button class="qa" onClick="{{toggleVoiceMenu}}" style="height: 28px; font-size: 12px; padding: 0 10px">Done</button>
     </div>
     <div style="font-size: 12px; color: #C9C0AC">Now speaking as: <span style="color: #FBCA03; font-weight: 700">{{voiceNow}}</span></div>
-    <div style="display: flex; flex-direction: column; gap: 4px">
+    <div style="display: grid; grid-template-columns: {{voiceCols}}; gap: 4px">
       <sc-for list="{{voiceList}}" as="vo" hint-placeholder-count="5">
         <button class="{{vo.cls}}" onClick="{{vo.pick}}">
           <span style="flex-grow: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{vo.name}}</span>
@@ -941,7 +941,7 @@ class Component extends DCLogic {
   constructor(props) {
     super(props);
     this.state = { mode: 'ambient', master: 'trading', now: new Date(), tick: 0,
-      a: 0, voiceMenu: false, voices: [], voiceName: null, wx: true, page: 0, orbA: 0, orbHov: null, speaking: false, pulse: 0, boot: true, bootT: 0, rotLon: -40, rotLat: 22, drag: null, hov: null, mind: false, openT: 0, sel: 'root', cmd: '', listening: false, flash: '', flashUntil: 0,
+      a: 0, voiceMenu: false, voices: [], voiceName: null, kVoices: [], kVoice: null, wx: true, page: 0, orbA: 0, orbHov: null, speaking: false, pulse: 0, boot: true, bootT: 0, rotLon: -40, rotLat: 22, drag: null, hov: null, mind: false, openT: 0, sel: 'root', cmd: '', listening: false, flash: '', flashUntil: 0,
       cpu: 13, ram: 94, gpu: 2, vram: 16, music: true, confirmOff: false, off: null, offT: 0,
       log: [
         { t: '13:22', msg: 'Screenwriter · draft 2 of Episode 04 started' },
@@ -1536,6 +1536,7 @@ class Component extends DCLogic {
       if (st.boot && st.boot.active) Object.assign(patch, { boot: true, bootT: st.boot.done * 3 });
       else if (this.state.boot) patch.boot = false;   // already running: no roll call on a plain page load
       if (st.power && st.power.on === false) Object.assign(patch, { off: 'standby', boot: false });
+      if (st.voice && st.voice.tts) this.loadKokoroVoices();
       this.setState(patch);
     } else if (m.type === 'agent') {
       const ms = Object.assign({ agents: [] }, L.masters[m.master]);
@@ -1601,6 +1602,15 @@ class Component extends DCLogic {
       });
     } catch (e) {}
   }
+  async loadKokoroVoices() {
+    // Kokoro runs on the Mac: its voices replace the browser's list in the voice menu
+    try {
+      const r = await fetch('/api/voices'); const j = r.ok ? await r.json() : null;
+      if (!j || !j.voices || !j.voices.length) return;
+      let saved = null; try { saved = window.localStorage.getItem('vision-kokoro-voice'); } catch (e) {}
+      this.setState({ kVoices: j.voices, kVoice: j.voices.some((v) => v.id === saved) ? saved : j.current });
+    } catch (e) {}
+  }
   async speakLocal(text, after) {
     // Kokoro/Piper/macOS on the Mac mini; the rings follow the real audio loudness
     clearTimeout(this.speakTimer);
@@ -1608,7 +1618,7 @@ class Component extends DCLogic {
     const done = () => { this.setState({ speaking: false }); if (after) after(); };
     try {
       if (this.audioSrc) { try { this.audioSrc.stop(); } catch (e) {} }
-      const r = await fetch('/api/tts', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text }) });
+      const r = await fetch('/api/tts', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text, voice: this.state.kVoice || undefined }) });
       if (!r.ok) throw new Error('tts ' + r.status);
       const ac = this.audioCtx || (this.audioCtx = new (window.AudioContext || window.webkitAudioContext)());
       const buf = await ac.decodeAudioData(await r.arrayBuffer());
@@ -1781,6 +1791,7 @@ class Component extends DCLogic {
       g('GPU', s.gpu, 80),
       g('VRAM', s.vram, 85)
     ];
+    const kOn = !!(CON && s.live.voice && s.live.voice.tts && s.kVoices.length && !this.ttsFailed);
     const gaugeTag = liveSys ? 'LIVE' : CON ? 'WAITING' : '[DEMO DATA]';
     const msgs = [
       'Film Studio is scripting Episode 04.',
@@ -2452,14 +2463,17 @@ class Component extends DCLogic {
       readDraft: () => this.speak(this.draftText),
       voiceMenuOn: s.voiceMenu, voiceBtnCls: s.voiceMenu ? 'qa-on' : 'qa',
       toggleVoiceMenu: () => { if (!this.state.voices.length && this.loadVoices) this.loadVoices(); this.setState({ voiceMenu: !this.state.voiceMenu }); },
-      voiceNow: s.voiceName || 'browser default (no female voice found)',
+      voiceNow: kOn ? ((s.kVoices.find((v) => v.id === s.kVoice) || {}).name || s.kVoice) + ' · Kokoro' : s.voiceName || 'browser default (no female voice found)',
+      voiceMenuW: kOn ? '440px' : '330px', voiceCols: kOn ? 'repeat(3, minmax(0, 1fr))' : 'minmax(0, 1fr)',
       voiceList: (() => {
+        if (kOn) return s.kVoices.map((v) => ({ name: v.name, sub: v.accent + ' ' + v.gender, cls: v.id === s.kVoice ? 'vrow-on' : 'vrow',
+          pick: () => { try { window.localStorage.setItem('vision-kokoro-voice', v.id); } catch (e) {} this.setState({ kVoice: v.id }); setTimeout(() => this.speak('Hello Mani. This is my new voice.'), 30); } }));
         const fem = s.voices.filter((v) => v.female);
         const list = (fem.length ? fem : s.voices).slice(0, 8);
         return list.map((v) => ({ name: v.name, sub: v.lang + (v.female ? ' · female' : ''), cls: v.name === s.voiceName ? 'vrow-on' : 'vrow',
           pick: () => { try { window.localStorage.setItem('vision-voice', v.name); } catch (e) {} this.setState({ voiceName: v.name }); setTimeout(() => this.speak('Hello Mani. This is my new voice.'), 30); } }));
       })(),
-      voiceHint: s.voices.some((v) => v.female)
+      voiceHint: kOn ? 'Kokoro voices, generated on this Mac. UK and US English, female (F) and male (M).' : s.voices.some((v) => v.female)
         ? 'Tip: on the Mac, System Settings → Accessibility → Spoken Content → System voice → Manage Voices, then add Serena or Kate (Enhanced) for a more natural British female voice.'
         : 'No female English voice is installed in this browser. On the Mac: System Settings → Accessibility → Spoken Content → System voice → Manage Voices, add Serena or Kate, then reload.',
       testVoice: () => this.speak('Good ' + (new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening') + ', Mani. VISION is online. All masters are reporting.'),

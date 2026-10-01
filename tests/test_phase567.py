@@ -346,3 +346,28 @@ def test_trading_desk_rules_and_guards(tmp_path, web_mock, monkeypatch):
     monkeypatch.setenv("OANDA_ENV", "practice")
     assert asyncio.run(trading.approve_trade(row, "approved", ctx)).startswith("filled")
     assert ORDERS[-1]["order"]["type"] == "MARKET" and "stopLossOnFill" in ORDERS[-1]["order"]
+
+
+def test_kokoro_voices_are_listed_and_switchable(monkeypatch):
+    from vision import voice
+
+    class FakeKokoro:
+        used = []
+        def get_voices(self):
+            return ["af_heart", "am_adam", "bf_emma", "bm_george", "jf_alpha", "zf_xiaobei"]
+        def create(self, text, voice, speed, lang):
+            FakeKokoro.used.append((voice, lang))
+            return [0.0, 0.1], 24000
+
+    t = voice.TTS({"tts": "kokoro", "kokoro_voice": "bf_emma"})
+    monkeypatch.setattr(t, "available", lambda: True)
+    monkeypatch.setattr(t, "_load_kokoro", lambda: FakeKokoro())
+    monkeypatch.setattr(voice, "_wav", lambda samples, sr: b"wav")
+    v = t.voices()
+    assert [x["id"] for x in v["voices"]] == ["bf_emma", "bm_george", "af_heart", "am_adam"]      # English only, UK first
+    assert v["current"] == "bf_emma" and v["voices"][0] == {"id": "bf_emma", "name": "Emma", "accent": "UK", "gender": "F"}
+    asyncio.run(t.synth("hi", "am_adam"))            # a listed voice is used, with its own accent
+    asyncio.run(t.synth("hi", "jf_alpha"))           # anything else falls back to the configured voice
+    asyncio.run(t.synth("hi"))
+    assert FakeKokoro.used == [("am_adam", "en-us"), ("bf_emma", "en-gb"), ("bf_emma", "en-gb")]
+    assert voice.TTS({"tts": "browser"}).voices()["voices"] == []
