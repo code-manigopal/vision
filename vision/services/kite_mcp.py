@@ -16,7 +16,8 @@ from typing import Any
 
 log = logging.getLogger("vision.kite")
 KITE_URL = "https://mcp.kite.trade/mcp"
-LOGIN_RE = re.compile(r"https://kite\.zerodha\.com/connect/login[^\s)\"'<>\]]+")
+LOGIN_RE = re.compile(r"https://(?:kite\.zerodha\.com|kite\.trade)[^\s)\"'<>\]]+")
+ANY_URL = re.compile(r"https://[^\s)\"'<>\]]+")
 
 
 class KiteLoginNeeded(Exception):
@@ -35,6 +36,17 @@ def _parse_json(text: str) -> Any:
     except json.JSONDecodeError:
         m = re.search(r"(\[.*\]|\{.*\})", text, re.S)
         return json.loads(m.group(1)) if m else None
+
+
+_shared: "KiteMCP | None" = None
+
+
+def shared() -> "KiteMCP":
+    """One Kite session for the whole app: the login is tied to it, so the server routes reuse it."""
+    global _shared
+    if _shared is None:
+        _shared = KiteMCP()
+    return _shared
 
 
 class KiteMCP:
@@ -95,9 +107,8 @@ class KiteMCP:
         text = _text(res)
         data = None if getattr(res, "isError", False) else _parse_json(text)
         if data is None or (isinstance(data, dict) and not data.get("data") and "login" in text.lower()):
-            login = await self.call("login")
-            m = LOGIN_RE.search(_text(login))
-            raise KiteLoginNeeded(m.group(0) if m else None)
+            url, _ = await self.login_url()
+            raise KiteLoginNeeded(url)
         rows = data.get("data", data) if isinstance(data, dict) else data
         positions, value, day = [], 0.0, 0.0
         for x in rows or []:
@@ -111,6 +122,12 @@ class KiteMCP:
             positions.append({"symbol": f"{x.get('exchange', 'NSE')}:{x.get('tradingsymbol')}", "qty": qty, "value": mv,
                               "day": d, "cost": (x.get("average_price") or 0) * qty})
         return {"account": "Zerodha", "ccy": "INR", "value": value, "day": day, "positions": positions}
+
+    async def login_url(self) -> tuple[str | None, str]:
+        """Ask the MCP server for a fresh Kite login link. Returns (url, raw text)."""
+        text = _text(await self.call("login"))
+        m = LOGIN_RE.search(text) or ANY_URL.search(text)
+        return (m.group(0) if m else None), text
 
     async def close(self) -> None:
         if self._task:

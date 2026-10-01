@@ -130,6 +130,7 @@ def fake_factory(session):
 def invest_master(monkeypatch, tmp_path, logged_in=True, fyers_on=False):
     write_ws_csv(tmp_path / "inbox")
     monkeypatch.setattr(kite_mcp.KiteMCP, "_default_factory", staticmethod(fake_factory(FakeSession(logged_in))))
+    kite_mcp._shared = None   # fresh session per test
     monkeypatch.setattr(fyers, "TOKENS", tmp_path / "tokens.json")
     if fyers_on:
         monkeypatch.setenv("FYERS_APP_ID", "APP-100")
@@ -168,7 +169,7 @@ def test_invest_partial_setup_never_blocks(mocked, monkeypatch, tmp_path):
     st = {a["name"]: a for a in bus.state["masters"]["invest"]["agents"]}
     assert st["Zerodha Sync"]["label"] == "LOGIN"
     assert st["Fyers Sync"]["label"] == "NOT SET UP"
-    assert "kite.zerodha.com/connect/login" in bus.state["notices"]["kite"]["url"]
+    assert bus.state["notices"]["kite"]["url"].endswith("/auth/kite/login")
     assert st["Daily P&L Reporter"]["status"] == "done"
     assert "WS TFSA" in report and "waiting on: kite" in report
 

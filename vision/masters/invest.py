@@ -17,6 +17,7 @@ from ..agents import AgentResult, SubAgent
 from ..config import ROOT
 from ..services import fyers, markets, news
 from ..services import wealthsimple as ws
+from ..services import kite_mcp
 from ..services.kite_mcp import KiteLoginNeeded, KiteMCP
 
 
@@ -33,9 +34,9 @@ def pct(v: float | None) -> str:
 class ZerodhaSync(SubAgent):
     name, tier, note, blocking = "Zerodha Sync", "MCP", "via Kite MCP", False
 
-    def __init__(self, kite: KiteMCP, enabled: bool) -> None:
+    def __init__(self, kite: KiteMCP, enabled: bool, port: int) -> None:
         super().__init__()
-        self.kite, self.enabled = kite, enabled
+        self.kite, self.enabled, self.port = kite, enabled, port
 
     async def run(self, ctx):
         if not self.enabled:
@@ -43,7 +44,8 @@ class ZerodhaSync(SubAgent):
         try:
             acct = await self.kite.holdings()
         except KiteLoginNeeded as e:
-            ctx["bus"].notice("kite", "Zerodha login needed for holdings (valid for the day)", e.url)
+            # always give a clickable button: the local route fetches a fresh Kite link on demand
+            ctx["bus"].notice("kite", "Zerodha login needed for holdings (valid for the day)", f"http://127.0.0.1:{self.port}/auth/kite/login")
             return AgentResult("wait", "LOGIN", "Zerodha: waiting for your Kite login")
         ctx["bus"].clear_notice("kite")
         ctx.setdefault("accounts", []).append(acct)
@@ -295,9 +297,9 @@ def build_agents(options: dict[str, Any], cfg=None) -> dict[str, SubAgent]:
     port = cfg.vision.port if cfg else 8765
     brokers = options.get("brokers") or {}
     inbox = ROOT / options.get("wealthsimple_inbox", "inbox/wealthsimple")
-    kite = KiteMCP()
+    kite = kite_mcp.shared()
     return {
-        "Zerodha Sync": ZerodhaSync(kite, brokers.get("zerodha", True)),
+        "Zerodha Sync": ZerodhaSync(kite, brokers.get("zerodha", True), port),
         "Fyers Sync": FyersSync(port),
         "Wealthsimple Sync": WealthsimpleSync(inbox, int(options.get("csv_stale_days", 7))),
         "Portfolio Aggregator": PortfolioAggregator(),

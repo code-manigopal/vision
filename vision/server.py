@@ -20,7 +20,7 @@ from .ask import AskEngine
 from .orchestrator import Orchestrator
 from .voice import STT, TTS, VoiceUnavailable, WakeWord
 from .channels.telegram import TelegramChannel
-from .services import fyers, oauth, traffic_api
+from .services import fyers, kite_mcp, oauth, traffic_api
 
 log = logging.getLogger("vision")
 DASH = ROOT / "dashboard"
@@ -81,6 +81,23 @@ def create_app(*, boot_on_start: bool = True, schedules: bool = True, telegram_o
         app.state.bus.say("Fyers connected")
         asyncio.create_task(app.state.orch.run_master("invest", "login"))
         return HTMLResponse(_page("Fyers connected ✓", "You can close this tab. VISION is refreshing your holdings."))
+
+    @app.get("/auth/kite/login")
+    async def kite_login():
+        """Zerodha's login belongs to VISION's own Kite MCP session, so we fetch the link live."""
+        try:
+            url, text = await kite_mcp.shared().login_url()
+        except Exception as e:
+            return HTMLResponse(_page("Couldn't reach Zerodha", f"The Kite MCP server didn't answer: {e}<br>Try again in a moment."), 502)
+        if url:
+            return RedirectResponse(url)
+        return HTMLResponse(_page("No login link came back", f"Kite replied:<br><pre style='white-space:pre-wrap'>{text[:800]}</pre>"), 502)
+
+    @app.get("/auth/kite/done")
+    async def kite_done():
+        app.state.bus.clear_notice("kite")
+        asyncio.create_task(app.state.orch.run_master("invest", "login"))
+        return HTMLResponse(_page("Thanks ✓", "Refreshing your Zerodha holdings now."))
 
     @app.get("/auth/{provider}/login")
     async def oauth_login(provider: str, account: str):
