@@ -123,7 +123,7 @@ masters:
 
 voice:                     # local voice (install requirements-voice.txt); browser = use the browser's voice
   tts: kokoro              # kokoro | piper | macos | browser
-  kokoro_voice: bf_emma
+  kokoro_voice: af_heart
   kokoro_model: models/kokoro-v1.0.onnx
   kokoro_voices: models/voices-v1.0.bin
   macos_voice: Serena
