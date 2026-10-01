@@ -171,6 +171,8 @@ class Orchestrator:
         try:
             result = await handler(row, decision, ctx)
             self.bus.say(f"{row['title']} → {result}")
+            if ctx.get("rerun"):   # the handler asked for a fresh cycle (Web Designer refills its stack of demos)
+                self._refill = asyncio.create_task(self.run_master(row["master"], "refill"))
             return result
         except Exception as e:
             log.exception("approval action failed")

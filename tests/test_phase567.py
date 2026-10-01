@@ -402,3 +402,40 @@ def test_color_theme_from_colorhunt():
             assert _contrast(rgb(th["accent"]), rgb(th["text"])) >= 4.3
     assert pick_theme({"id": "a", "type": "cafe"}) == pick_theme({"id": "a", "type": "cafe"})
     assert pick_theme({"id": "a", "type": "cafe"}, ["neon"]) != pick_theme({"id": "a", "type": "cafe"})
+
+
+def test_web_designer_stack_and_late_deploy(tmp_path, web_mock, monkeypatch):
+    import vision.masters.web as web
+    monkeypatch.setenv("GOOGLE_MAPS_API_KEY", "x")
+    for k in ("CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"):
+        monkeypatch.delenv(k, raising=False)
+    monkeypatch.setattr(web, "ROOT", tmp_path)
+    full = orch_with(tmp_path / "full", {"web": MasterConfig(mode="live", options={"business_types": ["plumber"], "stack": 0})})
+    asyncio.run(full.run_master("web"))
+    assert not full.store.kv_has("leads", "p1")                           # the stack is full: no new lead taken
+    o = orch_with(tmp_path, {"web": MasterConfig(mode="live", options={"business_types": ["plumber"]})})
+    asyncio.run(o.run_master("web"))
+    assert o.store.kv_get("leads", "p1")["status"] == "built"             # no Cloudflare keys yet
+    month = "places-search-" + time.strftime("%Y-%m")
+    used = o.store.kv_get("web_state", month)["n"]
+    assert o.store.kv_has("web_searched", "plumber@50")                   # one lead for five slots: the search widened to its limit
+    assert not full.store.kv_has("web_state", month)                      # a full stack makes no Places searches
+    for k in ("CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"):
+        monkeypatch.setenv(k, "x")
+    asyncio.run(o.run_master("web"))                                      # the built lead is picked up again
+    assert o.store.kv_get("leads", "p1")["status"] == "pitch_ready"
+    assert o.store.kv_get("web_state", month)["n"] == used                # nothing is searched twice within research_days
+    tight = orch_with(tmp_path / "tight", {"web": MasterConfig(mode="live", options={"places_monthly_budget": 3})})
+    asyncio.run(tight.run_master("web"))
+    assert tight.store.kv_get("web_state", month)["n"] == 3 and "web:places-budget" in tight.bus.state["notices"]
+    capped = orch_with(tmp_path / "capped", {"web": MasterConfig(mode="live", options={"builds_per_day": 0})})
+    asyncio.run(capped.run_master("web"))
+    assert not capped.store.kv_has("leads", "p1")                         # today's build allowance is used up
+    pitch = [a for a in o.store.pending_approvals() if a["payload"]["kind"] == "proposal"][0]
+    o.store.decide_approval(pitch["id"], "approved")
+
+    async def decide():
+        await o.execute_approval(pitch["id"], "approved")
+        await o._refill                                                   # approving frees a slot and refills at once
+    asyncio.run(decide())
+    assert o.store.kv_get("leads", "p1")["status"] == "pitched"

@@ -48,6 +48,10 @@ THEMES = {
     "hair_care": ["vintage", "dark", "gold", "retro"], "restaurant": ["warm", "food", "fall", "earth"],
     "cafe": ["coffee", "cream", "earth", "vintage"], "car_repair": ["dark", "night", "retro", "neon"],
     "dentist": ["light", "cold", "sky", "sea"], "bakery": ["cream", "food", "warm", "pastel"],
+    "nail_salon": ["pastel", "wedding", "cream", "spring"], "hair_salon": ["pastel", "skin", "cream", "vintage"], "barber_shop": ["vintage", "dark", "gold", "retro"],
+    "spa": ["cream", "nature", "sea", "light"], "florist": ["spring", "nature", "pastel", "happy"], "gym": ["neon", "dark", "night", "retro"],
+    "child_care_agency": ["kids", "happy", "pastel"], "bed_and_breakfast": ["sea", "nature", "vintage", "earth"], "meal_takeaway": ["warm", "food", "fall", "earth"],
+    "veterinary_care": ["nature", "happy", "light"], "pet_store": ["happy", "nature", "kids"], "jewelry_store": ["gold", "dark", "wedding"],
 }
 _palettes: list[dict] | None = None
 
@@ -148,6 +152,34 @@ def clean_brief(raw: Any, lead: dict) -> dict:
     return {**b, "keywords": kw or b["keywords"]}
 
 
+# other kinds of local business the finder moves on to (Places API type names)
+MORE_TYPES = ["plumber", "beauty_salon", "hair_care", "restaurant", "cafe", "car_repair", "bakery", "electrician", "roofing_contractor", "painter", "locksmith",
+              "moving_company", "barber_shop", "hair_salon", "nail_salon", "spa", "florist", "laundry", "car_wash", "veterinary_care", "pet_store", "dentist",
+              "physiotherapist", "gym", "clothing_store", "jewelry_store", "furniture_store", "hardware_store", "bicycle_store", "book_store", "gift_shop",
+              "child_care_agency", "tailor", "real_estate_agency", "insurance_agency", "accounting", "lawyer", "travel_agency", "bed_and_breakfast",
+              "meal_takeaway", "funeral_home", "storage"]
+def places_budget(store, opts: dict, kind: str, peek: bool = False) -> int:
+    """Count one Google Places call of this kind ("search" | "details") against this month's budget.
+    Returns 0 when the budget is spent (don't call); with peek, just the budget."""
+    cap = int(opts.get("places_monthly_budget", 800))
+    if peek:
+        return cap
+    key = f"places-{kind}-{time.strftime('%Y-%m')}"
+    n = int((store.kv_get("web_state", key) or {}).get("n", 0))
+    if n >= cap:
+        return 0
+    store.kv_put("web_state", key, {"n": n + 1})
+    return n + 1
+
+
+ACTIVE = ("new", "researched", "built", "deployed", "pitch_ready")   # leads that hold a place in the stack
+
+
+def todo(ctx: dict) -> list[dict]:
+    """Leads that still need a site built."""
+    return [l for l in ctx.get("leads", []) if not l.get("site")]
+
+
 def slug(s: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", s.lower()).strip("-")[:40]
 
@@ -159,27 +191,73 @@ class BusinessFinder(SubAgent):
         key, opts, store = secret("GOOGLE_MAPS_API_KEY"), ctx["options"], ctx["store"]
         if not key:
             return AgentResult("idle", "NOT SET UP", "Web Designer: add GOOGLE_MAPS_API_KEY to .env")
-        home = ctx["cfg"].vision.home_city
+        home, bus = ctx["cfg"].vision.home_city, ctx.get("bus")
+        # keep `stack` demos in play (being built, live, or waiting for a decision); a decided pitch frees a slot.
+        # At most builds_per_day new leads are taken in a day, however fast pitches are decided.
+        active = [l for l in store.kv_list("leads", limit=1000) if l.get("status") in ACTIVE]
+        today = "taken-" + time.strftime("%Y-%m-%d")
+        taken = int((store.kv_get("web_state", today) or {}).get("n", 0))
+        need = max(0, min(int(opts.get("stack", 5)) - len(active), int(opts.get("builds_per_day", 5)) - taken))
+        # business_types are tried first; then any other kind of local business, unless any_type is false
+        types = list(opts.get("business_types") or [])
+        types += [t for t in MORE_TYPES if t not in types] if opts.get("any_type", True) else []
+        # Places calls are billed past a free monthly allowance, so: every no-website business a search returns is kept
+        # in a pool (`candidates`) and the stack refills from the pool first; a (type, radius) search isn't repeated
+        # for research_days; and searching stops at places_monthly_budget calls a month.
+        pool = lambda: store.kv_list("candidates", limit=5000)
+        radius, top, fresh_for = float(opts.get("radius_km", 10)), float(opts.get("max_radius_km", 50)), float(opts.get("research_days", 30)) * 86400
+        calls, capped = 0, False
         async with httpx.AsyncClient(timeout=25) as c:
-            g = await weather.geocode(c, home)
-            found, competitors = [], []
-            for t in opts.get("business_types", ["plumber", "beauty_salon", "restaurant", "cafe", "hair_care", "car_repair"]):
-                r = await c.post(PLACES, headers={"X-Goog-Api-Key": key, "X-Goog-FieldMask": FIELDS}, json={
-                    "includedTypes": [t], "maxResultCount": 20, "locationRestriction": {"circle": {
-                        "center": {"latitude": g["latitude"], "longitude": g["longitude"]}, "radius": float(opts.get("radius_km", 10)) * 1000}}})
-                r.raise_for_status()
-                for p in r.json().get("places", []):
-                    site = p.get("websiteUri", "")
-                    item = {"id": p["id"], "name": p["displayName"]["text"], "type": t, "type_label": (p.get("primaryTypeDisplayName") or {}).get("text", t),
-                            "address": p.get("formattedAddress", ""), "phone": p.get("nationalPhoneNumber", ""), "rating": p.get("rating"),
-                            "reviews": p.get("userRatingCount"), "website": site}
-                    (found if not site or SOCIAL.search(site) else competitors).append(item)
-        new = [p for p in found if not store.kv_has("leads", p["id"])][: int(opts.get("max_new_leads", 3))]
+            g = None
+            while len(pool()) < need and not capped:
+                for t in types:
+                    seen = store.kv_get("web_searched", f"{t}@{radius:g}")
+                    if seen and time.time() - seen["at"] < fresh_for:
+                        continue
+                    if not places_budget(store, opts, "search"):
+                        capped = True
+                        break
+                    g = g or await weather.geocode(c, home)
+                    r = await c.post(PLACES, headers={"X-Goog-Api-Key": key, "X-Goog-FieldMask": FIELDS}, json={
+                        "includedTypes": [t], "maxResultCount": 20, "locationRestriction": {"circle": {
+                            "center": {"latitude": g["latitude"], "longitude": g["longitude"]}, "radius": radius * 1000}}})
+                    calls += 1
+                    store.kv_put("web_searched", f"{t}@{radius:g}", {"at": time.time()})
+                    if r.status_code == 400:      # a type this API doesn't know: skip it
+                        continue
+                    r.raise_for_status()
+                    for p in r.json().get("places", []):
+                        site = p.get("websiteUri", "")
+                        item = {"id": p["id"], "name": p["displayName"]["text"], "type": t, "type_label": (p.get("primaryTypeDisplayName") or {}).get("text", t),
+                                "address": p.get("formattedAddress", ""), "phone": p.get("nationalPhoneNumber", ""), "rating": p.get("rating"),
+                                "reviews": p.get("userRatingCount"), "website": site}
+                        if site and not SOCIAL.search(site):
+                            store.kv_put("rivals", p["id"], item)
+                        elif not store.kv_has("leads", p["id"]) and not store.kv_has("candidates", p["id"]):
+                            store.kv_put("candidates", p["id"], item)
+                    if len(pool()) >= need:
+                        break
+                if len(pool()) >= need or radius >= top:
+                    break
+                radius = min(radius * 2, top)
+        if bus:
+            if capped:
+                bus.notice("web:places-budget", f"Web Designer paused its search: this month's Google Places budget ({places_budget(store, opts, 'search', peek=True)} calls) is used up. It resumes next month.")
+            else:
+                bus.clear_notice("web:places-budget")
+        waiting = pool()
+        new = [{k: v for k, v in p.items() if k not in ("_key", "_ts")} for p in waiting[::-1][:need]]   # oldest finds first
+        for p in new:
+            store.kv_delete("candidates", p["id"])
+        if new:
+            store.kv_put("web_state", today, {"n": taken + len(new)})
+        found, competitors = waiting, store.kv_list("rivals", limit=2000)
         for p in new:
             store.kv_put("leads", p["id"], {**p, "status": "new"})
-        ctx["leads"] = [l for l in store.kv_list("leads") if l.get("status") in ("new", "researched")][:3]
+        # unfinished leads go down the chain again, so one built before Cloudflare was set up still gets deployed
+        ctx["leads"] = [l for l in store.kv_list("leads", limit=1000) if l.get("status") in ("new", "researched", "built")]
         ctx["competitors"] = competitors
-        return AgentResult("done", f"{len(new)} NEW", f"{len(found)} businesses without a site · {len(new)} new leads",
+        return AgentResult("done", f"{len(new)} NEW", f"{len(new)} new leads · {len(active) + len(new)} in the stack · {len(found) - len(new)} more in the pool · {calls} Places searches",
                            {"leads": [{"name": l["name"], "type": l["type_label"]} for l in ctx["leads"]]})
 
 
@@ -189,8 +267,8 @@ class InformationCollector(SubAgent):
     async def run(self, ctx):
         key, store = secret("GOOGLE_MAPS_API_KEY"), ctx["store"]
         async with httpx.AsyncClient(timeout=20) as c:
-            for l in ctx.get("leads", []):
-                if l.get("info"):
+            for l in todo(ctx):
+                if l.get("info") or not places_budget(store, ctx["options"], "details"):
                     continue
                 r = await c.get(f"https://places.googleapis.com/v1/places/{l['id']}", headers={"X-Goog-Api-Key": key,
                                 "X-Goog-FieldMask": "regularOpeningHours.weekdayDescriptions,editorialSummary,googleMapsUri,reviews.text.text,reviews.rating,reviews.authorAttribution.displayName"})
@@ -201,7 +279,7 @@ class InformationCollector(SubAgent):
                              "reviews": [{"text": x.get("text", {}).get("text", "")[:400], "rating": x.get("rating"),
                                           "author": (x.get("authorAttribution") or {}).get("displayName", "")} for x in d.get("reviews", [])][:5]}
                 store.kv_put("leads", l["id"], {k: v for k, v in l.items() if k not in ("_key", "_ts")})
-        return AgentResult("done", "COLLECTED", f"Details for {len(ctx.get('leads', []))} leads")
+        return AgentResult("done", "COLLECTED", f"Details for {len(todo(ctx))} leads")
 
 
 class CompetitorAnalyst(SubAgent):
@@ -209,7 +287,7 @@ class CompetitorAnalyst(SubAgent):
 
     async def run(self, ctx):
         llm, notes, briefs = ctx.get("llm"), {}, {}
-        for l in ctx.get("leads", []):
+        for l in todo(ctx):
             rivals = [c for c in ctx.get("competitors", []) if c["type"] == l["type"] and c["website"]][:3]
             texts = []
             async with httpx.AsyncClient(timeout=15, follow_redirects=True) as c:
@@ -277,7 +355,7 @@ class ImagesDownloader(SubAgent):
     async def run(self, ctx):
         imgs, want = {}, int(ctx["options"].get("images_per_site", 6))
         async with httpx.AsyncClient(timeout=30) as c:
-            for l in ctx.get("leads", []):
+            for l in todo(ctx):
                 kws = (ctx.get("briefs", {}).get(l["id"]) or default_brief(l))["keywords"]
                 found = [await search_images(c, q) for q in kws[:5]]
                 picked, seen = [], set()
@@ -300,7 +378,7 @@ class ColorThemeDecider(SubAgent):
     async def run(self, ctx):
         over = ctx["options"].get("palette_themes") or {}
         mood = lambda l: (ctx.get("briefs", {}).get(l["id"]) or {}).get("mood")
-        themes = {l["id"]: pick_theme(l, over.get(l["type"]) or mood(l)) for l in ctx.get("leads", [])}
+        themes = {l["id"]: pick_theme(l, over.get(l["type"]) or mood(l)) for l in todo(ctx)}
         ctx["themes"] = themes
         return AgentResult("done", "PICKED", f"{len(themes)} palettes")
 
@@ -441,10 +519,12 @@ async def approve_pitch(row: dict, decision: str, ctx: dict) -> str:
         if gone:
             l.pop("url", None)
         store.kv_put("leads", p["lead"], l)   # a demo that couldn't be removed keeps its url; the deployer retries
+        ctx["rerun"] = True                   # a slot is free: build the next demo now
         return "parked · demo site removed" if gone else "parked · demo site still up, will retry"
     l["status"] = "pitched"
     store.kv_put("leads", p["lead"], l)
     ctx["bus"].notice(f"pitch:{p['lead']}", f"Pitch for {l.get('name', 'the business')} is approved: call {p.get('phone') or 'them'} or drop by. Message is on the dashboard.", p["url"])
+    ctx["rerun"] = True
     store.kv_put("pitches", p["lead"], {"message": p["message"], "url": p["url"], "phone": p.get("phone"), "at": time.time()})
     return "approved: message ready to send by phone or in person"
 

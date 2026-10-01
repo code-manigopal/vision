@@ -25,7 +25,9 @@ STYLES = {
                   "body": '"Source Sans 3","Segoe UI",system-ui,sans-serif', "weight": "500", "hero": "full", "services": "menu", "radius": "6px", "btn": "4px", "frame": "6px", "script": ""},
 }
 STYLE_BY_TYPE = {"beauty_salon": "luxe", "hair_care": "editorial", "restaurant": "editorial", "cafe": "sunny", "bakery": "sunny",
-                 "plumber": "trade", "car_repair": "trade", "dentist": "trade"}
+                 "plumber": "trade", "car_repair": "trade", "dentist": "trade",
+                 "nail_salon": "luxe", "hair_salon": "luxe", "spa": "luxe", "jewelry_store": "luxe", "barber_shop": "editorial", "bed_and_breakfast": "editorial",
+                 "meal_takeaway": "sunny", "florist": "sunny", "child_care_agency": "sunny", "pet_store": "sunny", "gift_shop": "sunny"}
 
 CSS = """
 :root{--p:[[primary]];--a:[[accent]];--bg:[[bg]];--t:[[text]];

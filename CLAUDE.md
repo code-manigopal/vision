@@ -128,6 +128,12 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   Adzuna, Greenhouse/Lever/Ashby boards. Never auto-applies; never invents resume content.
 - Web Designer images: free stock (Pexels, Pixabay) then Openverse, downloaded as .webp and credited on the page; never
   Google Maps photos or AI-generated images. Unsplash is out (its API forbids rehosting). Pitches need approval.
+- Web Designer keeps a stack of 5 demos in play (`options.stack`): being built, live, or awaiting a decision.
+  Approving or rejecting a pitch frees a slot and triggers a refill run straight away. When the area runs short of
+  new businesses it moves on to other business types (`MORE_TYPES`, after `business_types`), then the search radius doubles by itself (`radius_km` up to `max_radius_km`, default 50).
+- Web Designer stays inside Google Places' free allowance: at most `builds_per_day` (5) new leads a day; every no-website business a search returns goes into a pool
+  (kv `candidates`) that refills the stack with no API call; a (type, radius) search isn't repeated for 30 days
+  (kv `web_searched`); and calls stop at `places_monthly_budget` (800) a month with a dashboard notice.
 - Web Designer design: the model only writes JSON (design brief, copy); layout comes from `masters/site_template.py`
   (4 styles: luxe, sunny, trade, editorial), colours from `masters/palettes.json` (ColorHunt) via `pick_theme`.
 - Trading: practice account default; live needs OANDA_ENV=live AND options.live_trading: true;

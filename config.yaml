@@ -82,9 +82,11 @@ masters:
     mode: live
     cycle_minutes: 1440    # once a day
     options:
-      radius_km: 10
-      business_types: [plumber, beauty_salon, hair_care, restaurant, cafe, car_repair, bakery]
-      max_new_leads: 3
+      radius_km: 10          # starting search radius; doubles by itself (up to max_radius_km: 50) when leads run short
+      business_types: [plumber, beauty_salon, hair_care, restaurant, cafe, car_repair, bakery]   # tried first; then any other local business (any_type: false to stop that)
+      builds_per_day: 5            # new sites built per day at most
+      places_monthly_budget: 800   # Google Places calls allowed per month (searches and detail lookups counted separately)
+      stack: 5               # demos kept in play; approving or rejecting a pitch builds the next one
       price: "CAD 500"
       # images_per_site: 6
       # palette_themes: { hair_care: [vintage, gold], cafe: [coffee, cream] }   # ColorHunt themes per type; see vision/masters/skills/color-palettes.md
