@@ -159,7 +159,13 @@ def create_app(*, boot_on_start: bool = True, schedules: bool = True, telegram_o
 
     @app.post("/api/boot")
     async def reboot():
+        app.state.orch.wake()
         app.state.orch.start_boot()
+        return {"ok": True}
+
+    @app.post("/api/shutdown")
+    async def shutdown():
+        await app.state.orch.standby()
         return {"ok": True}
 
     @app.post("/api/masters/{master_id}/run")
@@ -167,6 +173,8 @@ def create_app(*, boot_on_start: bool = True, schedules: bool = True, telegram_o
         orch = app.state.orch
         if master_id not in orch.by_id:
             raise HTTPException(404, f"No master called {master_id}")
+        if orch.asleep:
+            raise HTTPException(409, "VISION is in standby")
         asyncio.create_task(orch.run_master(master_id, "manual"))
         return {"ok": True}
 
@@ -194,6 +202,8 @@ def create_app(*, boot_on_start: bool = True, schedules: bool = True, telegram_o
     async def decide(approval_id: int, decision: str):
         if decision not in ("approved", "rejected"):
             raise HTTPException(400, "decision must be approved or rejected")
+        if app.state.orch.asleep:
+            raise HTTPException(409, "VISION is in standby")
         row = app.state.store.decide_approval(approval_id, decision)
         if not row:
             raise HTTPException(409, "Already decided or not found")

@@ -30,6 +30,9 @@ class Orchestrator:
             m.services.update(cfg=cfg, llm=self.llm)
         self.handlers = approval_handlers()
         self._watch: asyncio.Task | None = None
+        self.asleep = False                       # standby: agents quiet, server and Telegram stay up
+        self._runs: set[asyncio.Task] = set()     # master cycles in flight, so standby can cancel them
+        self._parked: list[tuple[int, str]] = []  # approvals decided during standby, executed on wake
 
     # ---------- state the dashboard sees before anything runs ----------
     def seed_state(self) -> None:
@@ -85,7 +88,46 @@ class Orchestrator:
         self._watch = asyncio.create_task(self.watch_approvals())
 
     async def run_master(self, master_id: str, reason: str = "manual") -> str:
-        return await self.by_id[master_id].cycle(self.bus, self.store, reason=reason)
+        if self.asleep:
+            return "VISION is in standby"
+        task = asyncio.current_task()
+        self._runs.add(task)
+        try:
+            return await self.by_id[master_id].cycle(self.bus, self.store, reason=reason)
+        finally:
+            self._runs.discard(task)
+
+    # ---------- standby: stop everything that runs on its own, keep the server up ----------
+    async def standby(self) -> None:
+        if self.asleep:
+            return
+        self.asleep = True
+        self.bus.publish({"type": "power", "on": False})
+        if self.scheduler.running:
+            self.scheduler.pause()
+        tasks = [t for t in (self._boot_task, *self._runs) if t and not t.done()]
+        for t in tasks:
+            t.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        for m in self.masters:  # cancelled agents would otherwise stay "RUNNING"
+            cur = {a["name"]: a["status"] for a in self.bus.state["masters"].get(m.id, {}).get("agents", [])}
+            for a in m.agents:
+                if cur.get(a.name) == "work":
+                    self.bus.publish({"type": "agent", "master": m.id, "agent": m.agent_state(a, "idle", "STANDBY")})
+        if self.bus.state["boot"]["active"]:
+            self.bus.publish({"type": "boot", "active": False, "done": self.bus.state["boot"]["done"], "total": self.bus.state["boot"]["total"]})
+        self.bus.say("VISION in standby · all agents stopped")
+
+    def wake(self) -> None:
+        if not self.asleep:
+            return
+        self.asleep = False
+        if self.scheduler.running:
+            self.scheduler.resume()
+        self.bus.publish({"type": "power", "on": True})
+        parked, self._parked = self._parked, []
+        for aid, decision in parked:
+            asyncio.create_task(self.execute_approval(aid, decision))
 
     # ---------- briefs: only master reports go into it ----------
     def compose_brief(self) -> str:
@@ -109,7 +151,11 @@ class Orchestrator:
             while True:
                 e = await q.get()
                 if e.get("type") == "approval_decided":
-                    await self.execute_approval(e["id"], e["decision"])
+                    if self.asleep:  # decided via Telegram/Ask while in standby: run it on wake, not now
+                        self._parked.append((e["id"], e["decision"]))
+                        self.bus.say(f"Approval {e['id']} {e['decision']} · will run when VISION wakes")
+                    else:
+                        await self.execute_approval(e["id"], e["decision"])
         finally:
             self.bus.unsubscribe(q)
 

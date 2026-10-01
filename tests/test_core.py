@@ -120,6 +120,64 @@ def test_server_ws_and_api(tmp_path, monkeypatch):
             assert "agent" in kinds
 
 
+def _standby_app(monkeypatch, schedules):
+    monkeypatch.setenv("VISION_HOME", os.getcwd())
+    from vision.server import create_app
+    return create_app(boot_on_start=False, schedules=schedules, telegram_on=False, voice_on=False)
+
+
+@pytest.mark.parametrize("schedules", [False, True])
+def test_standby_and_wake(monkeypatch, schedules):
+    from apscheduler.schedulers.base import STATE_PAUSED, STATE_RUNNING
+    from fastapi.testclient import TestClient
+    with TestClient(_standby_app(monkeypatch, schedules)) as c:
+        sched = c.app.state.orch.scheduler
+        assert c.get("/api/state").json()["power"] == {"on": True}
+        with c.websocket_connect("/ws") as ws:
+            ws.receive_json()
+            assert c.post("/api/shutdown").json() == {"ok": True}
+            assert c.post("/api/shutdown").json() == {"ok": True}      # idempotent
+            seen = [ws.receive_json() for _ in range(2)]
+            assert seen[0] == {"type": "power", "on": False}
+            assert "standby" in seen[1]["msg"]
+            assert c.get("/api/state").json()["power"] == {"on": False}
+            if schedules:
+                assert sched.state == STATE_PAUSED
+            r = c.post("/api/masters/news/run")
+            assert r.status_code == 409 and r.json()["detail"] == "VISION is in standby"
+            assert c.post("/api/approvals/1/approved").status_code == 409
+            assert c.post("/api/boot").json() == {"ok": True}
+            assert ws.receive_json() == {"type": "power", "on": True}
+            assert c.get("/api/state").json()["power"] == {"on": True}
+            if schedules:
+                assert sched.state == STATE_RUNNING
+            assert c.post("/api/masters/news/run").status_code == 200
+
+
+def test_standby_cancels_running_cycle(store):
+    class Slow(SubAgent):
+        name = "Slow"
+
+        async def run(self, ctx):
+            await asyncio.sleep(60)
+
+    async def go():
+        bus = EventBus()
+        orch = Orchestrator(Config(), [Master("x", "X", [Stage("A", [Slow()])], reporter="Slow")], bus, store)
+        orch.seed_state()
+        run = asyncio.create_task(orch.run_master("x"))
+        await asyncio.sleep(0.05)
+        assert bus.state["masters"]["x"]["agents"][0]["status"] == "work"
+        await orch.standby()
+        assert run.cancelled() and not orch._runs
+        assert bus.state["masters"]["x"]["agents"][0]["label"] == "STANDBY"
+        assert await orch.run_master("x") == "VISION is in standby"
+        orch.wake()
+        assert bus.state["power"] == {"on": True}
+
+    asyncio.run(go())
+
+
 # ---- Instruments (vision/services/sysmon.py) ----
 
 def _sysmon(monkeypatch, system, machine, outputs):

@@ -21,7 +21,7 @@ class EventBus:
         self._subs: set[asyncio.Queue] = set()
         self.state: dict[str, Any] = {"masters": {}, "reports": {}, "boot": {"active": False, "done": 0, "total": 0},
                                       "approvals": [], "telegram": {"connected": False, "reason": "not started"},
-                                      "report_data": {}, "notices": {}}
+                                      "report_data": {}, "notices": {}, "power": {"on": True}}
         self.log: deque[dict] = deque(maxlen=50)
 
     def subscribe(self) -> asyncio.Queue:
@@ -77,6 +77,8 @@ class EventBus:
             self.state["notices"][e["key"]] = {k: e.get(k) for k in ("text", "url", "t")}
         elif kind == "notice_clear":
             self.state["notices"].pop(e["key"], None)
+        elif kind == "power":
+            self.state["power"] = {"on": e["on"]}
         elif kind == "boot":
             self.state["boot"] = {k: e[k] for k in ("active", "done", "total")}
         elif kind == "log":
