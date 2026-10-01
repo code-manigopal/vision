@@ -371,3 +371,17 @@ def test_kokoro_voices_are_listed_and_switchable(monkeypatch):
     asyncio.run(t.synth("hi"))
     assert FakeKokoro.used == [("am_adam", "en-us"), ("bf_emma", "en-gb"), ("bf_emma", "en-gb")]
     assert voice.TTS({"tts": "browser"}).voices()["voices"] == []
+
+
+def test_color_theme_from_colorhunt():
+    from vision.masters.web import _contrast, pick_theme
+    rgb = lambda h: tuple(int(h[i:i + 2], 16) for i in (1, 3, 5))
+    for t in ("plumber", "beauty_salon", "hair_care", "car_repair", "unknown_type"):
+        for i in range(25):
+            th = pick_theme({"id": f"lead-{i}", "type": t})
+            assert th.get("palette"), "palettes.json should be found"
+            assert _contrast(rgb(th["text"]), rgb(th["bg"])) >= 7
+            assert _contrast(rgb(th["primary"]), rgb(th["bg"])) >= 4.5
+            assert _contrast(rgb(th["accent"]), rgb(th["text"])) >= 4.5
+    assert pick_theme({"id": "a", "type": "cafe"}) == pick_theme({"id": "a", "type": "cafe"})
+    assert pick_theme({"id": "a", "type": "cafe"}, ["neon"]) != pick_theme({"id": "a", "type": "cafe"})

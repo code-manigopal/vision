@@ -13,6 +13,7 @@ import html
 import json
 import re
 import time
+import zlib
 from pathlib import Path
 from typing import Any
 
@@ -33,6 +34,66 @@ PALETTES = {
     "cafe": ("#5A3E2B", "#C9A27E", "#FBF6EF", "#2A1E15"), "car_repair": ("#1F2A36", "#E4572E", "#F5F6F8", "#11161C"),
     "dentist": ("#0F6F78", "#9ED9D6", "#F4FBFB", "#12302F"), "bakery": ("#A0522D", "#F3D29B", "#FFFAF2", "#2B1A10"),
 }
+
+
+# business type -> ColorHunt themes (see skills/color-palettes.md); config: options.palette_themes overrides per type
+THEMES = {
+    "plumber": ["cold", "sea", "sky", "light"], "beauty_salon": ["pastel", "skin", "wedding", "cream"],
+    "hair_care": ["vintage", "dark", "gold", "retro"], "restaurant": ["warm", "food", "fall", "earth"],
+    "cafe": ["coffee", "cream", "earth", "vintage"], "car_repair": ["dark", "night", "retro", "neon"],
+    "dentist": ["light", "cold", "sky", "sea"], "bakery": ["cream", "food", "warm", "pastel"],
+}
+_palettes: list[dict] | None = None
+
+
+def _lum(c: tuple) -> float:
+    r, g, b = [(v / 255 / 12.92) if v / 255 <= 0.03928 else ((v / 255 + 0.055) / 1.055) ** 2.4 for v in c]
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+def _contrast(a: tuple, b: tuple) -> float:
+    hi, lo = sorted((_lum(a), _lum(b)), reverse=True)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+def _mix(c: tuple, to: tuple, k: float) -> tuple:
+    return tuple(round(x + (y - x) * k) for x, y in zip(c, to))
+
+
+def _until(c: tuple, to: tuple, ok) -> tuple:
+    for _ in range(20):
+        if ok(c):
+            break
+        c = _mix(c, to, 0.15)
+    return c
+
+
+def theme_from(colors: list) -> dict:
+    """Four colours -> page roles, by luminance; adjusted until text, headings and buttons are readable."""
+    W, K = (255, 255, 255), (0, 0, 0)
+    cs = sorted((tuple(c) for c in colors), key=_lum)
+    text, bg = cs[0], _until(cs[3], W, lambda c: _lum(c) >= 0.8)
+    primary, accent = sorted(cs[1:3], key=lambda c: max(c) - min(c))
+    text = _until(text, K, lambda c: _contrast(c, bg) >= 7)
+    primary = _until(primary, K, lambda c: _contrast(c, bg) >= 4.5)
+    accent = _until(accent, W, lambda c: _contrast(c, text) >= 4.5)
+    return {k: "#%02X%02X%02X" % v for k, v in (("primary", primary), ("accent", accent), ("bg", bg), ("text", text))}
+
+
+def pick_theme(lead: dict, themes: list | None = None) -> dict:
+    """A ColorHunt palette for this lead: top 40 of its themes by likes, the same lead always gets the same one."""
+    global _palettes
+    if _palettes is None:
+        try:
+            _palettes = json.loads((Path(__file__).parent / "palettes.json").read_text())
+        except (OSError, ValueError):
+            _palettes = []
+    want = set(themes or THEMES.get(lead["type"], ["light", "cold"]))
+    pool = [p for p in _palettes if want & set(p["tags"])][:40]
+    if not pool:
+        return dict(zip(("primary", "accent", "bg", "text"), PALETTES.get(lead["type"], ("#1E3A5F", "#F2B134", "#F8F9FB", "#16202B"))))
+    p = pool[zlib.crc32(lead["id"].encode()) % len(pool)]
+    return {**theme_from(p["rgb"]), "palette": p["id"]}
 
 
 def slug(s: str) -> str:
@@ -130,10 +191,11 @@ class ImagesDownloader(SubAgent):
 
 
 class ColorThemeDecider(SubAgent):
-    name, tier, note, blocking = "Color Theme Decider", "QUICK", "palette by business type", False
+    name, tier, note, blocking = "Color Theme Decider", "QUICK", "ColorHunt palette by business type", False
 
     async def run(self, ctx):
-        themes = {l["id"]: dict(zip(("primary", "accent", "bg", "text"), PALETTES.get(l["type"], ("#1E3A5F", "#F2B134", "#F8F9FB", "#16202B")))) for l in ctx.get("leads", [])}
+        over = ctx["options"].get("palette_themes") or {}
+        themes = {l["id"]: pick_theme(l, over.get(l["type"])) for l in ctx.get("leads", [])}
         ctx["themes"] = themes
         return AgentResult("done", "PICKED", f"{len(themes)} palettes")
 
