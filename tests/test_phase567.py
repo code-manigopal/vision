@@ -179,6 +179,13 @@ def test_voice_endpoints_fall_back(monkeypatch):
     from fastapi.testclient import TestClient
     from vision.server import create_app
     monkeypatch.setenv("VISION_HOME", os.getcwd())
+    import vision.server as server
+    real = server.load_config
+    def browser_only():                       # whatever engines config.yaml turns on, this test is about the fallback
+        cfg = real()
+        cfg.voice = {**cfg.voice, "tts": "browser", "stt": "browser"}
+        return cfg
+    monkeypatch.setattr(server, "load_config", browser_only)
     with TestClient(create_app(boot_on_start=False, schedules=False, telegram_on=False, voice_on=False)) as c:
         assert c.post("/api/tts", json={"text": "hi"}).status_code == 503
         assert c.post("/api/stt", content=b"abc", headers={"content-type": "audio/webm"}).status_code == 503
