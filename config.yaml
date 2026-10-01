@@ -11,7 +11,7 @@ vision:
 
 llm:                       # Ask engine + every agent that writes or judges
   local_base_url: http://localhost:1234/v1   # LM Studio > Developer > Start server
-  local_model: ""                            # the model id LM Studio shows (a 7-8B instruct model with tool use)
+  local_model: "granite-4.1-8b"                            # the model id LM Studio shows (a 7-8B instruct model with tool use)
   cloud_provider: anthropic
   cloud_model: ""                            # e.g. a current Claude model id; needs ANTHROPIC_API_KEY in .env
 
