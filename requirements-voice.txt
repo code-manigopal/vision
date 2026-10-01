@@ -1,0 +1,6 @@
+# Optional local voice for the Mac mini (Apple Silicon). Also: brew install ffmpeg
+kokoro-onnx>=0.4     # natural speech (download kokoro-v1.0.onnx + voices-v1.0.bin into models/)
+soundfile>=0.12
+mlx-whisper>=0.4     # speech-to-text on Apple Silicon
+openwakeword>=0.6    # "Hey ..." wake word
+sounddevice>=0.4

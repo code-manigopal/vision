@@ -1,0 +1,137 @@
+# VISION settings (no secrets here; keys go in .env)
+
+vision:
+  owner: Mani
+  home_city: Leamington, ON
+  timezone: America/Toronto
+  host: 127.0.0.1          # localhost only
+  port: 8765               # dashboard: http://127.0.0.1:8765
+  brief_times: ["06:00", "18:00"]
+  cycle_minutes: 15        # default refresh for every master
+
+llm:                       # Ask engine + every agent that writes or judges
+  local_base_url: http://localhost:1234/v1   # LM Studio > Developer > Start server
+  local_model: ""                            # the model id LM Studio shows (a 7-8B instruct model with tool use)
+  cloud_provider: anthropic
+  cloud_model: ""                            # e.g. a current Claude model id; needs ANTHROPIC_API_KEY in .env
+
+# mode: stub = demo agents until that master is built · live = real agents
+# trust: OBSERVE | SUGGEST | ACT | HOLD
+masters:
+  email:
+    enabled: true
+    trust: SUGGEST         # reads and drafts; sends only after your OK
+    mode: live
+    cycle_minutes: 15
+    options:
+      accounts:            # one line per inbox; sign in once from the dashboard's Log in button
+        - { id: personal, provider: google }        # google | microsoft
+        # - { id: work, provider: microsoft }
+      tone: "warm, direct, concise"
+      signature: "Mani"
+      max_drafts_per_cycle: 3
+  calendar:
+    enabled: true
+    trust: SUGGEST
+    mode: live
+    cycle_minutes: 15
+    options:
+      accounts:            # same ids as email; calendar: false to skip one
+        - { id: personal, provider: google }
+      reminder_minutes: 15
+      default_meeting_minutes: 30
+      work_start: 9
+      work_end: 17
+  trading:
+    enabled: true
+    trust: OBSERVE         # every trade needs your approval
+    mode: live
+    cycle_minutes: 240
+    options:
+      instruments: ["EUR_USD"]
+      granularity: H4
+      risk_pct: 0.5        # of account NAV per trade
+      max_units: 1000
+      min_units: 100
+      approval_ttl_min: 30
+      live_trading: false  # practice account only until you set this true AND OANDA_ENV=live
+  invest:
+    enabled: true
+    trust: OBSERVE         # read-only: nothing here can trade
+    mode: live
+    options:
+      brokers: { zerodha: true }          # Fyers turns on when its keys are in .env
+      wealthsimple_inbox: inbox/wealthsimple
+      csv_stale_days: 7
+      targets: {}                         # optional, e.g. { india: 40, us: 40, crypto: 20 }
+  news:
+    enabled: true
+    trust: OBSERVE
+    mode: live
+    cycle_minutes: 30
+    options:
+      max_age_hours: 30
+      # topics: override any Google News search, e.g.
+      #   cricket: { query: "India cricket", edition: IN }
+      # extra_feeds: add publisher RSS feeds per topic, e.g.
+      #   politics: ["https://www.cbc.ca/webfeed/rss/rss-politics"]
+      weather: {}                         # defaults to home_city; or { city: "Leamington, ON", lat: 42.05, lon: -82.6 }
+  web:
+    enabled: true
+    trust: SUGGEST
+    mode: live
+    cycle_minutes: 1440    # once a day
+    options:
+      radius_km: 10
+      business_types: [plumber, beauty_salon, hair_care, restaurant, cafe, car_repair, bakery]
+      max_new_leads: 3
+      price: "CAD 500"
+  jobs:
+    enabled: true
+    trust: ACT
+    mode: live
+    cycle_minutes: 360
+    options:
+      target_titles: ["Data Analyst", "Data Analytics Engineer", "BI Developer", "Software Engineering Manager"]
+      skills: ["Python", "SQL", "Power BI", "Java", "Kubernetes", "CI/CD"]
+      locations: ["Windsor, ON", "Leamington, ON", "Toronto, ON", "Remote"]
+      seniority: ["mid", "senior", "lead"]
+      exclude: ["unpaid", "commission only"]
+      adzuna_where: Ontario
+      max_days_old: 3
+      min_match: 70
+      max_packages_per_cycle: 2
+      target_companies: []   # e.g. - { name: Shopify, ats: greenhouse, slug: shopify }   (ats: greenhouse | lever | ashby)
+  world:
+    enabled: true
+    trust: OBSERVE
+    mode: live
+    cycle_minutes: 5
+    options:
+      home: [42.05, -82.60]
+      max_flights: 60
+      near_km: 400
+      route_lookups: 25
+  traffic:
+    enabled: true
+    trust: OBSERVE
+    mode: live
+    cycle_minutes: 10
+    options:
+      watch_cities: ["Leamington, ON", "Windsor, ON"]
+  film:     { enabled: false, trust: HOLD,    mode: stub }   # on hold
+
+voice:                     # local voice (install requirements-voice.txt); browser = use the browser's voice
+  tts: browser             # kokoro | piper | macos | browser
+  kokoro_voice: bf_emma
+  kokoro_model: models/kokoro-v1.0.onnx
+  kokoro_voices: models/voices-v1.0.bin
+  macos_voice: Serena
+  stt: browser             # whisper | browser
+  whisper_model: mlx-community/whisper-small-mlx
+  wake: false              # true = listen for the wake word on the Mac's mic
+  wake_model: hey_jarvis   # built-in model; or a path to your own trained "hey viz" .onnx
+  wake_threshold: 0.5
+
+telegram:                  # token + chat ID live in .env; blank = Telegram stays off
+  alerts: true             # instant alerts for agent errors and approvals

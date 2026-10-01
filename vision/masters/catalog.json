@@ -1,0 +1,959 @@
+{
+ "order": [
+  "email",
+  "calendar",
+  "trading",
+  "invest",
+  "news",
+  "web",
+  "jobs",
+  "world",
+  "traffic",
+  "film"
+ ],
+ "masters": {
+  "email": {
+   "id": "email",
+   "name": "EMAIL MANAGER",
+   "agents": [
+    {
+     "name": "Reader",
+     "status": "done",
+     "label": "24 READ",
+     "tier": "API",
+     "note": "all inboxes \u00b7 last 24h"
+    },
+    {
+     "name": "Categorizer",
+     "status": "done",
+     "label": "SORTED",
+     "tier": "LOCAL",
+     "note": "action \u00b7 work \u00b7 finance \u00b7 promo"
+    },
+    {
+     "name": "Summarizer",
+     "status": "done",
+     "label": "DONE",
+     "tier": "LOCAL",
+     "note": "digest + needs attention"
+    },
+    {
+     "name": "Writer",
+     "status": "wait",
+     "label": "2 DRAFTS",
+     "tier": "CLOUD",
+     "note": "drafts in your tone"
+    },
+    {
+     "name": "Sender",
+     "status": "idle",
+     "label": "WAITING",
+     "tier": "API",
+     "note": "sends after approval"
+    }
+   ],
+   "stages": [
+    {
+     "title": "READ",
+     "agents": [
+      "Reader"
+     ],
+     "parallel": false
+    },
+    {
+     "title": "SORT",
+     "agents": [
+      "Categorizer"
+     ],
+     "parallel": false
+    },
+    {
+     "title": "SUMMARIZE",
+     "agents": [
+      "Summarizer"
+     ],
+     "parallel": false
+    },
+    {
+     "title": "DRAFT",
+     "agents": [
+      "Writer"
+     ],
+     "parallel": false
+    },
+    {
+     "title": "APPROVAL",
+     "agents": [],
+     "approval": true
+    },
+    {
+     "title": "SEND",
+     "agents": [
+      "Sender"
+     ],
+     "parallel": false
+    }
+   ],
+   "reporter": "Summarizer",
+   "demo_report": "24 new \u00b7 3 need you \u00b7 2 drafts",
+   "loop": false
+  },
+  "calendar": {
+   "id": "calendar",
+   "name": "CALENDAR MANAGER",
+   "agents": [
+    {
+     "name": "Calendar Reader",
+     "status": "done",
+     "label": "SYNCED",
+     "tier": "API",
+     "note": "all calendars"
+    },
+    {
+     "name": "Conflict Checker",
+     "status": "done",
+     "label": "NO CLASH",
+     "tier": "NONE",
+     "note": "double-bookings, travel time"
+    },
+    {
+     "name": "Scheduler",
+     "status": "wait",
+     "label": "CONFIRM",
+     "tier": "LOCAL",
+     "note": "finds slots, proposes times"
+    },
+    {
+     "name": "Reminder Agent",
+     "status": "work",
+     "label": "ARMED",
+     "tier": "NONE",
+     "note": "Telegram + voice reminders"
+    },
+    {
+     "name": "Email Liaison",
+     "status": "work",
+     "label": "LINKED",
+     "tier": "LOCAL",
+     "note": "works with Email Manager"
+    }
+   ],
+   "stages": [
+    {
+     "title": "SYNC",
+     "agents": [
+      "Calendar Reader"
+     ],
+     "parallel": false
+    },
+    {
+     "title": "CHECK",
+     "agents": [
+      "Conflict Checker"
+     ],
+     "parallel": false
+    },
+    {
+     "title": "PLAN",
+     "agents": [
+      "Scheduler",
+      "Reminder Agent"
+     ],
+     "parallel": true
+    },
+    {
+     "title": "COORDINATE",
+     "agents": [
+      "Email Liaison"
+     ],
+     "parallel": false
+    },
+    {
+     "title": "APPROVAL",
+     "agents": [],
+     "approval": true
+    }
+   ],
+   "reporter": "Scheduler",
+   "demo_report": "1 meeting today \u00b7 1 proposed from email",
+   "loop": false
+  },
+  "trading": {
+   "id": "trading",
+   "name": "TRADING DESK",
+   "agents": [
+    {
+     "name": "Market Analyst",
+     "status": "work",
+     "label": "ANALYZING",
+     "tier": "QUICK",
+     "note": "last EURUSD trend"
+    },
+    {
+     "name": "Sentiment Analyst",
+     "status": "done",
+     "label": "DONE",
+     "tier": "QUICK",
+     "note": "last USDJPY 216w"
+    },
+    {
+     "name": "News Analyst",
+     "status": "off",
+     "label": "OFF",
+     "tier": "QUICK",
+     "note": "OFF for this run"
+    },
+    {
+     "name": "Macro Analyst",
+     "status": "done",
+     "label": "DONE",
+     "tier": "QUICK",
+     "note": "last rates note"
+    },
+    {
+     "name": "Bull Researcher",
+     "status": "work",
+     "label": "DEBATING",
+     "tier": "QUICK",
+     "note": "last long case #1"
+    },
+    {
+     "name": "Bear Researcher",
+     "status": "work",
+     "label": "DEBATING",
+     "tier": "QUICK",
+     "note": "last short case #2"
+    },
+    {
+     "name": "Research Manager",
+     "status": "idle",
+     "label": "QUEUED",
+     "tier": "DEEP",
+     "note": "last Underweight"
+    },
+    {
+     "name": "Trader",
+     "status": "idle",
+     "label": "QUEUED",
+     "tier": "QUICK",
+     "note": "last Sell plan"
+    },
+    {
+     "name": "Aggressive Risk",
+     "status": "idle",
+     "label": "QUEUED",
+     "tier": "QUICK",
+     "note": "last size up"
+    },
+    {
+     "name": "Conservative Risk",
+     "status": "idle",
+     "label": "QUEUED",
+     "tier": "QUICK",
+     "note": "last size down"
+    },
+    {
+     "name": "Neutral Risk",
+     "status": "idle",
+     "label": "QUEUED",
+     "tier": "QUICK",
+     "note": "last hold size"
+    },
+    {
+     "name": "Portfolio Manager",
+     "status": "wait",
+     "label": "APPROVE",
+     "tier": "DEEP",
+     "note": "call: Underweight"
+    },
+    {
+     "name": "Reflection",
+     "status": "idle",
+     "label": "5D LATER",
+     "tier": "QUICK",
+     "note": "last lessons log"
+    },
+    {
+     "name": "OANDA Executor",
+     "status": "idle",
+     "label": "STANDBY",
+     "tier": "API",
+     "note": "last none today"
+    }
+   ],
+   "stages": [
+    {
+     "title": "ANALYSTS",
+     "agents": [
+      "Market Analyst",
+      "Sentiment Analyst",
+      "News Analyst",
+      "Macro Analyst"
+     ],
+     "parallel": true
+    },
+    {
+     "title": "RESEARCH DEBATE",
+     "agents": [
+      "Bull Researcher",
+      "Bear Researcher"
+     ],
+     "parallel": true
+    },
+    {
+     "title": "DEEP JUDGE",
+     "agents": [
+      "Research Manager"
+     ],
+     "parallel": false
+    },
+    {
+     "title": "EXECUTION PLAN",
+     "agents": [
+      "Trader"
+     ],
+     "parallel": false
+    },
+    {
+     "title": "RISK DEBATE",
+     "agents": [
+      "Aggressive Risk",
+      "Conservative Risk",
+      "Neutral Risk"
+     ],
+     "parallel": true
+    },
+    {
+     "title": "FINAL CALL",
+     "agents": [
+      "Portfolio Manager"
+     ],
+     "parallel": false
+    },
+    {
+     "title": "APPROVAL",
+     "agents": [],
+     "approval": true
+    },
+    {
+     "title": "EXECUTE",
+     "agents": [
+      "OANDA Executor"
+     ],
+     "parallel": false
+    },
+    {
+     "title": "REFLECT",
+     "agents": [
+      "Reflection"
+     ]
+    }
+   ],
+   "reporter": "Portfolio Manager",
+   "demo_report": "Final call awaiting approval",
+   "loop": false
+  },
+  "invest": {
+   "id": "invest",
+   "name": "INVESTMENTS",
+   "agents": [
+    {
+     "name": "Zerodha Sync",
+     "status": "done",
+     "label": "SYNCED",
+     "tier": "MCP",
+     "note": "via Kite MCP"
+    },
+    {
+     "name": "Fyers Sync",
+     "status": "done",
+     "label": "SYNCED",
+     "tier": "API",
+     "note": "via Fyers API"
+    },
+    {
+     "name": "Wealthsimple Sync",
+     "status": "wait",
+     "label": "NEEDS CSV",
+     "tier": "CSV",
+     "note": "drop CSVs in inbox"
+    },
+    {
+     "name": "Portfolio Aggregator",
+     "status": "done",
+     "label": "DONE",
+     "tier": "QUICK",
+     "note": "INR/USD \u2192 CAD"
+    },
+    {
+     "name": "Allocation Analyst",
+     "status": "idle",
+     "label": "QUEUED",
+     "tier": "DEEP",
+     "note": "target mix not set"
+    },
+    {
+     "name": "Risk Monitor",
+     "status": "work",
+     "label": "WATCHING",
+     "tier": "QUICK",
+     "note": "crypto vol check"
+    },
+    {
+     "name": "Market Watcher",
+     "status": "work",
+     "label": "WATCHING",
+     "tier": "QUICK",
+     "note": "earnings & dividends"
+    },
+    {
+     "name": "Tax & Records Keeper",
+     "status": "idle",
+     "label": "TFSA",
+     "tier": "QUICK",
+     "note": "TFSA: gains tax-free"
+    },
+    {
+     "name": "Index Tracker",
+     "status": "done",
+     "label": "CLOSED",
+     "tier": "API",
+     "note": "NIFTY\u00b7BANKNIFTY\u00b7IT\u00b7NYSE\u00b7NDQ"
+    },
+    {
+     "name": "Bitcoin Tracker",
+     "status": "work",
+     "label": "LIVE",
+     "tier": "API",
+     "note": "BTC price feed"
+    },
+    {
+     "name": "Daily P&L Reporter",
+     "status": "done",
+     "label": "SENT 7:00",
+     "tier": "QUICK",
+     "note": "yesterday P&L \u2192 VISION"
+    }
+   ],
+   "stages": [
+    {
+     "title": "SYNC",
+     "agents": [
+      "Zerodha Sync",
+      "Fyers Sync",
+      "Wealthsimple Sync"
+     ],
+     "parallel": true
+    },
+    {
+     "title": "CONSOLIDATE",
+     "agents": [
+      "Portfolio Aggregator"
+     ],
+     "parallel": false
+    },
+    {
+     "title": "ANALYZE",
+     "agents": [
+      "Allocation Analyst",
+      "Risk Monitor",
+      "Market Watcher",
+      "Tax & Records Keeper"
+     ],
+     "parallel": true
+    },
+    {
+     "title": "MARKET PULSE",
+     "agents": [
+      "Index Tracker",
+      "Bitcoin Tracker"
+     ],
+     "parallel": true
+    },
+    {
+     "title": "REPORT",
+     "agents": [
+      "Daily P&L Reporter"
+     ],
+     "parallel": false
+    }
+   ],
+   "reporter": "Daily P&L Reporter",
+   "demo_report": "+C$43 yesterday \u00b7 CSV due",
+   "loop": false
+  },
+  "news": {
+   "id": "news",
+   "name": "NEWS DESK",
+   "agents": [
+    {
+     "name": "Indian Market News",
+     "status": "work",
+     "label": "SCANNING",
+     "tier": "QUICK",
+     "note": "NSE/BSE headlines"
+    },
+    {
+     "name": "Global Market News",
+     "status": "work",
+     "label": "SCANNING",
+     "tier": "QUICK",
+     "note": "Wall St, Fed, oil"
+    },
+    {
+     "name": "Cricket News",
+     "status": "done",
+     "label": "UPDATED",
+     "tier": "QUICK",
+     "note": "scores & fixtures"
+    },
+    {
+     "name": "Political News",
+     "status": "idle",
+     "label": "QUEUED",
+     "tier": "QUICK",
+     "note": "balanced sources"
+    },
+    {
+     "name": "Weather Agent",
+     "status": "work",
+     "label": "LIVE",
+     "tier": "API",
+     "note": "Open-Meteo \u00b7 Leamington"
+    },
+    {
+     "name": "News Summarizer",
+     "status": "idle",
+     "label": "QUEUED",
+     "tier": "DEEP",
+     "note": "top 4 \u2192 VISION"
+    }
+   ],
+   "stages": [
+    {
+     "title": "GATHER",
+     "agents": [
+      "Indian Market News",
+      "Global Market News",
+      "Cricket News",
+      "Political News",
+      "Weather Agent"
+     ],
+     "parallel": true
+    },
+    {
+     "title": "CURATE",
+     "agents": [
+      "News Summarizer"
+     ],
+     "parallel": false
+    }
+   ],
+   "reporter": "News Summarizer",
+   "demo_report": "5 desks updated",
+   "loop": false
+  },
+  "web": {
+   "id": "web",
+   "name": "WEB DESIGNER",
+   "agents": [
+    {
+     "name": "Business Finder",
+     "status": "done",
+     "label": "8 IN 10 KM",
+     "tier": "QUICK",
+     "note": "last: 8 in 10 km"
+    },
+    {
+     "name": "Information Collector",
+     "status": "done",
+     "label": "DONE",
+     "tier": "QUICK",
+     "note": "last: hours, phone"
+    },
+    {
+     "name": "Competitor Analyst",
+     "status": "work",
+     "label": "ANALYZING",
+     "tier": "DEEP",
+     "note": "last: 3 rivals"
+    },
+    {
+     "name": "Images Downloader",
+     "status": "work",
+     "label": "FETCHING",
+     "tier": "QUICK",
+     "note": "last: 14 images"
+    },
+    {
+     "name": "Color Theme Decider",
+     "status": "idle",
+     "label": "QUEUED",
+     "tier": "QUICK",
+     "note": "last: palette pending"
+    },
+    {
+     "name": "Website Builder",
+     "status": "idle",
+     "label": "QUEUED",
+     "tier": "DEEP",
+     "note": "last: demo v1"
+    },
+    {
+     "name": "Cloudflare Deployer",
+     "status": "idle",
+     "label": "STANDBY",
+     "tier": "QUICK",
+     "note": "last: Workers deploy"
+    },
+    {
+     "name": "Proposal Drafter",
+     "status": "wait",
+     "label": "APPROVE",
+     "tier": "DEEP",
+     "note": "last: pitch email"
+    }
+   ],
+   "stages": [
+    {
+     "title": "FIND",
+     "agents": [
+      "Business Finder"
+     ],
+     "parallel": false
+    },
+    {
+     "title": "RESEARCH",
+     "agents": [
+      "Information Collector",
+      "Competitor Analyst"
+     ],
+     "parallel": true
+    },
+    {
+     "title": "ASSETS",
+     "agents": [
+      "Images Downloader",
+      "Color Theme Decider"
+     ],
+     "parallel": true
+    },
+    {
+     "title": "BUILD",
+     "agents": [
+      "Website Builder"
+     ],
+     "parallel": false
+    },
+    {
+     "title": "DEPLOY",
+     "agents": [
+      "Cloudflare Deployer"
+     ],
+     "parallel": false
+    },
+    {
+     "title": "PITCH",
+     "agents": [
+      "Proposal Drafter"
+     ],
+     "parallel": false
+    },
+    {
+     "title": "APPROVAL",
+     "agents": [],
+     "approval": true
+    }
+   ],
+   "reporter": "Proposal Drafter",
+   "demo_report": "Pitch ready for approval",
+   "loop": false
+  },
+  "jobs": {
+   "id": "jobs",
+   "name": "JOB HUNT",
+   "agents": [
+    {
+     "name": "Job Scout",
+     "status": "done",
+     "label": "12 FOUND",
+     "tier": "API",
+     "note": "Job Bank \u00b7 Adzuna \u00b7 career pages"
+    },
+    {
+     "name": "Resume Tailor",
+     "status": "work",
+     "label": "TAILORING",
+     "tier": "DEEP",
+     "note": "last: Resume v7"
+    },
+    {
+     "name": "Cover Letter Writer",
+     "status": "idle",
+     "label": "QUEUED",
+     "tier": "DEEP",
+     "note": "last: draft queued"
+    },
+    {
+     "name": "Outreach",
+     "status": "idle",
+     "label": "QUEUED",
+     "tier": "QUICK",
+     "note": "last: 2 contacts"
+    },
+    {
+     "name": "Application Tracker",
+     "status": "work",
+     "label": "TRACKING",
+     "tier": "QUICK",
+     "note": "last: 3 updates"
+    },
+    {
+     "name": "Interview Prep",
+     "status": "idle",
+     "label": "STANDBY",
+     "tier": "DEEP",
+     "note": "last: none yet"
+    }
+   ],
+   "stages": [
+    {
+     "title": "SCOUT",
+     "agents": [
+      "Job Scout"
+     ],
+     "parallel": false
+    },
+    {
+     "title": "TAILOR",
+     "agents": [
+      "Resume Tailor",
+      "Cover Letter Writer"
+     ],
+     "parallel": true
+    },
+    {
+     "title": "APPROVAL",
+     "agents": [],
+     "approval": true
+    },
+    {
+     "title": "REACH OUT",
+     "agents": [
+      "Outreach"
+     ],
+     "parallel": false
+    },
+    {
+     "title": "TRACK",
+     "agents": [
+      "Application Tracker"
+     ],
+     "parallel": false
+    },
+    {
+     "title": "PREPARE",
+     "agents": [
+      "Interview Prep"
+     ],
+     "parallel": false
+    }
+   ],
+   "reporter": "Application Tracker",
+   "demo_report": "12 postings \u00b7 resume tailoring",
+   "loop": true
+  },
+  "world": {
+   "id": "world",
+   "name": "WORLD WATCH",
+   "agents": [
+    {
+     "name": "Flight Tracker",
+     "status": "work",
+     "label": "TRACKING",
+     "tier": "API",
+     "note": "OpenSky \u00b7 live ADS-B"
+    }
+   ],
+   "stages": [
+    {
+     "title": "TRACK",
+     "agents": [
+      "Flight Tracker"
+     ],
+     "parallel": false
+    }
+   ],
+   "reporter": "Flight Tracker",
+   "demo_report": "28 flights tracked",
+   "loop": false
+  },
+  "traffic": {
+   "id": "traffic",
+   "name": "TRAFFIC DESK",
+   "agents": [
+    {
+     "name": "City Geocoder",
+     "status": "done",
+     "label": "MAPPED",
+     "tier": "API",
+     "note": "Dynamic city input"
+    },
+    {
+     "name": "Traffic Poller",
+     "status": "work",
+     "label": "POLLING",
+     "tier": "API",
+     "note": "Live congestion"
+    },
+    {
+     "name": "Incident Scout",
+     "status": "work",
+     "label": "SCANNING",
+     "tier": "DEEP",
+     "note": "Active roadworks & jams"
+    }
+   ],
+   "stages": [
+    {
+     "title": "LOCATION",
+     "agents": [
+      "City Geocoder"
+     ],
+     "parallel": false
+    },
+    {
+     "title": "POLL",
+     "agents": [
+      "Traffic Poller"
+     ],
+     "parallel": false
+    },
+    {
+     "title": "INCIDENTS",
+     "agents": [
+      "Incident Scout"
+     ],
+     "parallel": false
+    }
+   ],
+   "reporter": "Incident Scout",
+   "demo_report": "Watching Leamington, Windsor",
+   "loop": true
+  },
+  "film": {
+   "id": "film",
+   "name": "FILM STUDIO",
+   "agents": [
+    {
+     "name": "Content Generator",
+     "status": "done",
+     "label": "DONE",
+     "tier": "QUICK",
+     "note": "last: 5 topic ideas"
+    },
+    {
+     "name": "Screenwriter",
+     "status": "work",
+     "label": "WRITING",
+     "tier": "DEEP",
+     "note": "last: Ep 04 draft 2"
+    },
+    {
+     "name": "Director",
+     "status": "idle",
+     "label": "QUEUED",
+     "tier": "DEEP",
+     "note": "last: shot list sc 1"
+    },
+    {
+     "name": "Video Generator",
+     "status": "idle",
+     "label": "QUEUED",
+     "tier": "GPU",
+     "note": "last: Ep 03 render"
+    },
+    {
+     "name": "Editor",
+     "status": "idle",
+     "label": "QUEUED",
+     "tier": "QUICK",
+     "note": "last: Ep 03 cut v2"
+    },
+    {
+     "name": "YouTube Publisher",
+     "status": "wait",
+     "label": "APPROVE",
+     "tier": "QUICK",
+     "note": "last: Ep 03 queued"
+    },
+    {
+     "name": "Analytics Monitor",
+     "status": "work",
+     "label": "WATCHING",
+     "tier": "QUICK",
+     "note": "last: CTR check"
+    }
+   ],
+   "stages": [
+    {
+     "title": "IDEATION",
+     "agents": [
+      "Content Generator"
+     ],
+     "parallel": false
+    },
+    {
+     "title": "WRITING",
+     "agents": [
+      "Screenwriter"
+     ],
+     "parallel": false
+    },
+    {
+     "title": "DIRECTION",
+     "agents": [
+      "Director"
+     ],
+     "parallel": false
+    },
+    {
+     "title": "PRODUCTION",
+     "agents": [
+      "Video Generator"
+     ],
+     "parallel": false
+    },
+    {
+     "title": "POST",
+     "agents": [
+      "Editor"
+     ],
+     "parallel": false
+    },
+    {
+     "title": "APPROVAL",
+     "agents": [],
+     "approval": true
+    },
+    {
+     "title": "PUBLISH",
+     "agents": [
+      "YouTube Publisher"
+     ],
+     "parallel": false
+    },
+    {
+     "title": "MONITOR",
+     "agents": [
+      "Analytics Monitor"
+     ],
+     "parallel": false
+    }
+   ],
+   "reporter": "Analytics Monitor",
+   "demo_report": "On hold",
+   "loop": true
+  }
+ }
+}

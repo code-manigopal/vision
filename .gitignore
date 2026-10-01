@@ -1,0 +1,11 @@
+.env
+.venv/
+__pycache__/
+data/
+logs/
+inbox/
+vault/
+*.pyc
+models/*.onnx
+models/*.bin
+.pytest_cache/
