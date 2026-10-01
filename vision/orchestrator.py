@@ -43,6 +43,7 @@ class Orchestrator:
             }
         for mid, summary in self.store.latest_reports().items():
             self.bus.state["reports"][mid] = summary
+        self.bus.state["approvals"] = self.store.pending_approvals()   # still waiting from before a restart
 
     # ---------- boot: every master runs its first cycle; the dashboard shows the roll call ----------
     async def boot(self) -> None:

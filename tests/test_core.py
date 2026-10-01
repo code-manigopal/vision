@@ -216,3 +216,15 @@ def test_system_event_lands_in_snapshot():
     bus = EventBus()
     bus.publish({"type": "system", "gauges": [{"id": "cpu", "label": "CPU", "pct": 5, "hot": 80, "detail": ""}]})
     assert bus.snapshot()["state"]["system"][0]["id"] == "cpu"
+
+
+def test_pending_approvals_survive_a_restart(tmp_path):
+    """An approval still waiting when VISION restarts must show up again on the dashboard."""
+    store = Store(tmp_path / "t.db")
+    waiting = store.add_approval("web", "Proposal Drafter", "Pitch · demo https://demo-x.workers.dev", {"key": "pitch:1", "kind": "proposal"})
+    done = store.add_approval("web", "Proposal Drafter", "Old pitch", {"key": "pitch:0", "kind": "proposal"})
+    store.decide_approval(done["id"], "rejected")
+    cfg = Config(masters={"web": MasterConfig(mode="stub")})
+    orch = Orchestrator(cfg, [m for m in build_masters(cfg) if m.id == "web"], EventBus(), store)
+    orch.seed_state()
+    assert [a["id"] for a in orch.bus.snapshot()["state"]["approvals"]] == [waiting["id"]]
