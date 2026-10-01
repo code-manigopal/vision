@@ -92,6 +92,9 @@ def create_app(*, boot_on_start: bool = True, schedules: bool = True, telegram_o
         except Exception as e:
             return HTMLResponse(_page("Couldn't reach Zerodha", f"The Kite MCP server didn't answer: {e}<br>Try again in a moment."), 502)
         if url:
+            # Kite sends the browser back to the MCP server, not to VISION, so watch the session ourselves
+            if not (getattr(app.state, "kite_wait", None) and not app.state.kite_wait.done()):
+                app.state.kite_wait = asyncio.create_task(_kite_wait(app.state.orch, app.state.bus))
             return RedirectResponse(url)
         return HTMLResponse(_page("No login link came back", f"Kite replied:<br><pre style='white-space:pre-wrap'>{text[:800]}</pre>"), 502)
 
@@ -226,6 +229,19 @@ def create_app(*, boot_on_start: bool = True, schedules: bool = True, telegram_o
             bus.unsubscribe(q)
 
     return app
+
+
+async def _kite_wait(orch, bus, tries: int = 60, every: float = 5) -> None:
+    """After the Log in button: poll until the Kite session is logged in, then clear the notice and refresh holdings."""
+    for _ in range(tries):
+        await asyncio.sleep(every)
+        try:
+            if await kite_mcp.shared().logged_in():
+                bus.clear_notice("kite")
+                await orch.run_master("invest", "login")
+                return
+        except Exception as e:
+            log.warning("Kite login check failed: %s", e)
 
 
 def _page(title: str, body: str) -> str:

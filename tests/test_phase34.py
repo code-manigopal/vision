@@ -186,3 +186,31 @@ def test_fyers_expired_token_asks_for_login(monkeypatch, tmp_path):
     with pytest.raises(fyers.FyersAuthError):
         asyncio.run(fyers.holdings_with_day_change())
     assert "redirect_uri=http%3A%2F%2F127.0.0.1%3A8765%2Fauth%2Ffyers%2Fcallback" in fyers.login_url(8765)
+
+
+def test_kite_login_is_noticed_without_a_callback(monkeypatch, tmp_path):
+    """Kite never redirects back to VISION: after the Log in button the server polls the session itself."""
+    from vision import server
+
+    session = FakeSession(logged_in=False)
+    monkeypatch.setattr(kite_mcp.KiteMCP, "_default_factory", staticmethod(fake_factory(session)))
+    kite_mcp._shared = None
+    ran = []
+
+    class Orch:
+        async def run_master(self, master_id, reason):
+            ran.append((master_id, reason))
+
+    async def go():
+        bus = EventBus()
+        bus.notice("kite", "Zerodha login needed")
+        assert not await kite_mcp.shared().logged_in()
+        task = asyncio.create_task(server._kite_wait(Orch(), bus, tries=50, every=0.01))
+        await asyncio.sleep(0.05)
+        assert "kite" in bus.state["notices"] and not ran   # still waiting
+        session.logged_in = True                              # you finish the Kite login
+        await asyncio.wait_for(task, 2)
+        assert "kite" not in bus.state["notices"] and ran == [("invest", "login")]
+        await kite_mcp.shared().close()
+
+    asyncio.run(go())

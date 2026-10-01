@@ -102,11 +102,21 @@ class KiteMCP:
         await self._queue.put((tool, args, fut))
         return await asyncio.wait_for(fut, timeout)
 
-    async def holdings(self) -> dict:
+    async def _holdings_data(self) -> Any:
+        """Raw holdings, or None while this session isn't logged in."""
         res = await self.call("get_holdings")
         text = _text(res)
         data = None if getattr(res, "isError", False) else _parse_json(text)
         if data is None or (isinstance(data, dict) and not data.get("data") and "login" in text.lower()):
+            return None
+        return data
+
+    async def logged_in(self) -> bool:
+        return await self._holdings_data() is not None
+
+    async def holdings(self) -> dict:
+        data = await self._holdings_data()
+        if data is None:
             url, _ = await self.login_url()
             raise KiteLoginNeeded(url)
         rows = data.get("data", data) if isinstance(data, dict) else data
