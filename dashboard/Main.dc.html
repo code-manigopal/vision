@@ -638,7 +638,7 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
           <sc-for list="{{actionItems}}" as="ai" hint-placeholder-count="2">
             <div style="font-size: 14px; font-weight: 600; color: #EDE6D6">{{ai.text}}</div>
             <sc-if value="{{ai.hasUrl}}" hint-placeholder-val="{{ false }}">
-              <a href="{{ai.url}}" target="_blank" rel="noopener" style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #67C7EB; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{ai.url}}</a>
+              <a href="{{ai.url}}" target="_blank" rel="noopener" style="font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.4; color: #67C7EB; text-decoration: underline; word-break: break-all; overflow-wrap: anywhere">{{ai.url}}</a>
             </sc-if>
             <div style="display: flex; gap: 8px">
               <sc-if value="{{ai.isLink}}" hint-placeholder-val="{{ true }}">
