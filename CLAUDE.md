@@ -111,7 +111,7 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   that ducks while VISION speaks or listens. Switch in the voice menu (`vision-music` in localStorage).
 - Power button: confirmation → `/api/shutdown` → the roll call in reverse → standby screen; "Power on" calls `/api/boot`.
 - Design system: palette #FBCA03 gold, #B97D10 bronze, #AA0505 red, #6A0C0B dark red, #67C7EB blue
-  (sparingly), bg #07080A. Fonts: **Michroma** headings, **Nunito Sans** body, **JetBrains Mono** numbers.
+  (sparingly), bg #07080A. Fonts: **Michroma** headings, **Pixelywave** body (`dashboard/fonts/pixelywave.otf`, freeware non-commercial, kept out of git), **JetBrains Mono** numbers.
   Rounded corners 8–14 px. Subtle starfield background. No scrollbars (lists fit or page themselves).
   Center: Mani's triangle emblem (`dashboard/core.webp`, pulsing; swells with the voice) with 10 gold diamond icons on one ring (glass hover cards). Mani reverted
   a "sun" core and solar-system orbits — don't reintroduce them.

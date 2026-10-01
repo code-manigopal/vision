@@ -8,4 +8,5 @@ vault/
 *.pyc
 models/*.onnx
 models/*.bin
+dashboard/fonts/
 .pytest_cache/

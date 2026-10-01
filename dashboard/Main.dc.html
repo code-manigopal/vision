@@ -9,9 +9,10 @@
 <x-dc>
 <helmet>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Michroma&amp;family=Nunito+Sans:opsz,wght@6..12,400;6..12,600;6..12,700;6..12,800;6..12,900&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Michroma&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap" rel="stylesheet">
 <style>
-body{margin:0;background:#07080A;font-family:'Nunito Sans','Segoe UI',sans-serif;color:#EDE6D6}
+@font-face{font-family:'Pixelywave';src:url('/dashboard/fonts/pixelywave.otf') format('opentype');font-weight:100 900;font-display:swap}
+body{margin:0;background:#07080A;font-family:'Pixelywave','Segoe UI',sans-serif;color:#EDE6D6}
 a{color:#FBCA03}a:hover{color:#FBCA03}
 @keyframes vspin{to{transform:rotate(360deg)}}
 @keyframes vspinr{to{transform:rotate(-360deg)}}
@@ -30,14 +31,14 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
 .blink{animation:vblink 1.4s ease-in-out infinite}
 .tab{border-radius:8px;background:transparent;border:1px solid #3A3222;color:#B97D10;font-family:'Michroma',sans-serif;font-size:11px;letter-spacing:2px;padding:0 18px;height:44px;cursor:pointer}
 .tab-on{border-radius:8px;background:#2A2210;border:1px solid #FBCA03;color:#FBCA03;font-family:'Michroma',sans-serif;font-size:11px;letter-spacing:2px;padding:0 18px;height:44px;cursor:pointer;box-shadow:0 0 12px rgba(251,202,3,.35)}
-.mst{border-radius:8px;display:flex;align-items:center;gap:10px;width:100%;min-height:34px;background:#101217;border:1px solid #262A33;color:#EDE6D6;font-family:'Nunito Sans',sans-serif;font-size:14px;font-weight:600;padding:0 12px;cursor:pointer;text-align:left}
-.mst-on{border-radius:8px;display:flex;align-items:center;gap:10px;width:100%;min-height:34px;background:#1E1A10;border:1px solid #FBCA03;color:#FBCA03;font-family:'Nunito Sans',sans-serif;font-size:14px;font-weight:600;padding:0 12px;cursor:pointer;text-align:left}
+.mst{border-radius:8px;display:flex;align-items:center;gap:10px;width:100%;min-height:34px;background:#101217;border:1px solid #262A33;color:#EDE6D6;font-family:'Pixelywave',sans-serif;font-size:14px;font-weight:600;padding:0 12px;cursor:pointer;text-align:left}
+.mst-on{border-radius:8px;display:flex;align-items:center;gap:10px;width:100%;min-height:34px;background:#1E1A10;border:1px solid #FBCA03;color:#FBCA03;font-family:'Pixelywave',sans-serif;font-size:14px;font-weight:600;padding:0 12px;cursor:pointer;text-align:left}
 .d-work{width:9px;height:9px;border-radius:50%;background:#FBCA03;box-shadow:0 0 8px #FBCA03}
 .d-done{width:9px;height:9px;border-radius:50%;background:#67C7EB}
 .d-error{width:9px;height:9px;border-radius:50%;background:#FF3B30;box-shadow:0 0 10px #FF3B30}
 .d-wait{width:9px;height:9px;border-radius:50%;background:#AA0505;box-shadow:0 0 8px #AA0505}
 .d-idle{width:9px;height:9px;border-radius:50%;background:#4A4F5A}
-.qa{border-radius:8px;background:#101217;border:1px solid #3A3222;color:#E8D5A8;font-family:'Nunito Sans',sans-serif;font-size:14px;font-weight:600;height:44px;padding:0 16px;cursor:pointer}
+.qa{border-radius:8px;background:#101217;border:1px solid #3A3222;color:#E8D5A8;font-family:'Pixelywave',sans-serif;font-size:14px;font-weight:600;height:44px;padding:0 16px;cursor:pointer}
 .qa:hover,.mst:hover,.tab:hover{border-color:#FBCA03}
 @keyframes vhue{0%,100%{filter:hue-rotate(-18deg) brightness(1)}50%{filter:hue-rotate(14deg) brightness(1.25)}}
 @keyframes vstroke{0%,100%{stroke:#FBCA03}50%{stroke:#AA0505}}
@@ -82,7 +83,7 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
 .tglow{filter:drop-shadow(0 0 4px #FBCA03)}
 .tglow-r{filter:drop-shadow(0 0 4px #67C7EB)}
 .mindbox{border-radius:14px;animation:vopen .9s cubic-bezier(.2,.8,.2,1)}
-.nd,.nd-on{position:absolute;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:3px;background:transparent;border:none;padding:6px;min-width:44px;min-height:44px;cursor:pointer;font-family:'Nunito Sans',sans-serif}
+.nd,.nd-on{position:absolute;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:3px;background:transparent;border:none;padding:6px;min-width:44px;min-height:44px;cursor:pointer;font-family:'Pixelywave',sans-serif}
 .nlabel{font-size:12px;font-weight:600;color:#C9C0AC;white-space:nowrap;text-shadow:0 0 4px #000}
 .nd-on .nlabel{color:#FBCA03;font-size:13px}
 .dot0{width:26px;height:26px;border-radius:50%;background:#FBCA03;color:#FBCA03;animation:vnode 2s ease-in-out infinite}
@@ -132,7 +133,7 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
 .pgB{animation:pgB .55s cubic-bezier(.2,.8,.2,1)}
 .pgdot{width:6px;height:6px;border-radius:50%;background:#3A3222}
 .pgdot-on{width:14px;height:6px;border-radius:3px;background:#FBCA03;box-shadow:0 0 6px #FBCA03}
-.ct,.ct-today,.ct-sel,.ct-past{display:flex;flex-direction:column;align-items:stretch;gap:2px;padding:4px 5px;border-radius:7px;background:rgba(16,18,23,0.85);border:1px solid #262A33;cursor:pointer;font-family:'Nunito Sans',sans-serif;text-align:left;overflow:hidden;min-width:0}
+.ct,.ct-today,.ct-sel,.ct-past{display:flex;flex-direction:column;align-items:stretch;gap:2px;padding:4px 5px;border-radius:7px;background:rgba(16,18,23,0.85);border:1px solid #262A33;cursor:pointer;font-family:'Pixelywave',sans-serif;text-align:left;overflow:hidden;min-width:0}
 .ct-past{opacity:.45}
 .ct-today{border-color:#FBCA03;box-shadow:0 0 10px rgba(251,202,3,.35) inset,0 0 8px rgba(251,202,3,.25)}
 .ct-sel{border-color:#67C7EB;background:rgba(20,30,38,0.9)}
@@ -147,7 +148,7 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
 .wx-rain::after{content:'';position:absolute;left:2px;top:9px;width:11px;height:3px;background:repeating-linear-gradient(90deg,#67C7EB 0 2px,transparent 2px 4px)}
 .wx-storm{background:#7A8295}
 .wx-storm::after{content:'';position:absolute;left:5px;top:7px;width:6px;height:8px;background:#FBCA03;clip-path:polygon(40% 0,100% 0,60% 45%,90% 45%,20% 100%,40% 55%,10% 55%)}
-.vrow,.vrow-on{display:flex;align-items:center;gap:8px;width:100%;min-height:34px;padding:0 10px;border-radius:8px;cursor:pointer;font-family:'Nunito Sans',sans-serif;font-size:13px;font-weight:600;text-align:left;background:rgba(16,18,23,0.7);border:1px solid #262A33;color:#EDE6D6}
+.vrow,.vrow-on{display:flex;align-items:center;gap:8px;width:100%;min-height:34px;padding:0 10px;border-radius:8px;cursor:pointer;font-family:'Pixelywave',sans-serif;font-size:13px;font-weight:600;text-align:left;background:rgba(16,18,23,0.7);border:1px solid #262A33;color:#EDE6D6}
 .vrow-on{background:rgba(30,26,16,0.9);border-color:#FBCA03;color:#FFF4D6;box-shadow:0 0 10px rgba(251,202,3,.25)}
 .vrow:hover{border-color:#B97D10}
 .qa-on{border-radius:8px;background:#1E1A10;border:1px solid #FBCA03;cursor:pointer;box-shadow:0 0 10px rgba(251,202,3,.3)}
@@ -591,7 +592,7 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
 
       <div style="position: relative; width: 100%; max-width: 640px; display: flex; align-items: center; gap: 10px; background: rgba(13,15,20,0.82); border: 1px solid #B97D10; padding: 0 0 0 16px; height: 52px; box-sizing: border-box; border-radius: 8px; overflow: hidden">
         <label for="vision-ask" style="font-family: 'Michroma', sans-serif; font-size: 11px; letter-spacing: 2px; color: #FBCA03">ASK</label>
-        <input id="vision-ask" value="{{cmd}}" onChange="{{onCmd}}" onKeyDown="{{onCmdKey}}" placeholder="Try: open mind" style="flex-grow: 1; background: transparent; border: none; color: #EDE6D6; font-family: 'Nunito Sans', sans-serif; font-size: 14px; height: 44px; outline: none">
+        <input id="vision-ask" value="{{cmd}}" onChange="{{onCmd}}" onKeyDown="{{onCmdKey}}" placeholder="Try: open mind" style="flex-grow: 1; background: transparent; border: none; color: #EDE6D6; font-family: 'Pixelywave', sans-serif; font-size: 14px; height: 44px; outline: none">
         <button class="{{micCls}}" onClick="{{startVoice}}" aria-label="Voice command" style="width: 52px; height: 50px; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFF4D6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0"></path><path d="M12 18v3"></path></svg>
         </button>

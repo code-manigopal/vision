@@ -137,3 +137,4 @@ on your Mac mini: run `.venv/bin/python -m vision check` after adding each key, 
 
 ## Credits
 - Dashboard music (`dashboard/audio/`): "Inspired" by NEFFEX (boot roll call) and "Roadside (Azaleh VIP)" by Azaleh x Descant (ambient loop).
+- Dashboard body font: "Pixelywave Tech Future" (freeware, non-commercial; https://www.fontspace.com/pixelywave-tech-future-font-f166250). Not in the repo: download it and save it as `dashboard/fonts/pixelywave.otf`; without it the dashboard falls back to a system font.
