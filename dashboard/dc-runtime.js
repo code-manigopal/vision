@@ -142,13 +142,17 @@
     window.VISION = logic; // handy in the browser console
   }
 
-  // ---------- 6. fit 1440x900 to any screen ----------
+  // ---------- 6. fill the browser window ----------
+  // The design is authored at 1440x900; here we scale it up to the window and let the
+  // artboard grow past 1440x900 so the layout uses all the space instead of letterboxing.
   function fit() {
-    const s = Math.min(window.innerWidth / 1440, window.innerHeight / 900);
+    const s = Math.max(1, Math.min(window.innerWidth / 1440, window.innerHeight / 900));
     const el = document.getElementById('stage');
+    el.style.width = Math.round(window.innerWidth / s) + 'px';
+    el.style.height = Math.round(window.innerHeight / s) + 'px';
     el.style.transform = 'scale(' + s + ')';
-    el.style.left = Math.max(0, (window.innerWidth - 1440 * s) / 2) + 'px';
-    el.style.top = Math.max(0, (window.innerHeight - 900 * s) / 2) + 'px';
+    el.style.left = '0px';
+    el.style.top = '0px';
   }
   window.addEventListener('resize', fit);
   document.addEventListener('DOMContentLoaded', () => { fit(); start().catch((e) => {

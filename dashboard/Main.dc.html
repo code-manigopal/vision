@@ -159,7 +159,7 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
 .mic-on{background:#AA0505;animation:vmic 1.2s ease-out infinite}
 </style>
 </helmet>
-<div ref="{{topRef}}" style="width: 1440px; height: 900px; box-sizing: border-box; background: #07080A; display: flex; flex-direction: column; overflow: hidden; border: 1px solid #1C1F26; position: relative; isolation: isolate; border-radius: 8px">
+<div ref="{{topRef}}" style="width: 100%; height: 100%; min-width: 1440px; min-height: 900px; box-sizing: border-box; background: #07080A; display: flex; flex-direction: column; overflow: hidden; border: 1px solid #1C1F26; position: relative; isolation: isolate; border-radius: 8px">
   <div class="starfield" aria-hidden="true">
     <svg width="1520" height="1640" viewBox="0 0 1520 1640">
       <defs>
@@ -182,7 +182,7 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
   <div style="height: 72px; display: flex; align-items: center; gap: 24px; padding: 0 28px; border-bottom: 1px solid #262A33; background: rgba(11,13,17,0.85)">
     <div style="display: flex; align-items: center; gap: 14px">
       <div style="width: 14px; height: 14px; background: #AA0505; transform: rotate(45deg); box-shadow: 0 0 10px #AA0505"></div>
-      <div style="font-family: 'Michroma', sans-serif; font-size: 26px; letter-spacing: 8px; color: #FBCA03">VISION</div>
+      <button onClick="{{goHome}}" aria-label="Back to the dashboard" style="background: transparent; border: none; padding: 0; cursor: pointer; font-family: 'Michroma', sans-serif; font-size: 26px; letter-spacing: 8px; color: #FBCA03">VISION</button>
       <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 1.5px; color: #9A8F76">{{hostLabel}}</div>
     </div>
     <div style="flex-grow: 1; display: flex; justify-content: center; gap: 8px">
@@ -224,11 +224,11 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
     <button class="qa" onClick="{{testVoice}}" style="height: 36px; background: #AA0505; border-color: #AA0505; color: #FFF4D6">Test voice</button>
   </div>
   </sc-if>
-  <div style="height: 828px; flex-shrink: 0; overflow: hidden; position: relative">
-  <div style="display: flex; width: 2880px; height: 828px; transform: translateX({{trackX}}); transition: transform 0.75s cubic-bezier(0.2, 0.8, 0.2, 1)">
-  <div style="width: 1440px; height: 828px; flex-shrink: 0; display: flex; flex-direction: column; position: relative">
+  <div style="flex-grow: 1; min-height: 0; overflow: hidden; position: relative">
+  <div style="display: flex; width: 200%; height: 100%; transform: translateX({{trackX}}); transition: transform 0.75s cubic-bezier(0.2, 0.8, 0.2, 1)">
+  <div style="width: 50%; height: 100%; flex-shrink: 0; display: flex; flex-direction: column; position: relative">
   <!-- MAIN -->
-  <div style="height: 700px; flex-shrink: 0; box-sizing: border-box; display: flex; gap: 20px; padding: 20px 28px; min-height: 0">
+  <div style="flex-grow: 1; box-sizing: border-box; display: flex; gap: 20px; padding: 20px 28px; min-height: 0">
 
     <!-- LEFT COLUMN -->
     <div style="width: 300px; display: flex; flex-direction: column; gap: 16px">
@@ -350,11 +350,11 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
         </div>
       </sc-if>
       </div>
-      <div style="font-size: 14px; font-weight: 600; color: {{statusColor}}; text-align: center; position: relative; min-height: 24px; max-width: 640px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden">{{statusMsg}}</div>
+      <div style="font-size: 14px; font-weight: 600; color: {{statusColor}}; text-align: center; position: relative; min-height: 24px; max-width: 900px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden">{{statusMsg}}</div>
       </sc-if>
 
       <sc-if value="{{askOn}}" hint-placeholder-val="{{ false }}">
-      <div class="mindbox" style="position: relative; width: 100%; height: 468px; overflow: hidden; background: rgba(8,9,12,0.9); border: 1px solid #3A3222; box-sizing: border-box; padding: 12px 16px; display: flex; flex-direction: column; gap: 8px">
+      <div class="mindbox" style="position: relative; width: 100%; height: 100%; min-height: 468px; overflow: hidden; background: rgba(8,9,12,0.9); border: 1px solid #3A3222; box-sizing: border-box; padding: 12px 16px; display: flex; flex-direction: column; gap: 8px">
         <div style="display: flex; align-items: center; gap: 12px">
           <div style="font-family: 'Michroma', sans-serif; font-size: 12px; letter-spacing: 3px; color: #FBCA03">ASK VISION</div>
           <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #9A8F76">{{askMeta}}</div>
@@ -410,7 +410,7 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
       </sc-if>
 
       <sc-if value="{{calOn}}" hint-placeholder-val="{{ false }}">
-      <div class="mindbox" style="position: relative; width: 100%; height: 468px; overflow: hidden; background: rgba(8,9,12,0.88); border: 1px solid #3A3222; box-sizing: border-box; padding: 12px 16px; display: flex; flex-direction: column; gap: 6px">
+      <div class="mindbox" style="position: relative; width: 100%; height: 100%; min-height: 468px; overflow: hidden; background: rgba(8,9,12,0.88); border: 1px solid #3A3222; box-sizing: border-box; padding: 12px 16px; display: flex; flex-direction: column; gap: 6px">
         <div style="display: flex; align-items: center; gap: 12px">
           <div style="font-family: 'Michroma', sans-serif; font-size: 12px; letter-spacing: 3px; color: #FBCA03">CALENDAR · NEXT 5 WEEKS</div>
           <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #9A8F76">Calendar Manager · forecast by Weather Agent · [DEMO DATA]</div>
@@ -507,7 +507,7 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
       </sc-if>
 
       <sc-if value="{{briefOn}}" hint-placeholder-val="{{ false }}">
-      <div class="mindbox" style="position: relative; width: 100%; height: 468px; overflow: hidden; background: rgba(8,9,12,0.88); border: 1px solid #3A3222; box-sizing: border-box; padding: 14px 18px; display: flex; flex-direction: column; gap: 12px; border-radius: 8px">
+      <div class="mindbox" style="position: relative; width: 100%; height: 100%; min-height: 468px; overflow: hidden; background: rgba(8,9,12,0.88); border: 1px solid #3A3222; box-sizing: border-box; padding: 14px 18px; display: flex; flex-direction: column; gap: 12px; border-radius: 8px">
         <div style="display: flex; align-items: center; gap: 12px">
           <div style="font-family: 'Michroma', sans-serif; font-size: 12px; letter-spacing: 3px; color: #FBCA03">VISION MORNING BRIEF</div>
           <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #9A8F76">{{briefDate}} · [DEMO DATA]</div>
@@ -564,7 +564,7 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
       </sc-if>
 
       <sc-if value="{{mindOn}}" hint-placeholder-val="{{ false }}">
-      <div class="mindbox" style="position: relative; width: 100%; height: 468px; background: rgba(8,9,12,0.88); border: 1px solid #3A3222; overflow: hidden; border-radius: 8px">
+      <div class="mindbox" style="position: relative; width: 100%; height: 100%; min-height: 468px; background: rgba(8,9,12,0.88); border: 1px solid #3A3222; overflow: hidden; border-radius: 8px">
         <svg width="100%" height="468" viewBox="0 0 700 468" preserveAspectRatio="xMidYMid meet" aria-hidden="true" style="position: absolute; left: 0; top: 0">
           <path d="{{edgePath}}" fill="none" stroke="#B97D10" stroke-width="1.2" opacity="0.75"></path>
           <path d="{{hotPath}}" fill="none" stroke="#FBCA03" stroke-width="2.2" class="tglow"></path>
@@ -700,7 +700,7 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
   </button>
   </div>
   <!-- AGENT GRAPH (slide 2) -->
-  <div ref="{{graphRef}}" style="width: 1440px; height: 828px; flex-shrink: 0; position: relative; padding: 16px 28px 24px 56px; box-sizing: border-box; display: flex; flex-direction: column; gap: 12px">
+  <div ref="{{graphRef}}" style="width: 50%; height: 100%; flex-shrink: 0; position: relative; padding: 16px 28px 24px 56px; box-sizing: border-box; display: flex; flex-direction: column; gap: 12px">
     <div style="display: flex; align-items: center; gap: 16px">
       <div style="font-family: 'Michroma', sans-serif; font-size: 14px; letter-spacing: 4px; color: #FBCA03">AGENT GRAPH</div>
       <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #9A8F76">{{graphMasterName}} · lit = working now · red = waiting on you</div>
@@ -708,7 +708,7 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
       <sc-for list="{{gtabs}}" as="gt" hint-placeholder-count="4">
         <button class="{{gt.cls}}" onClick="{{gt.pick}}">{{gt.label}}</button>
       </sc-for>
-      <button class="qa" onClick="{{scrollTop}}">‹ Dashboard</button>
+      <button class="qa" onClick="{{scrollTop}}" style="background: #AA0505; border-color: #AA0505; color: #FFF4D6">‹ Back to dashboard</button>
     </div>
     <div class="panel" style="background: rgba(13,15,20,0.82); border: 1px solid #6A0C0B; padding: 10px 16px; font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #EDE6D6; border-radius: 8px">
       <span style="color: #FBCA03; font-weight: 600">WORKING NOW:</span> {{gWorking}}   <span style="color: #FF8A73; font-weight: 600">WAITING ON YOU:</span> {{gWaiting}}
@@ -759,7 +759,7 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
   </div>
 
   <sc-if value="{{bootOn}}" hint-placeholder-val="{{ false }}">
-  <div class="{{bootCls}}" style="position: absolute; left: 0; top: 0; width: 1440px; height: 900px; z-index: 50; background: #050608; display: flex; flex-direction: column; align-items: center; padding: 40px 48px; box-sizing: border-box; gap: 18px">
+  <div class="{{bootCls}}" style="position: absolute; left: 0; top: 0; width: 100%; height: 100%; z-index: 50; background: #050608; display: flex; flex-direction: column; align-items: center; padding: 40px 48px; box-sizing: border-box; gap: 18px">
     <div style="display: flex; align-items: center; gap: 18px">
       <svg width="64" height="64" viewBox="0 0 64 64" aria-hidden="true">
         <g class="r2"><circle cx="32" cy="32" r="28" fill="none" stroke="#AA0505" stroke-width="5" stroke-dasharray="12 8"></circle></g>
@@ -870,13 +870,22 @@ class Component extends DCLogic {
       this.setState(next);
     }, 1000);
     this.connectLive();
+    this.onKey = (e) => {
+      if (e.key !== 'Escape') return;
+      const s = this.state;
+      if (s.page === 1) this.scrollToTop();
+      else if (s.mind) this.setState({ mind: false });
+      else if (s.voiceMenu) this.setState({ voiceMenu: false });
+      else if (s.mode !== 'ambient') this.setState({ mode: 'ambient' });
+    };
+    window.addEventListener('keydown', this.onKey);
     this.anim = setInterval(() => {
       const s = this.state;
       this.setState({ a: s.a + 0.02, openT: s.mind ? Math.min(1, s.openT + 0.045) : 0, rotLon: (s.drag || s.hov) ? s.rotLon : s.rotLon + 0.12, bootT: s.boot && !(s.live && s.live.boot && s.live.boot.active) ? s.bootT + 1 : s.bootT, orbA: s.orbHov ? s.orbA : s.orbA + 0.0056, pulse: s.speaking ? Math.max(s.pulse * 0.8, Math.random() < 0.4 ? 0.45 + Math.random() * 0.55 : 0) : s.pulse * 0.85 });
     }, 40);
   }
   componentWillUnmount() {
-    this.dead = true; clearTimeout(this.wsRetry); try { this.ws && this.ws.close(); } catch (e) {}
+    this.dead = true; clearTimeout(this.wsRetry); window.removeEventListener('keydown', this.onKey); try { this.ws && this.ws.close(); } catch (e) {}
     try { window.speechSynthesis && window.speechSynthesis.removeEventListener('voiceschanged', this.loadVoices); } catch (e) {}
     clearInterval(this.timer);
     clearInterval(this.anim);
@@ -1491,15 +1500,23 @@ class Component extends DCLogic {
     const V = this.state.liveUp && this.state.live && this.state.live.voice;
     if (V && V.stt && !this.sttFailed) { this.listenLocal(); return; }
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) { if (!quiet) this.say('Voice is not supported in this browser. Type the command instead.'); return; }
+    if (!SR) { this.say('This browser has no speech recognition. Use Chrome, or install local Whisper on the Mac mini (requirements-voice.txt).'); return; }
     if (this.state.listening) return;
     try {
       const rec = new SR();
       rec.lang = 'en-US';
       rec.interimResults = false;
       rec.onresult = (e) => { const txt = e.results[0][0].transcript; this.voiceAt = Date.now(); this.setState({ cmd: txt }); this.runCommand(txt); };
-      rec.onerror = () => { this.setState({ listening: false }); if (!quiet) this.say('Mic is blocked here. Type your question instead.'); };
+      rec.onerror = (ev) => {
+        this.setState({ listening: false });
+        const why = { 'not-allowed': 'Microphone permission is off. Allow the mic for this page in your browser settings, then try again.',
+          'service-not-allowed': 'Your browser blocked speech recognition. Chrome works best for voice here.',
+          'no-speech': "I didn't catch anything. Tap the mic and speak again.",
+          'audio-capture': 'No microphone found on this Mac.', 'network': 'Speech recognition needs the internet in this browser.' }[ev && ev.error];
+        this.say(why || 'Voice input failed (' + ((ev && ev.error) || 'unknown') + '). You can type instead.');
+      };
       rec.onend = () => this.setState({ listening: false });
+      rec.onnomatch = () => this.say("I didn't catch that. Try again?");
       this.rec = rec;
       rec.start();
       this.setState({ listening: true });
@@ -2261,7 +2278,7 @@ class Component extends DCLogic {
       closeAsk: () => this.setState({ mode: 'ambient' }),
       askStatus: () => this.runCommand('hey vision, how are we doing today'),
       orbMarks, orbOn: !!orb, orb: orb || { agents: [] },
-      trackX: s.page === 1 ? '-1440px' : '0px', busDrops, reportLine, reporterNote: '▲ ' + reporterName + ' reports to ' + sel.name, masterCardX, gMasterName,
+      trackX: s.page === 1 ? '-50%' : '0%', busDrops, reportLine, reporterNote: '▲ ' + reporterName + ' reports to ' + sel.name, masterCardX, gMasterName,
       agPgCls: (agPgI + (s.master.length % 2)) % 2 ? 'pgB' : 'pgA', agMulti: false, agDots, agPgLabel: (agPgI * PG + 1) + '–' + Math.min(allAg.length, agPgI * PG + PG) + ' of ' + allAg.length,
       agHoldOn: () => this.setState({ agHold: true }), agHoldOff: () => this.setState({ agHold: null }),
       ...(() => {
@@ -2277,6 +2294,7 @@ class Component extends DCLogic {
       tgStatus, tgSent, voiceBars, voiceOpacity, voiceGlowW, voiceGlowO, voiceScaleOuter, voiceScaleInner, statusColor,
       bootOn, bootCls, bootPhase, bootPct, bootCount, bootCols, bootLog, replyText, approvalCount,
       skipBoot: () => this.setState({ boot: false }),
+      goHome: () => this.setState({ page: 0, mind: false, mode: 'ambient', voiceMenu: false }),
       restart: () => { if (this.state.liveUp) { fetch('/api/boot', { method: 'POST' }).catch(() => {}); this.setState({ mode: 'ambient', mind: false }); } else this.setState({ boot: true, bootT: 0, mode: 'ambient', mind: false }); },
       hostLabel: s.liveUp ? 'LIVE · CORE CONNECTED' : this.isLocal() ? 'CORE OFFLINE · RETRYING' : 'PREVIEW · DEMO DATA',
       closeBrief: () => this.setState({ mode: 'ambient' }),
