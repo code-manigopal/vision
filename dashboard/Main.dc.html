@@ -1371,7 +1371,7 @@ class Component extends DCLogic {
       const st = m.state;
       const patch = { live: { masters: st.masters || {}, reports: st.reports || {}, boot: st.boot || L.boot, telegram: st.telegram,
         report_data: st.report_data || {}, notices: st.notices || {}, approvals: st.approvals || [], voice: st.voice || {}, system: st.system || null } };
-      if (st.log && st.log.length) patch.log = st.log.slice(0, 3);
+      patch.log = (st.log || []).slice(0, 3);   // connected: real log only, even if empty
       if (st.boot && st.boot.active) Object.assign(patch, { boot: true, bootT: st.boot.done * 3 });
       else if (this.state.boot) patch.boot = false;   // already running: no roll call on a plain page load
       this.setState(patch);
