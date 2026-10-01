@@ -636,6 +636,9 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
         <sc-if value="{{liveActions}}" hint-placeholder-val="{{ false }}">
           <sc-for list="{{actionItems}}" as="ai" hint-placeholder-count="2">
             <div style="font-size: 14px; font-weight: 600; color: #EDE6D6">{{ai.text}}</div>
+            <sc-if value="{{ai.hasUrl}}" hint-placeholder-val="{{ false }}">
+              <a href="{{ai.url}}" target="_blank" rel="noopener" style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #67C7EB; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{ai.url}}</a>
+            </sc-if>
             <div style="display: flex; gap: 8px">
               <sc-if value="{{ai.isLink}}" hint-placeholder-val="{{ true }}">
                 <button class="qa" onClick="{{ai.open}}" style="background: #AA0505; border-color: #AA0505; color: #FFF4D6; padding: 0 12px">{{ai.linkLabel}}</button>
@@ -2359,9 +2362,10 @@ class Component extends DCLogic {
         if (!LV2) return { liveActions: false, demoActions: true, actionItems: [], noActions: false };
         const items = Object.entries(LV2.notices || {}).map(([k, n]) => ({ text: n.text, isLink: !!n.url, isApproval: false,
           linkLabel: k === 'fyers' || k === 'kite' ? 'Log in' : 'Open', open: () => { if (n.url) window.open(n.url, '_blank'); } }))
-          .concat((LV2.approvals || []).map((a) => ({ text: a.master + ' · ' + a.title, isLink: false, isApproval: true,
+          .concat((LV2.approvals || []).map((a) => { const u = (a.title.match(/https?:\/\/\S+/) || [''])[0]; return ({ url: u, hasUrl: !!u,
+            text: a.master + ' · ' + (u ? a.title.replace(u, '').replace(/[\s·]*(demo)?[\s·]*$/, '') : a.title), isLink: false, isApproval: true,
             approve: () => fetch('/api/approvals/' + a.id + '/approved', { method: 'POST' }).catch(() => {}),
-            reject: () => fetch('/api/approvals/' + a.id + '/rejected', { method: 'POST' }).catch(() => {}) })));
+            reject: () => fetch('/api/approvals/' + a.id + '/rejected', { method: 'POST' }).catch(() => {}) }); }));
         return { liveActions: true, demoActions: false, actionItems: items.slice(0, 3), noActions: items.length === 0 };
       })(),
       tgStatus, tgSent, voiceBars, voiceOpacity, voiceGlowW, voiceGlowO, voiceScaleOuter, voiceScaleInner, statusColor,
