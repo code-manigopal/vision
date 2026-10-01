@@ -510,7 +510,58 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
       </sc-if>
 
       <sc-if value="{{briefOn}}" hint-placeholder-val="{{ false }}">
-      <div class="mindbox" style="position: relative; width: 100%; height: 100%; min-height: 468px; overflow: hidden; background: rgba(8,9,12,0.88); border: 1px solid #3A3222; box-sizing: border-box; padding: 14px 18px; display: flex; flex-direction: column; gap: 12px; border-radius: 8px">
+      <div class="mindbox" style="position: relative; width: 100%; height: 100%; min-height: 468px; overflow: hidden; isolation: isolate; background: transparent; border: 1px solid #3A3222; box-sizing: border-box; padding: 14px 18px; display: flex; flex-direction: column; gap: 12px; border-radius: 8px">
+        <div style="position: absolute; left: 0; top: 0; right: 0; bottom: 0; z-index: -1; display: flex; align-items: center; justify-content: center; pointer-events: none">
+          <div style="position: relative; width: 430px; height: 430px; flex-shrink: 0">
+      <svg width="430" height="430" viewBox="0 0 440 440" aria-hidden="true">
+        <defs>
+          <linearGradient id="vsweep" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#FBCA03" stop-opacity="0"></stop>
+            <stop offset="100%" stop-color="#FBCA03" stop-opacity="0.45"></stop>
+          </linearGradient>
+          <radialGradient id="vcore" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#FFF4D6" stop-opacity="0.9"></stop>
+            <stop offset="40%" stop-color="#FBCA03" stop-opacity="0.45"></stop>
+            <stop offset="80%" stop-color="#AA0505" stop-opacity="0.18"></stop>
+            <stop offset="100%" stop-color="#6A0C0B" stop-opacity="0"></stop>
+          </radialGradient>
+        </defs>
+        <circle cx="220" cy="220" r="214" fill="none" stroke="#262A33" stroke-width="1"></circle>
+        <circle class="ping" cx="220" cy="220" r="160" fill="none" stroke="#AA0505" stroke-width="2"></circle>
+        <circle class="ping2" cx="220" cy="220" r="160" fill="none" stroke="#FBCA03" stroke-width="1.5"></circle>
+        <g class="sweep">
+          <path d="M220 220 L220 12 A208 208 0 0 1 367 73 Z" fill="url(#vsweep)"></path>
+          <line x1="220" y1="220" x2="367" y2="73" stroke="#FBCA03" stroke-width="1.5" opacity="0.8"></line>
+        </g>
+        <g class="r4">
+          <circle cx="220" cy="220" r="205" fill="none" stroke="#B97D10" stroke-width="1.5" stroke-dasharray="1 7"></circle>
+        </g>
+        <g class="orb">
+          <circle cx="220" cy="220" r="190" fill="none" stroke="#3A3222" stroke-width="1" stroke-dasharray="4 10"></circle>
+        </g>
+        <path d="{{voiceBars}}" fill="none" stroke="#FBCA03" stroke-width="2.4" stroke-linecap="round" opacity="{{voiceOpacity}}" class="tglow"></path>
+        <circle cx="220" cy="220" r="172" fill="none" stroke="#AA0505" stroke-width="{{voiceGlowW}}" opacity="{{voiceGlowO}}"></circle>
+        <g style="transform-box: view-box; transform-origin: center; transform: scale({{voiceScaleOuter}})">
+        <g class="r1">
+          <circle class="cshift" cx="220" cy="220" r="168" fill="none" stroke="#FBCA03" stroke-width="2" stroke-dasharray="70 18"></circle>
+        </g>
+        </g>
+        <g style="transform-box: view-box; transform-origin: center; transform: scale({{voiceScaleInner}})">
+        <g class="r2">
+          <circle cx="220" cy="220" r="150" fill="none" stroke="#AA0505" stroke-width="10" stroke-dasharray="26 14" opacity="0.9"></circle>
+        </g>
+        </g>
+        <g class="r3">
+          <circle cx="220" cy="220" r="128" fill="none" stroke="#FBCA03" stroke-width="1.5" stroke-dasharray="2 5"></circle>
+        </g>
+        <circle cx="220" cy="220" r="112" fill="#0A0806" stroke="#FBCA03" stroke-width="2"></circle>
+        <circle cx="220" cy="220" r="100" fill="url(#vcore)" opacity="0.5"></circle>
+      </svg>
+      <div style="position: absolute; left: 0; top: 0; width: 430px; height: 430px; display: flex; align-items: center; justify-content: center; pointer-events: none">
+        <img class="coreimg" src="/dashboard/core.webp" alt="" style="position: relative; top: 15px; width: 250px; height: 250px">
+      </div>
+          </div>
+        </div>
         <div style="display: flex; align-items: center; gap: 12px">
           <div style="font-family: 'Michroma', sans-serif; font-size: 12px; letter-spacing: 3px; color: #FBCA03">VISION MORNING BRIEF</div>
           <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #9A8F76">{{briefDate}} · {{briefTag}}</div>
@@ -518,9 +569,9 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
           <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #67C7EB; border: 1px solid #2C5566; padding: 6px 8px; border-radius: 8px">{{tgSent}}</div>
           <button class="qa" onClick="{{closeBrief}}" style="height: 36px">Close brief</button>
         </div>
-        <div style="background: #15130B; border: 1px solid #B97D10; padding: 8px 12px; font-size: 14px; color: #EDE6D6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-radius: 8px"><span style="font-family: 'Michroma', sans-serif; font-size: 10px; letter-spacing: 2px; color: #FBCA03">VISION ›</span>  {{replyText}}</div>
+        <div style="background: rgba(21,19,11,0.6); border: 1px solid #B97D10; padding: 8px 12px; font-size: 14px; color: #EDE6D6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-radius: 8px"><span style="font-family: 'Michroma', sans-serif; font-size: 10px; letter-spacing: 2px; color: #FBCA03">VISION ›</span>  {{replyText}}</div>
         <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px">
-          <div style="background: rgba(13,15,20,0.82); border: 1px solid #262A33; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; border-radius: 8px">
+          <div style="background: rgba(13,15,20,0.55); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); border: 1px solid #262A33; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; border-radius: 8px">
             <div style="font-family: 'Michroma', sans-serif; font-size: 10px; letter-spacing: 2px; color: #B97D10">{{bPortsTitle}}</div>
             <sc-for list="{{bPorts}}" as="bp" hint-placeholder-count="5">
               <div style="display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; font-weight: 600; padding: 1px 0; border-bottom: 1px solid #1C1F26">
@@ -529,7 +580,7 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
               </div>
             </sc-for>
           </div>
-          <div style="background: rgba(13,15,20,0.82); border: 1px solid #262A33; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; border-radius: 8px">
+          <div style="background: rgba(13,15,20,0.55); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); border: 1px solid #262A33; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; border-radius: 8px">
             <div style="font-family: 'Michroma', sans-serif; font-size: 10px; letter-spacing: 2px; color: #B97D10">{{bMktsTitle}}</div>
             <sc-for list="{{bMkts}}" as="bm" hint-placeholder-count="6">
               <div style="display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; font-weight: 600; padding: 1px 0; border-bottom: 1px solid #1C1F26">
@@ -541,14 +592,14 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
         </div>
         <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px">
           <sc-for list="{{bMasters}}" as="bmr" hint-placeholder-count="8">
-            <div style="background: rgba(13,15,20,0.82); border: 1px solid {{bmr.border}}; border-radius: 8px; padding: 5px 8px; min-width: 0">
+            <div style="background: rgba(13,15,20,0.55); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); border: 1px solid {{bmr.border}}; border-radius: 8px; padding: 5px 8px; min-width: 0">
               <div style="font-family: 'Michroma', sans-serif; font-size: 9px; letter-spacing: 1px; color: #FBCA03; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{bmr.name}}</div>
               <div style="font-size: 12px; color: {{bmr.color}}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{bmr.line}}</div>
             </div>
           </sc-for>
         </div>
         <div style="display: flex; gap: 8px; min-height: 0">
-        <div style="flex-grow: 1; min-width: 0; background: rgba(13,15,20,0.82); border: 1px solid #262A33; padding: 8px 12px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3px 14px; border-radius: 8px">
+        <div style="flex-grow: 1; min-width: 0; background: rgba(13,15,20,0.55); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); border: 1px solid #262A33; padding: 8px 12px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3px 14px; border-radius: 8px">
           <sc-for list="{{bNews}}" as="bn" hint-placeholder-count="5">
             <div style="font-size: 13px; color: #EDE6D6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis"><span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #FBCA03">{{bn.tag}}</span>  {{bn.text}}</div>
           </sc-for>
