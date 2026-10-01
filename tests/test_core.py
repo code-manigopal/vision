@@ -118,3 +118,43 @@ def test_server_ws_and_api(tmp_path, monkeypatch):
             c.post("/api/masters/news/run")
             kinds = {ws.receive_json()["type"] for _ in range(6)}
             assert "agent" in kinds
+
+
+# ---- Instruments (vision/services/sysmon.py) ----
+
+def _sysmon(monkeypatch, system, machine, outputs):
+    """outputs: {command name: stdout}; a missing command behaves as not installed."""
+    from types import SimpleNamespace
+    from vision.services import sysmon
+    monkeypatch.setattr(sysmon.platform, "system", lambda: system)
+    monkeypatch.setattr(sysmon.platform, "machine", lambda: machine)
+    monkeypatch.setattr(sysmon.shutil, "which", lambda name: name if name in outputs else None)
+    monkeypatch.setattr(sysmon, "_run", lambda cmd: outputs.get(cmd[0], ""))
+    monkeypatch.setattr(sysmon.psutil, "cpu_percent", lambda interval=None: 12.4)
+    monkeypatch.setattr(sysmon.psutil, "virtual_memory",
+                        lambda: SimpleNamespace(total=16 * sysmon.GB, available=4 * sysmon.GB, percent=75.0))
+    return {g["id"]: g for g in sysmon.SysMon().sample()}
+
+
+def test_sysmon_apple_silicon(monkeypatch):
+    g = _sysmon(monkeypatch, "Darwin", "arm64", {"ioreg": '"PerformanceStatistics" = {"Tiler Utilization %"=3,"Device Utilization %"=41}'})
+    assert list(g) == ["cpu", "mem", "gpu"]          # unified memory: no separate VRAM gauge
+    assert g["cpu"]["pct"] == 12 and g["gpu"]["pct"] == 41
+    assert g["mem"]["label"] == "UNIFIED MEMORY" and g["mem"]["pct"] == 75 and g["mem"]["detail"] == "12.0 / 16.0 GB"
+
+
+def test_sysmon_nvidia(monkeypatch):
+    g = _sysmon(monkeypatch, "Linux", "x86_64", {"nvidia-smi": "37, 4096, 16384\n"})
+    assert list(g) == ["cpu", "mem", "gpu", "vram"]
+    assert g["mem"]["label"] == "RAM" and g["gpu"]["pct"] == 37
+    assert g["vram"]["pct"] == 25 and g["vram"]["detail"] == "4.0 / 16.0 GB"
+
+
+def test_sysmon_no_gpu(monkeypatch):
+    assert list(_sysmon(monkeypatch, "Linux", "x86_64", {})) == ["cpu", "mem"]
+
+
+def test_system_event_lands_in_snapshot():
+    bus = EventBus()
+    bus.publish({"type": "system", "gauges": [{"id": "cpu", "label": "CPU", "pct": 5, "hot": 80, "detail": ""}]})
+    assert bus.snapshot()["state"]["system"][0]["id"] == "cpu"

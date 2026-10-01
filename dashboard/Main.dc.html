@@ -235,7 +235,7 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
       <div class="panel" style="background: rgba(13,15,20,0.82); border: 1px solid #262A33; padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; border-radius: 8px">
         <div style="display: flex; justify-content: space-between; align-items: center">
           <div style="font-family: 'Michroma', sans-serif; font-size: 11px; letter-spacing: 2px; color: #FBCA03">INSTRUMENTS</div>
-          <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #9A8F76">[DEMO DATA]</div>
+          <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #9A8F76">{{gaugeTag}}</div>
         </div>
         <sc-for list="{{gauges}}" as="g" hint-placeholder-count="4">
           <div style="display: flex; flex-direction: column; gap: 5px">
@@ -1370,7 +1370,7 @@ class Component extends DCLogic {
     if (m.type === 'snapshot') {
       const st = m.state;
       const patch = { live: { masters: st.masters || {}, reports: st.reports || {}, boot: st.boot || L.boot, telegram: st.telegram,
-        report_data: st.report_data || {}, notices: st.notices || {}, approvals: st.approvals || [], voice: st.voice || {} } };
+        report_data: st.report_data || {}, notices: st.notices || {}, approvals: st.approvals || [], voice: st.voice || {}, system: st.system || null } };
       if (st.log && st.log.length) patch.log = st.log.slice(0, 3);
       if (st.boot && st.boot.active) Object.assign(patch, { boot: true, bootT: st.boot.done * 3 });
       else if (this.state.boot) patch.boot = false;   // already running: no roll call on a plain page load
@@ -1400,6 +1400,8 @@ class Component extends DCLogic {
       if (!this.state.speaking && !this.state.listening) { this.voiceAt = Date.now(); this.setState({ mode: this.state.mode === 'world' ? 'world' : 'ambient' }); this.startVoice(true); }
     } else if (m.type === 'telegram') {
       this.setState({ live: Object.assign({}, L, { telegram: m.status }) });
+    } else if (m.type === 'system') {
+      this.setState({ live: Object.assign({}, L, { system: m.gauges }) });
     } else if (m.type === 'log') {
       this.setState({ log: [{ t: m.t, msg: m.msg }].concat(this.state.log || []).slice(0, 3) });
     }
@@ -1599,12 +1601,14 @@ class Component extends DCLogic {
     const agDots = Array.from({ length: pgN }, (_, k) => ({ cls: k === agPgI ? 'pgdot-on' : 'pgdot' }));
 
     const g = (label, v, hot) => ({ label, val: v + '%', pct: v + '%', color: v >= hot ? '#AA0505' : '#FBCA03' });
-    const gauges = [
+    const liveSys = s.liveUp && s.live && s.live.system;
+    const gauges = liveSys ? liveSys.map((x) => g(x.label + (x.detail ? ' · ' + x.detail : ''), x.pct, x.hot)) : [
       g('CPU', s.cpu, 80),
-      g('RAM · ' + (31.1 * s.ram / 100).toFixed(1) + ' / 31.1 GB', s.ram, 85),
+      g('RAM', s.ram, 85),
       g('GPU', s.gpu, 80),
-      g('VRAM · ' + (15.9 * s.vram / 100).toFixed(1) + ' / 15.9 GB', s.vram, 85)
+      g('VRAM', s.vram, 85)
     ];
+    const gaugeTag = liveSys ? 'LIVE' : '[DEMO DATA]';
     const msgs = [
       'Film Studio is scripting Episode 04.',
       'Trading Desk is watching an OANDA mismatch.',
@@ -2233,7 +2237,7 @@ class Component extends DCLogic {
       graphRef: (el) => { this.graphEl = el; }, topRef: (el) => { this.topEl = el; },
       scrollGraph: () => this.scrollToGraph(), scrollTop: () => this.scrollToTop(),
       gtabs, graphMasterName: sel.name, gWorking: workingNames.join(', ') || 'none', gWaiting: waitingNames.join(', ') || 'nothing',
-      gStages: cols.map((c) => ({ title: c.title, left: c.left, width: c.width, top: c.top })), gCards: cards, gEdges, gFlow, gLoop, gHasLoop: flow.loop, gLoopX, gLoopY, gDebate, gHeads, gNotes, modeLabel: s.mind ? 'MIND OPEN' : modeLabel, masters, agents, selName: sel.name, gauges, log: s.log, statusMsg,
+      gStages: cols.map((c) => ({ title: c.title, left: c.left, width: c.width, top: c.top })), gCards: cards, gEdges, gFlow, gLoop, gHasLoop: flow.loop, gLoopX, gLoopY, gDebate, gHeads, gNotes, modeLabel: s.mind ? 'MIND OPEN' : modeLabel, masters, agents, selName: sel.name, gauges, gaugeTag, log: s.log, statusMsg,
       tessE, tessW, tessV,
       calOn: s.mode === 'calendar' && !s.mind, calDays, calSelTitle, calSelWx, calSelEvents,
       openCal: () => this.setState({ mode: 'calendar', mind: false, calSel: null }), closeCal: () => this.setState({ mode: 'ambient' }),

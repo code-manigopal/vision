@@ -20,7 +20,7 @@ from .ask import AskEngine
 from .orchestrator import Orchestrator
 from .voice import STT, TTS, VoiceUnavailable, WakeWord
 from .channels.telegram import TelegramChannel
-from .services import fyers, kite_mcp, oauth, traffic_api
+from .services import fyers, kite_mcp, oauth, sysmon, traffic_api
 
 log = logging.getLogger("vision")
 DASH = ROOT / "dashboard"
@@ -48,8 +48,10 @@ def create_app(*, boot_on_start: bool = True, schedules: bool = True, telegram_o
             orch.start_boot()
         if schedules:
             orch.start_schedules()
+        instruments = asyncio.create_task(sysmon.run(bus))
         log.info("VISION online at http://%s:%s", cfg.vision.host, cfg.vision.port)
         yield
+        instruments.cancel()
         orch.shutdown()
         wake.stop()
         await telegram.stop()

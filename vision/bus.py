@@ -87,6 +87,8 @@ class EventBus:
             self.state["approvals"] = [a for a in self.state["approvals"] if a["id"] != e["id"]]
         elif kind == "telegram":
             self.state["telegram"] = e["status"]
+        elif kind == "system":
+            self.state["system"] = e["gauges"]
 
 
 SCHEMA = """

@@ -52,7 +52,8 @@ vision/
   services/        llm.py (LM Studio OpenAI-compatible + Anthropic), oauth.py (Google/Microsoft),
                    mailcal.py (Gmail/GCal/Graph), traffic_api.py (TomTom), news.py (Google News RSS),
                    weather.py (Open-Meteo), markets.py (Yahoo chart, CoinGecko, Bank of Canada FX),
-                   fyers.py, kite_mcp.py (Zerodha via hosted Kite MCP, persistent session), wealthsimple.py (CSV)
+                   fyers.py, kite_mcp.py (Zerodha via hosted Kite MCP, persistent session), wealthsimple.py (CSV),
+                   sysmon.py (Instruments: CPU/memory via psutil, GPU via ioreg or nvidia-smi)
   masters/         catalog.json (shared with the dashboard) + one module per live master
 dashboard/
   Main.dc.html     the HUD (canvas "design" format: {{holes}}, <sc-for>, <sc-if>, logic class)
@@ -92,7 +93,7 @@ Tests: mock HTTP with `httpx.MockTransport`; use `FakeLLM` from tests/test_phase
 · `/auth/{google|microsoft}/login?account=` + `/callback` · `/auth/fyers/login` + `/callback` · `WS /ws`
 
 WebSocket events: `snapshot, agent, master_report(+data), boot, log, notice, notice_clear, approval,
-approval_decided, telegram, brief, reminder, wake`.
+approval_decided, telegram, brief, reminder, wake, system`.
 
 ## Dashboard notes
 - Main.dc.html is authored in Claude's canvas "design" format and **must keep that format** (it is also
