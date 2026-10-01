@@ -122,7 +122,7 @@ masters:
   film:     { enabled: false, trust: HOLD,    mode: stub }   # on hold
 
 voice:                     # local voice (install requirements-voice.txt); browser = use the browser's voice
-  tts: browser             # kokoro | piper | macos | browser
+  tts: kokoro              # kokoro | piper | macos | browser
   kokoro_voice: bf_emma
   kokoro_model: models/kokoro-v1.0.onnx
   kokoro_voices: models/voices-v1.0.bin
