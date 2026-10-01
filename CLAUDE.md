@@ -87,13 +87,13 @@ catalog.json), optional `APPROVAL_HANDLERS`; register in `LIVE_MODULES` (masters
 Tests: mock HTTP with `httpx.MockTransport`; use `FakeLLM` from tests/test_phase567.py.
 
 ### API
-`GET /api/state` · `POST /api/boot` · `POST /api/masters/{id}/run` · `GET /api/brief` · `POST /api/brief/send`
+`GET /api/state` · `POST /api/boot` · `POST /api/shutdown` (standby) · `POST /api/masters/{id}/run` · `GET /api/brief` · `POST /api/brief/send`
 · `GET/POST /api/approvals` · `POST /api/approvals/{id}/{approved|rejected}` · `POST /api/ask {text, session}`
 · `POST /api/tts {text}` → wav · `POST /api/stt` (raw audio body) → `{text}` · `GET /api/traffic?city=`
 · `/auth/{google|microsoft}/login?account=` + `/callback` · `/auth/fyers/login` + `/callback` · `WS /ws`
 
 WebSocket events: `snapshot, agent, master_report(+data), boot, log, notice, notice_clear, approval,
-approval_decided, telegram, brief, reminder, wake, system`.
+approval_decided, telegram, brief, reminder, wake, system, power`.
 
 ## Dashboard notes
 - Main.dc.html is authored in Claude's canvas "design" format and **must keep that format** (it is also
@@ -107,10 +107,13 @@ approval_decided, telegram, brief, reminder, wake, system`.
 - Voice: `speak()` uses `/api/tts` when `voice.tts` is available (rings follow real loudness), else the
   browser voice pinned to a natural female voice (cloud/neural first). `startVoice()` uses `/api/stt`
   (MediaRecorder + silence detection) when available, else browser speech recognition. `wake` event opens the mic.
+- Music: `dashboard/audio/inspired.mp3` during the boot roll call, fading into `roadside.mp3` as a quiet loop
+  that ducks while VISION speaks or listens. Switch in the voice menu (`vision-music` in localStorage).
+- Power button: confirmation → `/api/shutdown` → the roll call in reverse → standby screen; "Power on" calls `/api/boot`.
 - Design system: palette #FBCA03 gold, #B97D10 bronze, #AA0505 red, #6A0C0B dark red, #67C7EB blue
   (sparingly), bg #07080A. Fonts: **Michroma** headings, **Nunito Sans** body, **JetBrains Mono** numbers.
   Rounded corners 8–14 px. Subtle starfield background. No scrollbars (lists fit or page themselves).
-  Center: tesseract core with 10 gold diamond icons on one ring (glass hover cards). Mani reverted
+  Center: Mani's triangle emblem (`dashboard/core.webp`, pulsing; swells with the voice) with 10 gold diamond icons on one ring (glass hover cards). Mani reverted
   a "sun" core and solar-system orbits — don't reintroduce them.
 
 ## Decisions log

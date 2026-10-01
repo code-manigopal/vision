@@ -134,3 +134,6 @@ data/ logs/ vault/ inbox/   created on setup (not shared)
 ## Tested vs. untested
 27 automated tests cover the core, every live master, approvals, Telegram, the Ask engine and voice fallbacks (see `tests/`). Every external service is mocked in tests. Real-world checks happen
 on your Mac mini: run `.venv/bin/python -m vision check` after adding each key, and watch `logs/vision.log`.
+
+## Credits
+- Dashboard music (`dashboard/audio/`): "Inspired" by NEFFEX (boot roll call) and "Roadside (Azaleh VIP)" by Azaleh x Descant (ambient loop).
