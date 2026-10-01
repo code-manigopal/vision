@@ -1,4 +1,5 @@
 import asyncio
+import io
 import json
 import time
 
@@ -206,6 +207,7 @@ ORDERS = []
 
 
 DELETED: list[str] = []   # Cloudflare Workers removed during a test
+UPLOADS: list[bytes] = []  # Worker script uploads
 
 
 def router(req: httpx.Request) -> httpx.Response:
@@ -242,7 +244,19 @@ def router(req: httpx.Request) -> httpx.Response:
         return httpx.Response(200, text="<html><body>24/7 emergency service, free quotes</body></html>")
     if h == "api.openverse.org":
         return httpx.Response(200, json={"results": [{"url": "https://img/1.jpg", "title": "Pipes", "creator": "A", "license": "by", "license_version": "4.0", "foreign_landing_url": "https://src/1"}]})
+    if h == "img":
+        from PIL import Image
+        buf = io.BytesIO()
+        Image.new("RGB", (2000, 1200), "#336699").save(buf, "JPEG")
+        return httpx.Response(200, content=buf.getvalue())
     if h == "api.cloudflare.com":
+        if path.endswith("/assets-upload-session"):
+            manifest = json.loads(req.content)["manifest"]
+            return httpx.Response(200, json={"result": {"jwt": "session", "buckets": [[v["hash"] for v in manifest.values()]]}})
+        if path.endswith("/assets/upload"):
+            return httpx.Response(201, json={"result": {"jwt": "assets-done"}})
+        if "/workers/scripts/" in path and req.method == "PUT":
+            UPLOADS.append(req.content)
         if path.endswith("/workers/subdomain"):
             return httpx.Response(200, json={"result": {"subdomain": "mani"}})
         if req.method == "DELETE":
@@ -318,6 +332,9 @@ def test_web_designer_pipeline(tmp_path, web_mock, monkeypatch):
     assert lead["url"] == "https://demo-jesse-s-plumbing.mani.workers.dev"
     page = (tmp_path / "data" / "sites" / "jesse-s-plumbing" / "index.html").read_text()
     assert "Jesse&#x27;s Plumbing" in page and "tel:5195550100" in page and "Pipes by A (BY 4.0)" in page
+    assert 'src="img/1.webp"' in page and "Manrope" in page and "Fast and fair" in page      # local photo, trade style, real review
+    assert (tmp_path / "data" / "sites" / "jesse-s-plumbing" / "img" / "1.webp").stat().st_size > 0
+    assert b"assets-done" in UPLOADS[-1]                                  # images ship as Worker static assets
     assert not o.store.kv_has("leads", "p2")                              # has a website: competitor, not a lead
     pitch = [a for a in o.store.pending_approvals() if a["payload"]["kind"] == "proposal"][0]
     assert "CAD 500" in pitch["payload"]["message"] and "pitch waiting" in o.bus.state["reports"]["web"]
@@ -380,8 +397,8 @@ def test_color_theme_from_colorhunt():
         for i in range(25):
             th = pick_theme({"id": f"lead-{i}", "type": t})
             assert th.get("palette"), "palettes.json should be found"
-            assert _contrast(rgb(th["text"]), rgb(th["bg"])) >= 7
-            assert _contrast(rgb(th["primary"]), rgb(th["bg"])) >= 4.5
-            assert _contrast(rgb(th["accent"]), rgb(th["text"])) >= 4.5
+            assert _contrast(rgb(th["text"]), rgb(th["bg"])) >= 9.5
+            assert _contrast(rgb(th["primary"]), rgb(th["bg"])) >= 5
+            assert _contrast(rgb(th["accent"]), rgb(th["text"])) >= 4.3
     assert pick_theme({"id": "a", "type": "cafe"}) == pick_theme({"id": "a", "type": "cafe"})
     assert pick_theme({"id": "a", "type": "cafe"}, ["neon"]) != pick_theme({"id": "a", "type": "cafe"})

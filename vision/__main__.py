@@ -33,7 +33,7 @@ def check() -> int:
     keys = {"TOMTOM_API_KEY": "Traffic Desk", "TELEGRAM_BOT_TOKEN": "Telegram bot", "TELEGRAM_CHAT_ID": "Telegram: your chat (send /start to the bot to get it)",
             "FYERS_APP_ID": "Investments · Fyers", "GOOGLE_CLIENT_ID": "Email + Calendar · Google sign-in", "MS_CLIENT_ID": "Email + Calendar · Microsoft sign-in",
             "ANTHROPIC_API_KEY": "Cloud model (optional)", "ADZUNA_APP_ID": "Job Hunt · Adzuna", "GOOGLE_MAPS_API_KEY": "Web Designer · Places",
-            "CLOUDFLARE_API_TOKEN": "Web Designer · deploys", "OPENSKY_CLIENT_ID": "World Watch (optional)", "OANDA_API_TOKEN": "Trading Desk"}
+            "CLOUDFLARE_API_TOKEN": "Web Designer · deploys", "PEXELS_API_KEY": "Web Designer · stock photos (optional)", "OPENSKY_CLIENT_ID": "World Watch (optional)", "OANDA_API_TOKEN": "Trading Desk"}
     for k, used in keys.items():
         print(f"  {'✓' if secret(k) else '·'} {k:<22} {used}")
     import asyncio as _a

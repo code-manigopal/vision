@@ -86,6 +86,7 @@ masters:
       business_types: [plumber, beauty_salon, hair_care, restaurant, cafe, car_repair, bakery]
       max_new_leads: 3
       price: "CAD 500"
+      # images_per_site: 6
       # palette_themes: { hair_care: [vintage, gold], cafe: [coffee, cream] }   # ColorHunt themes per type; see vision/masters/skills/color-palettes.md
   jobs:
     enabled: true

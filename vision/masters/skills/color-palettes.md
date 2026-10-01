@@ -17,9 +17,9 @@ Full data: `vision/masters/palettes.json` — one object per line, sorted by lik
 ## How to pick
 
 1. Map the business type to themes (table below); let the design brief's mood override it.
-2. Filter `palettes.json` by those themes, keep the top ~40 by likes, pick one seeded by the lead id so two similar businesses differ.
-3. Assign roles by luminance, not by position: lightest = `bg`, darkest = `text`, most saturated of the other two = `accent`, the remaining one = `primary`.
-4. If no colour is dark enough for text (contrast with `bg` under 4.5:1 — common in pastel/light themes), darken the `primary` hue to ~15% lightness for `text`.
+2. Filter `palettes.json` by those themes, drop palettes with no real colour in them, rank by how many of the themes match and then by likes, keep the top 40, pick one seeded by the lead id so two similar businesses differ.
+3. Assign roles: lightest = `bg`, most colourful of the rest = `primary`, next = `accent`.
+4. `text` is the `primary` hue at ~15% lightness; `primary` is darkened (hue kept) until it reads on `bg`.
 5. Derive the rest in code: `surface` = white or bg lightened, `line` = bg darkened 8%, `muted` = text at 65%, `on-dark` = bg.
 6. Buttons: text on `accent` must also pass 4.5:1; otherwise use `text` colour on it.
 

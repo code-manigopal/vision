@@ -80,7 +80,7 @@ your calendar; approving books the event (invites go out) and replies. Reminders
 |---|---|---|
 | **World Watch** | optional `OPENSKY_CLIENT_ID/SECRET` | Live flights on the globe; routes from adsbdb; refreshes every 5 min. |
 | **Job Hunt** | `ADZUNA_APP_ID/KEY` (free) | Plus Job Bank alert emails and `target_companies` career pages. Put your resume at `vault/resume/master.md`. Packages land in `data/applications/`; **you** submit. |
-| **Web Designer** | `GOOGLE_MAPS_API_KEY`, `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` | Finds no-website businesses, builds and deploys a demo to workers.dev, drafts the pitch for your OK. Images are openly licensed with credits on the page. |
+| **Web Designer** | `GOOGLE_MAPS_API_KEY`, `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` | Finds no-website businesses, builds and deploys a demo to workers.dev, drafts the pitch for your OK. Four page styles, ColorHunt palettes, stock photos from Pexels/Pixabay (optional `PEXELS_API_KEY`, `PIXABAY_API_KEY`) or Openverse, saved locally with credits on the page. |
 | **Trading Desk** | `OANDA_API_TOKEN`, `OANDA_ACCOUNT_ID`, `OANDA_ENV=practice` | Analysts → debate → judge → risk → your OK → order. Practice only until `live_trading: true` *and* `OANDA_ENV=live`. Approvals expire after 30 min and are refused if price moved too far. |
 
 ## Setup (once)

@@ -6,6 +6,12 @@
       "runtimeExecutable": ".venv/bin/python",
       "runtimeArgs": ["-c", "import uvicorn; from vision.server import create_app; uvicorn.run(create_app(boot_on_start=False, schedules=False, telegram_on=False, voice_on=False), host='127.0.0.1', port=8765)"],
       "port": 8765
+    },
+    {
+      "name": "demo-sites",
+      "runtimeExecutable": ".venv/bin/python",
+      "runtimeArgs": ["-m", "http.server", "8766", "--bind", "127.0.0.1", "--directory", "data/sites"],
+      "port": 8766
     }
   ]
 }

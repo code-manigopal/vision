@@ -126,7 +126,10 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
 - Zerodha via hosted Kite MCP (read-only); Fyers via API v3 with daily login (PIN refresh optional).
 - Job Hunt: **never touch LinkedIn or Indeed** (not even alert emails). Sources: Job Bank alert emails,
   Adzuna, Greenhouse/Lever/Ashby boards. Never auto-applies; never invents resume content.
-- Web Designer images: Openverse openly licensed only, credited on the page. Pitches need approval.
+- Web Designer images: free stock (Pexels, Pixabay) then Openverse, downloaded as .webp and credited on the page; never
+  Google Maps photos or AI-generated images. Unsplash is out (its API forbids rehosting). Pitches need approval.
+- Web Designer design: the model only writes JSON (design brief, copy); layout comes from `masters/site_template.py`
+  (4 styles: luxe, sunny, trade, editorial), colours from `masters/palettes.json` (ColorHunt) via `pick_theme`.
 - Trading: practice account default; live needs OANDA_ENV=live AND options.live_trading: true;
   approval TTL 30 min; refuse if price moved > 0.5 ATR; units capped.
 - Weather Agent belongs to News Desk; World Watch is flights only. Film Studio is on hold (stub, disabled).
@@ -140,7 +143,7 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
 | Investments | live | Kite login link, FYERS_APP_ID/SECRET (+PIN), Wealthsimple CSV in inbox/wealthsimple |
 | Email / Calendar | live | GOOGLE_CLIENT_ID/SECRET and/or MS_CLIENT_ID/SECRET, accounts in config, sign-in |
 | Job Hunt | live | ADZUNA keys, vault/resume/master.md, target titles/companies |
-| Web Designer | live | GOOGLE_MAPS_API_KEY, CLOUDFLARE_API_TOKEN + ACCOUNT_ID |
+| Web Designer | live | GOOGLE_MAPS_API_KEY, CLOUDFLARE_API_TOKEN + ACCOUNT_ID, optional PEXELS_API_KEY / PIXABAY_API_KEY |
 | World Watch | live | optional OPENSKY creds |
 | Trading Desk | live | OANDA practice token + account |
 | Film Studio | stub, off | on hold (future: GPU worker on Windows PC) |
