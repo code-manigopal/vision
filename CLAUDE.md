@@ -1,5 +1,15 @@
 # VISION — handover for Claude Code
 
+## Working rules (read first)
+The goal is the best result for the fewest usage credits and tokens.
+1. Delegate large, parallel, or search-heavy work to sub-agents (broad codebase sweeps, independent
+   multi-file changes, long research). Do small, targeted edits directly — a sub-agent starts cold and
+   re-reads context, so it costs more than it saves on a small task.
+2. Give sub-agents the lightest model that can do the job: Haiku for simple lookups, searches, and
+   mechanical edits; Sonnet for routine coding; the main model only for design and hard debugging.
+3. Keep context lean: read only the parts of files you need, give sub-agents a self-contained brief,
+   and ask them to return conclusions, not file dumps.
+
 VISION is Mani's personal assistant: one always-on Python service on a **Mac mini M1 (16 GB)** that runs
 **10 master agents**, each with its own sub-agents, a red/gold HUD dashboard, Telegram briefs/alerts,
 an AI "Ask" engine (LM Studio local model + optional cloud), and optional local voice.
