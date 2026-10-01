@@ -45,8 +45,9 @@ def build_masters(cfg: Config) -> list[Master]:
             if name in live:
                 return live[name]
             a = by_name[name]
-            summary = spec["demo_report"] if name == spec["reporter"] else ""
-            return StubAgent(name=name, tier=a["tier"], note=a["note"], status=a["status"], label=a["label"], summary=summary)
+            # a stub has done nothing real: never report the catalog's sample figures as if it had
+            summary = "Not built yet" if name == spec["reporter"] else ""
+            return StubAgent(name=name, tier=a["tier"], note=a["note"], status="idle", label="NOT BUILT", summary=summary)
 
         stages = [Stage(s["title"], [make(n) for n in s["agents"]], approval=s.get("approval", False)) for s in spec["stages"]]
         m = Master(mid, spec["name"], stages, spec["reporter"], trust=mc.trust, enabled=mc.enabled,

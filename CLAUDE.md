@@ -102,6 +102,9 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   `dc-runtime.js` implements exactly the subset used — extend it if you use something new.
 - The live bridge is active only on localhost; elsewhere it shows demo data ("PREVIEW · DEMO DATA").
   Live data overrides demo data in `renderVals` (`s.live.*`), so every view still works without the backend.
+  **Connected = real data or an honest "waiting / no data yet", never sample values**, on screen or spoken
+  (`CON` / `bLive` in `renderVals`). The rule-based local Ask engine is preview-only: when connected and the
+  LLM doesn't answer, VISION says the model is offline (`modelOffline`) instead of answering from samples.
 - Ask flow: `runCommand` → `askLive` (`/api/ask`) when connected, except navigation commands
   (`isNavCommand`); `{fallback:true}` → `runLocal` (rule-based engine + conversation layer).
 - Voice: `speak()` uses `/api/tts` when `voice.tts` is available (rings follow real loudness), else the

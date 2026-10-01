@@ -357,7 +357,58 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
       </sc-if>
 
       <sc-if value="{{askOn}}" hint-placeholder-val="{{ false }}">
-      <div class="mindbox" style="position: relative; width: 100%; height: 100%; min-height: 468px; overflow: hidden; background: rgba(8,9,12,0.9); border: 1px solid #3A3222; box-sizing: border-box; padding: 12px 16px; display: flex; flex-direction: column; gap: 8px">
+      <div class="mindbox" style="position: relative; width: 100%; height: 100%; min-height: 468px; overflow: hidden; isolation: isolate; background: transparent; border: 1px solid #3A3222; box-sizing: border-box; padding: 12px 16px; display: flex; flex-direction: column; gap: 8px">
+        <div style="position: absolute; left: 0; top: 0; right: 0; bottom: 0; z-index: -1; display: flex; align-items: center; justify-content: center; pointer-events: none">
+          <div style="position: relative; width: 430px; height: 430px; flex-shrink: 0">
+      <svg width="430" height="430" viewBox="0 0 440 440" aria-hidden="true">
+        <defs>
+          <linearGradient id="vsweep" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#FBCA03" stop-opacity="0"></stop>
+            <stop offset="100%" stop-color="#FBCA03" stop-opacity="0.45"></stop>
+          </linearGradient>
+          <radialGradient id="vcore" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#FFF4D6" stop-opacity="0.9"></stop>
+            <stop offset="40%" stop-color="#FBCA03" stop-opacity="0.45"></stop>
+            <stop offset="80%" stop-color="#AA0505" stop-opacity="0.18"></stop>
+            <stop offset="100%" stop-color="#6A0C0B" stop-opacity="0"></stop>
+          </radialGradient>
+        </defs>
+        <circle cx="220" cy="220" r="214" fill="none" stroke="#262A33" stroke-width="1"></circle>
+        <circle class="ping" cx="220" cy="220" r="160" fill="none" stroke="#AA0505" stroke-width="2"></circle>
+        <circle class="ping2" cx="220" cy="220" r="160" fill="none" stroke="#FBCA03" stroke-width="1.5"></circle>
+        <g class="sweep">
+          <path d="M220 220 L220 12 A208 208 0 0 1 367 73 Z" fill="url(#vsweep)"></path>
+          <line x1="220" y1="220" x2="367" y2="73" stroke="#FBCA03" stroke-width="1.5" opacity="0.8"></line>
+        </g>
+        <g class="r4">
+          <circle cx="220" cy="220" r="205" fill="none" stroke="#B97D10" stroke-width="1.5" stroke-dasharray="1 7"></circle>
+        </g>
+        <g class="orb">
+          <circle cx="220" cy="220" r="190" fill="none" stroke="#3A3222" stroke-width="1" stroke-dasharray="4 10"></circle>
+        </g>
+        <path d="{{voiceBars}}" fill="none" stroke="#FBCA03" stroke-width="2.4" stroke-linecap="round" opacity="{{voiceOpacity}}" class="tglow"></path>
+        <circle cx="220" cy="220" r="172" fill="none" stroke="#AA0505" stroke-width="{{voiceGlowW}}" opacity="{{voiceGlowO}}"></circle>
+        <g style="transform-box: view-box; transform-origin: center; transform: scale({{voiceScaleOuter}})">
+        <g class="r1">
+          <circle class="cshift" cx="220" cy="220" r="168" fill="none" stroke="#FBCA03" stroke-width="2" stroke-dasharray="70 18"></circle>
+        </g>
+        </g>
+        <g style="transform-box: view-box; transform-origin: center; transform: scale({{voiceScaleInner}})">
+        <g class="r2">
+          <circle cx="220" cy="220" r="150" fill="none" stroke="#AA0505" stroke-width="10" stroke-dasharray="26 14" opacity="0.9"></circle>
+        </g>
+        </g>
+        <g class="r3">
+          <circle cx="220" cy="220" r="128" fill="none" stroke="#FBCA03" stroke-width="1.5" stroke-dasharray="2 5"></circle>
+        </g>
+        <circle cx="220" cy="220" r="112" fill="#0A0806" stroke="#FBCA03" stroke-width="2"></circle>
+        <circle cx="220" cy="220" r="100" fill="url(#vcore)" opacity="0.5"></circle>
+      </svg>
+      <div style="position: absolute; left: 0; top: 0; width: 430px; height: 430px; display: flex; align-items: center; justify-content: center; pointer-events: none">
+        <img class="coreimg" src="/dashboard/core.webp" alt="" style="position: relative; top: 15px; width: 250px; height: 250px">
+      </div>
+          </div>
+        </div>
         <div style="display: flex; align-items: center; gap: 12px">
           <div style="font-family: 'Michroma', sans-serif; font-size: 12px; letter-spacing: 3px; color: #FBCA03">ASK VISION</div>
           <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #9A8F76">{{askMeta}}</div>
@@ -370,7 +421,7 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
             <span style="font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: #FBCA03; border: 1px solid #B97D10; background: rgba(30,26,16,0.8); border-radius: 12px; padding: 3px 10px">{{ai}}</span>
           </sc-for>
         </div>
-        <div style="display: flex; flex-direction: column; gap: 4px; background: rgba(13,15,20,0.82); border: 1px solid #262A33; border-radius: 8px; padding: 8px 10px">
+        <div style="display: flex; flex-direction: column; gap: 4px; background: rgba(13,15,20,0.55); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); border: 1px solid #262A33; border-radius: 8px; padding: 8px 10px">
           <sc-for list="{{askSteps}}" as="st" hint-placeholder-count="4">
             <div class="{{st.rowCls}}" style="display: flex; align-items: center; gap: 10px; min-height: 22px">
               <span class="{{st.icon}}"></span>
@@ -382,7 +433,7 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
           </sc-for>
         </div>
         <sc-if value="{{askRouteOn}}" hint-placeholder-val="{{ false }}">
-          <div style="background: rgba(13,15,20,0.82); border: 1px solid #262A33; border-radius: 8px; padding: 8px 12px; display: flex; flex-direction: column; gap: 6px">
+          <div style="background: rgba(13,15,20,0.55); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); border: 1px solid #262A33; border-radius: 8px; padding: 8px 12px; display: flex; flex-direction: column; gap: 6px">
             <div style="display: flex; align-items: center; gap: 10px">
               <span style="font-size: 13px; font-weight: 700; color: #EDE6D6; white-space: nowrap">{{askRoute.from}}</span>
               <span style="width: 10px; height: 10px; border-radius: 50%; background: #FBCA03; box-shadow: 0 0 8px #FBCA03; flex-shrink: 0"></span>
@@ -400,7 +451,7 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
           </div>
         </sc-if>
         <sc-if value="{{askDone}}" hint-placeholder-val="{{ false }}">
-          <div class="pgA" style="background: rgba(21,19,11,0.92); border: 1px solid #FBCA03; border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; box-shadow: 0 0 14px rgba(251,202,3,0.2)">
+          <div class="pgA" style="background: rgba(21,19,11,0.65); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); border: 1px solid #FBCA03; border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; box-shadow: 0 0 14px rgba(251,202,3,0.2)">
             <div style="font-size: 14px; color: #EDE6D6; line-height: 1.4"><span style="font-family: 'Michroma', sans-serif; font-size: 10px; letter-spacing: 2px; color: #FBCA03">VISION ›</span>  {{askSummary}}</div>
             <div style="display: flex; flex-wrap: wrap; gap: 6px">
               <sc-for list="{{askFollow}}" as="fu" hint-placeholder-count="3">
@@ -416,7 +467,7 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
       <div class="mindbox" style="position: relative; width: 100%; height: 100%; min-height: 468px; overflow: hidden; background: rgba(8,9,12,0.88); border: 1px solid #3A3222; box-sizing: border-box; padding: 12px 16px; display: flex; flex-direction: column; gap: 6px">
         <div style="display: flex; align-items: center; gap: 12px">
           <div style="font-family: 'Michroma', sans-serif; font-size: 12px; letter-spacing: 3px; color: #FBCA03">CALENDAR · NEXT 5 WEEKS</div>
-          <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #9A8F76">Calendar Manager · forecast by Weather Agent · [DEMO DATA]</div>
+          <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #9A8F76">Calendar Manager · forecast by Weather Agent · {{calTag}}</div>
           <div style="flex-grow: 1"></div>
           <button class="qa" onClick="{{closeCal}}" style="height: 34px">Close</button>
         </div>
@@ -741,9 +792,11 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
         </div>
       </div>
       <div style="position: relative; height: 40px; background: #101217; border: 1px solid #1C1F26; border-radius: 8px">
+        <sc-if value="{{demoOnly}}" hint-placeholder-val="{{ true }}">
         <div style="position: absolute; left: 12%; top: 10px; width: 6%; height: 20px; background: #3A3222"></div>
         <div style="position: absolute; left: 38%; top: 10px; width: 10%; height: 20px; background: #B97D10"></div>
         <div style="position: absolute; left: 50%; top: 10px; width: 4%; height: 20px; background: #6A0C0B"></div>
+        </sc-if>
         <div style="position: absolute; left: 25%; top: 0; width: 2px; height: 40px; background: #67C7EB"></div>
         <div style="position: absolute; left: calc(25% + 5px); top: 3px; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #67C7EB">06:00 TG</div>
         <div style="position: absolute; left: 75%; top: 0; width: 2px; height: 40px; background: #67C7EB"></div>
@@ -897,6 +950,7 @@ class Component extends DCLogic {
       ] };
   }
   componentDidMount() {
+    if (this.isLocal()) this.setState({ log: [] });   // on the Mac the log is the backend's; sample lines are for the preview
     this.loadVoices = () => {
       try {
         const all = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
@@ -1064,7 +1118,7 @@ class Component extends DCLogic {
       }
       if (/^(next|what else|anything else|and then|skip)\b/.test(q)) { c.offer = null; this.takeOffer(c); return true; }
     } else if (/^(yes|yeah|yep|sure|ok|okay|go on|next|what else|anything else)\b/.test(q)) {
-      this.turn(this.pick(["Nothing's waiting on you right now. Anything you want me to check?", "That's everything for now. Want me to look at anything?"])); return true;
+      this.turn(this.state.liveUp ? 'What would you like me to check?' : this.pick(["Nothing's waiting on you right now. Anything you want me to check?", "That's everything for now. Want me to look at anything?"])); return true;
     }
     return false;
   }
@@ -1076,14 +1130,16 @@ class Component extends DCLogic {
     if (needs.length) txt += this.cap1(needs[0].text) + '. ' + (needs.length > 1 ? this.cap1(this.join(needs.slice(1).map((n) => n.text))) + '. ' : '');
     if (m.notables.length) txt += this.cap1(this.join(m.notables.slice(0, 2))) + '. ';
     const queue = m.needs.map((n) => n.key);
-    if (queue.length) txt += this.pick(['Want to start with ', 'Shall we start with ']) + m.needs[0].label + '?';
+    const live = this.state.liveUp;
+    if (queue.length) txt += live ? "They're in the panel on the right." : this.pick(['Want to start with ', 'Shall we start with ']) + m.needs[0].label + '?';
     else txt += this.pick(['Anything you want me to check?', 'Want me to look at anything?']);
-    this.convo = { at: Date.now(), queue, labels: Object.fromEntries(m.needs.map((n) => [n.key, n.label])), offer: queue.length ? { key: queue[0] } : null };
+    this.convo = live ? null : { at: Date.now(), queue, labels: Object.fromEntries(m.needs.map((n) => [n.key, n.label])), offer: queue.length ? { key: queue[0] } : null };
     this.setState({ mode: 'ambient', mind: false, page: 0 });
     this.scrollToTop();
     this.turn(txt);
   }
   takeOffer(c) {
+    if (this.state.liveUp) { this.convo = null; this.turn("That's in the Needs Approval panel on the right. You can approve or reject it there, or on Telegram.", { listen: false }); return; }
     c.at = Date.now();
     let o = c.offer;
     if (!o && c.queue.length) o = { key: c.queue[0] };
@@ -1303,8 +1359,16 @@ class Component extends DCLogic {
     if (it.kind === 'trading') return { chip: 'TRADING DESK', steps: [['TRADING DESK', 'Portfolio Manager', 'Latest call', 'awaiting you']], say: 'The Trading Desk final call is Underweight and is waiting for your approval.', follow: ['Show trading agents'] };
     return null;
   }
+  modelOffline(raw) {
+    const msg = "My language model isn't answering right now, so I can't answer that. The briefing, the calendar, flights and traffic still work.";
+    clearTimeout(this.askTimer); this.convo = null;
+    this.setState({ mode: 'ask', mind: false, page: 0, askSrc: 'offline', askQ: (raw || '').trim(), askAt: Date.now(), askSteps: [['VISION', 'Assistant', 'language model offline', '']],
+      askChips: ['OFFLINE'], askSay: msg, askFollow: ['Brief me', 'Show calendar'], askRoute: null, askSpoken: true });
+    this.turn(msg, { listen: false });
+  }
   ask(raw, intents, opts) {
     const o = opts || {};
+    if (this.state.liveUp) { this.modelOffline(raw); return; }   // connected: the sample engine below must never speak for real data
     const plans = intents.map((it) => this.planFor(it)).filter(Boolean);
     const td = plans.find((p) => p.trafficData);
     let steps = [], say, chips, follow = [];
@@ -1320,7 +1384,7 @@ class Component extends DCLogic {
     }
     steps = steps.slice(0, plans.some((p) => p.route) ? 6 : 8);
     const dur = steps.length * 650 + 300;
-    this.setState({ mode: 'ask', mind: false, page: 0, askQ: raw.trim(), askAt: Date.now(), askSteps: steps, askChips: chips, askSay: say,
+    this.setState({ mode: 'ask', mind: false, page: 0, askSrc: 'local', askQ: raw.trim(), askAt: Date.now(), askSteps: steps, askChips: chips, askSay: say,
       askFollow: [...new Set(follow)].slice(0, 3), askRoute: (plans.find((p) => p.route) || {}).route || null, askSpoken: false,
       traffic: td ? td.trafficData : this.state.traffic });
     // spoken version
@@ -1355,7 +1419,7 @@ class Component extends DCLogic {
   }
   async askLive(raw) {
     this.sid = this.sid || 'dash-' + Math.random().toString(36).slice(2, 8);
-    this.setState({ mode: 'ask', mind: false, page: 0, askQ: raw.trim(), askAt: Date.now(), askSteps: [['VISION', 'Router', 'Thinking…', '']], askChips: ['AI'],
+    this.setState({ mode: 'ask', mind: false, page: 0, askSrc: 'live', askQ: raw.trim(), askAt: Date.now(), askSteps: [['VISION', 'Router', 'Thinking…', '']], askChips: ['AI'],
       askSay: '', askFollow: [], askRoute: null, askSpoken: false });
     const ackT = setTimeout(() => this.speak(this.pick(['One sec.', 'Let me check.', 'On it.'])), 700);
     let res = null;
@@ -1664,7 +1728,7 @@ class Component extends DCLogic {
         ['Zerodha Sync','done','SYNCED'],['Fyers Sync','done','SYNCED'],['Wealthsimple Sync','wait','NEEDS CSV'],
         ['Portfolio Aggregator','done','DONE'],['Allocation Analyst','idle','QUEUED'],['Risk Monitor','work','WATCHING'],
         ['Market Watcher','work','WATCHING'],['Tax & Records Keeper','idle','TFSA'],['Index Tracker','done','CLOSED'],
-        ['Bitcoin Tracker','work','LIVE'],['Daily P&L Reporter','done','SENT 7:00']] },
+        ['Bitcoin Tracker','work','LIVE'],['Daily P&L Reporter','done','SENT 6:00']] },
       news: { name: 'NEWS DESK', dot: 'd-work', agents: [
         ['Indian Market News','work','SCANNING'],['Global Market News','work','SCANNING'],['Cricket News','done','UPDATED'],
         ['Political News','idle','QUEUED'],['Weather Agent','work','LIVE'],['News Summarizer','idle','QUEUED']] },
@@ -1684,6 +1748,14 @@ class Component extends DCLogic {
       const la = LV.masters[m].agents;
       if (data[m] && la && la.length) data[m].agents = la.map((a) => [a.name, a.status, a.label]);
     });
+    // Connected: real data or an honest "waiting", never the sample values (those are for the unconnected preview).
+    const CON = !!(s.liveUp && s.live);
+    const liveSum = {};
+    if (CON) {
+      const LM = LV.masters || {};
+      Object.keys(data).forEach((m) => { if (m !== 'film' && !((LM[m] || {}).agents || []).length) data[m].agents = data[m].agents.map((a) => [a[0], 'idle', 'WAITING']); });
+      ((LM[s.master] || {}).agents || []).forEach((a) => { liveSum[a.name] = a.summary || ''; });
+    }
     const masters = ['email','calendar','trading','invest','news','web','jobs','world','traffic','film'].map((id) => ({
       name: data[id].name.charAt(0) + data[id].name.slice(1).toLowerCase().replace(/ (\w)/, (m) => m.toUpperCase()),
       dot: data[id].dot,
@@ -1703,13 +1775,13 @@ class Component extends DCLogic {
 
     const g = (label, v, hot) => ({ label, val: v + '%', pct: v + '%', color: v >= hot ? '#AA0505' : '#FBCA03' });
     const liveSys = s.liveUp && s.live && s.live.system;
-    const gauges = liveSys ? liveSys.map((x) => g(x.label + (x.detail ? ' · ' + x.detail : ''), x.pct, x.hot)) : [
+    const gauges = liveSys ? liveSys.map((x) => g(x.label + (x.detail ? ' · ' + x.detail : ''), x.pct, x.hot)) : CON ? [] : [
       g('CPU', s.cpu, 80),
       g('RAM', s.ram, 85),
       g('GPU', s.gpu, 80),
       g('VRAM', s.vram, 85)
     ];
-    const gaugeTag = liveSys ? 'LIVE' : '[DEMO DATA]';
+    const gaugeTag = liveSys ? 'LIVE' : CON ? 'WAITING' : '[DEMO DATA]';
     const msgs = [
       'Film Studio is scripting Episode 04.',
       'Trading Desk is watching an OANDA mismatch.',
@@ -1756,7 +1828,9 @@ class Component extends DCLogic {
     const voiceGlowW = (2 + vp * 10).toFixed(1), voiceGlowO = (vp * 0.6).toFixed(2);
     const voiceScaleOuter = (1 + vp * 0.045).toFixed(3), voiceScaleInner = (1 - vp * 0.03).toFixed(3);
     const statusColor = s.speaking ? '#FBCA03' : '#EDE6D6';
-    const statusMsg = (s.flash && Date.now() < s.flashUntil) ? s.flash : msgs[Math.floor(s.tick / 5) % msgs.length];
+    const liveMsgs = CON ? Object.keys(s.live.reports || {}).filter((m) => data[m] && s.live.reports[m]).map((m) => data[m].name.charAt(0) + data[m].name.slice(1).toLowerCase() + ': ' + s.live.reports[m]) : [];
+    const rotMsgs = CON ? (liveMsgs.length ? liveMsgs : ['Waiting for the first reports.']) : msgs;
+    const statusMsg = (s.flash && Date.now() < s.flashUntil) ? s.flash : rotMsgs[Math.floor(s.tick / 5) % rotMsgs.length];
 
     const f = (n) => n.toFixed(1);
     // ---- VISION Mind: knowledge graph (Obsidian-style) ----
@@ -1871,7 +1945,7 @@ class Component extends DCLogic {
     const mkCard = (nm, cx, y) => {
       let cls, dot, stats, last, tier, working = false;
       if (nm === 'VISION') {
-        cls = 'gc-done'; dot = 'd-done'; stats = 'morning brief · 7:00'; last = 'say "brief me"'; tier = 'CORE';
+        cls = 'gc-done'; dot = 'd-done'; stats = 'briefs · 6:00 AM and 6:00 PM'; last = 'say "brief me"'; tier = 'CORE';
       } else if (nm === 'YOU') {
         cls = anyWait ? 'gc-wait' : 'gc-gate'; dot = anyWait ? 'd-wait' : 'd-idle';
         stats = anyWait ? 'needs your approval' : 'nothing pending'; last = 'nothing ships without you'; tier = 'GATE';
@@ -1880,8 +1954,8 @@ class Component extends DCLogic {
         cls = st[0] === 'work' ? 'gc-work' : st[0] === 'wait' || st[0] === 'error' ? 'gc-wait' : st[0] === 'done' ? 'gc-done' : st[0] === 'off' ? 'gc-off' : 'gc';
         dot = 'd-' + (st[0] === 'off' ? 'idle' : st[0]);
         const h = hash(nm);
-        stats = st[0] === 'off' ? 'disabled' : (40 + (h % 900)) + ' steps · avg ' + (2 + (h % 180) / 10).toFixed(1) + 's';
-        last = st[0] === 'wait' ? 'awaiting your approval' : (meta[nm] || ['QUICK', 'last —'])[1];
+        stats = st[0] === 'off' ? 'disabled' : CON ? String(st[1] || '').toLowerCase() : (40 + (h % 900)) + ' steps · avg ' + (2 + (h % 180) / 10).toFixed(1) + 's';
+        last = st[0] === 'wait' ? 'awaiting your approval' : CON ? (liveSum[nm] || '—') : (meta[nm] || ['QUICK', 'last —'])[1];
         tier = (meta[nm] || ['QUICK'])[0];
         working = st[0] === 'work';
       }
@@ -2046,6 +2120,7 @@ class Component extends DCLogic {
         }).map((e) => { const t = e.all_day ? null : new Date(e.start); return { h: t ? t.getHours() + t.getMinutes() / 60 : 0, title: e.title, kind: 'ev' }; })
           .sort((a2, b2) => a2.h - b2.h);
       }
+      if (bLive) return [];   // connected but the Calendar Manager hasn't reported: no invented meetings
       const wd = dt.getDay(), wk = Math.floor(idx / 7), out = [];
       if (wd === 1 || wd === 3 || wd === 5) out.push({ h: 10, title: 'Team standup', kind: 'ev' });
       if (wd === 2 && wk % 2 === 0) out.push({ h: 14, title: 'Client call', kind: 'ev' });
@@ -2068,8 +2143,8 @@ class Component extends DCLogic {
       const evs = diff < -7 ? [] : evFor(dt, i + 7);
       const liveWx = s.live && s.live.report_data && s.live.report_data.news && s.live.report_data.news.weather;
       const ld = liveWx && liveWx.daily && diff >= 0 ? liveWx.daily[diff] : null;
-      const hasWx = ld ? true : !liveWx && diff >= 0 && diff < 16;
-      const wt = ld ? ld.kind : diff === 0 ? 'cloud' : hasWx ? wxTypes[diff] : null;
+      const hasWx = ld ? true : !liveWx && !bLive && diff >= 0 && diff < 16;
+      const wt = ld ? ld.kind : !hasWx ? null : diff === 0 ? 'cloud' : wxTypes[diff];
       const hi = ld ? ld.hi : !hasWx ? null : diff === 0 ? 22 : Math.round(22 - diff * 0.45 + ((diff * 7) % 5) - 2);
       const key = dt.toISOString().slice(0, 10);
       const isSel = selKey ? selKey === key : diff === 0;
@@ -2084,14 +2159,14 @@ class Component extends DCLogic {
         pick: () => this.setState({ calSel: key }) });
       if (isSel) {
         calSelTitle = (diff === 0 ? 'TODAY · ' : '') + label.toUpperCase();
-        calSelWx = wt ? wxWords[wt] + (hi != null ? ' · high ' + hi + '°C' : '') + ' · Leamington' : 'No forecast yet (beyond 16 days)';
-        calSelEvents = evs.length ? evs.map((e) => ({ time: hh(e.h), title: e.title, note: e.note ? '· ' + e.note : '· reminder 15 min before' })) : [{ time: '', title: 'No meetings. Say "schedule a meeting" to add one.', note: '' }];
+        calSelWx = wt ? wxWords[wt] + (hi != null ? ' · high ' + hi + '°C' : '') + (liveWx && liveWx.city ? ' · ' + liveWx.city : bLive ? '' : ' · Leamington') : bLive && !liveWx ? 'Waiting for the Weather Agent' : 'No forecast yet (beyond 16 days)';
+        calSelEvents = evs.length ? evs.map((e) => ({ time: hh(e.h), title: e.title, note: e.note ? '· ' + e.note : bLive ? '' : '· reminder 15 min before' })) : [{ time: '', title: bLive && !LCal ? 'Waiting for the Calendar Manager.' : 'No meetings. Say "schedule a meeting" to add one.', note: '' }];
       }
     }
     const todayEvs = evFor(today0, today0.getDay() + 7);
     const nextEv = todayEvs.find((e) => e.h > d.getHours());
     const calTodayLine = todayEvs.length + ' today' + (nextEv ? ' · next ' + hh(nextEv.h) : ' · none left');
-    const calSpoken = todayEvs.length + (todayEvs.length === 1 ? ' meeting today' : ' meetings today') + (nextEv ? ', next at ' + hh(nextEv.h) + '.' : ', none left today.') + ' One meeting from email is waiting for your OK.';
+    const calSpoken = todayEvs.length + (todayEvs.length === 1 ? ' meeting today' : ' meetings today') + (nextEv ? ', next at ' + hh(nextEv.h) + '.' : ', none left today.') + (bLive ? '' : ' One meeting from email is waiting for your OK.');
     const mReports = [
       ['email', 'EMAIL', '24 new · 3 need you · 2 drafts'],
       ['trading', 'TRADING', 'Final call awaiting approval'],
@@ -2136,7 +2211,7 @@ class Component extends DCLogic {
       liveWait ? liveWait + (liveWait === 1 ? ' thing needs you.' : ' things need you.') : 'Nothing needs you right now.'].filter(Boolean).join(' ');
     this.lastReply = replyText.replace(' [demo data]', '') + (bLive ? liveLines.map(([m, name]) => ' ' + name.charAt(0) + name.slice(1).toLowerCase() + ': ' + liveRp[m] + '.').join('') : '') + (T ? ' Traffic in ' + T.city + ': ' + T.totalActive + ' incidents' + (T.majorDelay && TMS ? ', major delay of ' + TMS.delayMinutes + ' minutes.' : ', no major delays.') : '');
     const LDr = s.live && s.live.report_data && s.live.report_data.email && s.live.report_data.email.drafts;
-    this.draftText = LDr && LDr.length ? 'Draft reply to ' + LDr[0].to + ', ' + LDr[0].subject + '. ' + LDr[0].body + ' Say approve to send, or edit to change it.' : 'Draft reply, re: meeting next week. Hi there, thanks for your email. Thursday afternoon or Friday morning both work for me. Let me know which suits you and I will send an invite. Best regards, Mani. Say approve to send, or edit to change it.';
+    this.draftText = LDr && LDr.length ? 'Draft reply to ' + LDr[0].to + ', ' + LDr[0].subject + '. ' + LDr[0].body + ' Say approve to send, or edit to change it.' : bLive ? 'There are no reply drafts waiting right now.' : 'Draft reply, re: meeting next week. Hi there, thanks for your email. Thursday afternoon or Friday morning both work for me. Let me know which suits you and I will send an invite. Best regards, Mani. Say approve to send, or edit to change it.';
     {
       const NEED = { 'Writer': ['email', "three emails need you, and I've drafted a couple of replies", 'the emails'],
         'Scheduler': ['calendar', 'a meeting request from email needs your OK', 'the meeting request'],
@@ -2149,17 +2224,17 @@ class Component extends DCLogic {
       const add = (k, txt, label) => { if (!seen.has(k)) { seen.add(k); needs.push({ key: k, text: txt, label }); } };
       if (s.liveUp && s.live) {
         Object.keys(s.live.notices || {}).forEach((k) => { const n = NOTE[k] || [s.live.notices[k].text, 'that']; add(k, n[0], n[1]); });
-        (s.live.approvals || []).forEach((a) => add('approval:' + a.id, 'there is an approval waiting: ' + a.title, 'the approval'));
+        (s.live.approvals || []).forEach((a) => add('approval:' + a.id, 'there is an approval waiting: ' + a.title.replace(/[\s·]*(demo\s+)?https?:\/\/\S+/g, ''), 'the approval'));
       }
-      waits.forEach((n) => { const x = NEED[n]; if (x) add(x[0], x[1], x[2]); });
+      waits.forEach((n) => { const x = NEED[n]; if (x) add(x[0], bLive ? n + ' is waiting for you' : x[1], bLive ? 'that' : x[2]); });
       const PRI = ['email', 'calendar', 'trading', 'web', 'kite', 'fyers', 'wealthsimple'];
       needs.sort((a, b) => (a.key.startsWith('approval:') ? -1 : PRI.indexOf(a.key)) - (b.key.startsWith('approval:') ? -1 : PRI.indexOf(b.key)));
       const notables = [];
       const tot = RD.invest && RD.invest.ports ? RD.invest.ports.find((x) => x.total) : null;
       const pp = tot ? (tot.pct || 0) : 0.18;
-      notables.push("your portfolio's " + (pp >= 0 ? 'up ' : 'down ') + (Math.abs(pp) < 0.5 ? 'a little' : Math.abs(pp) < 1.5 ? 'about ' + (Math.round(Math.abs(pp) * 10) / 10) + ' percent' : Math.round(Math.abs(pp)) + ' percent'));
+      if (tot || !bLive) notables.push("your portfolio's " + (pp >= 0 ? 'up ' : 'down ') + (Math.abs(pp) < 0.5 ? 'a little' : Math.abs(pp) < 1.5 ? 'about ' + (Math.round(Math.abs(pp) * 10) / 10) + ' percent' : Math.round(Math.abs(pp)) + ' percent'));
       const lw = RD.news && RD.news.weather;
-      notables.push(lw ? "it's " + lw.temp + ' and ' + lw.words + ' out' : "it's 22 and cloudy out");
+      if (lw || !bLive) notables.push(lw ? "it's " + lw.temp + ' and ' + lw.words + ' out' : "it's 22 and cloudy out");
       this.statusModel = { needs, notables };
     }
     const liveNeeds = s.liveUp && s.live ? Object.keys(s.live.notices || {}).length + (s.live.approvals || []).length : null;
@@ -2217,7 +2292,7 @@ class Component extends DCLogic {
       DEL: ['Delhi', 28.56, 77.10, 5.5], BOM: ['Mumbai', 19.09, 72.87, 5.5], MAA: ['Chennai', 12.99, 80.17, 5.5], BLR: ['Bengaluru', 13.20, 77.71, 5.5],
       SIN: ['Singapore', 1.36, 103.99, 8], HND: ['Tokyo', 35.55, 139.78, 9], SYD: ['Sydney', -33.94, 151.18, 10], GRU: ['São Paulo', -23.43, -46.47, -3],
       JNB: ['Johannesburg', -26.14, 28.24, 2], IST: ['Istanbul', 41.26, 28.74, 3], HKG: ['Hong Kong', 22.31, 113.92, 8], MEX: ['Mexico City', 19.44, -99.07, -6] };
-    const FL = [['AC 056','Air Canada','YYZ','DEL',13.5],['AI 188','Air India','DEL','YYZ',15.5],['AC 848','Air Canada','YYZ','LHR',7],['BA 092','British Airways','LHR','YYZ',8],
+    const FL = bLive ? [] : [['AC 056','Air Canada','YYZ','DEL',13.5],['AI 188','Air India','DEL','YYZ',15.5],['AC 848','Air Canada','YYZ','LHR',7],['BA 092','British Airways','LHR','YYZ',8],
       ['EK 242','Emirates','DXB','YYZ',14],['QR 764','Qatar Airways','DOH','MAA',4.2],['6E 1402','IndiGo','MAA','DXB',4.3],['AI 540','Air India','MAA','DEL',2.8],
       ['DL 275','Delta','DTW','HND',13],['DL 94','Delta','DTW','CDG',8],['WS 707','WestJet','YYZ','YVR',4.9],['AC 870','Air Canada','YUL','CDG',7],
       ['UA 870','United','ORD','LHR',8],['AA 100','American','JFK','LHR',7],['LH 470','Lufthansa','FRA','YYZ',8.8],['SQ 422','Singapore Airlines','SIN','BOM',5.5],
@@ -2243,7 +2318,7 @@ class Component extends DCLogic {
     let wxCloudD = '', wxCloudN = '', wxCloudCore = '', wxRain = '', wxStorm = '', wxBolt = '', wxSun = '';
     const circ = (x, y, r) => 'M' + f(x - r) + ' ' + f(y) + 'a' + f(r) + ' ' + f(r) + ' 0 1 0 ' + f(2 * r) + ' 0a' + f(r) + ' ' + f(r) + ' 0 1 0 ' + f(-2 * r) + ' 0';
     const isDay = (la, lo) => Math.sin(la * rad) * Math.sin(decl) + Math.cos(la * rad) * Math.cos(decl) * Math.cos(lo * rad - sunLon) > 0;
-    if (s.mode === 'world' && s.wx) {
+    if (s.mode === 'world' && s.wx && !bLive) {   // the weather systems are illustrative, so they are hidden when connected
       WX.forEach((w, i) => {
         const la0 = w[0], lo0 = w[1] + w[4] * s.a * 1.2, rd = w[2], kind = w[3];
         for (let k = 0; k < 6; k++) {
@@ -2338,7 +2413,7 @@ class Component extends DCLogic {
       });
     }
     const wCount = LFd && LFd.flights && LFd.flights.length ? (LFd.total_airborne || LFd.flights.length).toLocaleString() + ' in the air · showing ' + LFd.flights.length + ' · ' + wFlights.length + ' on this side · LIVE'
-      : FL.length + ' flights tracked · ' + wFlights.length + ' on this side · [DEMO DATA]';
+      : bLive ? 'No flight data yet · waiting for the Flight Tracker' : FL.length + ' flights tracked · ' + wFlights.length + ' on this side · [DEMO DATA]';
     let orbitPath = '';
     for (let k = 0; k < 7; k++) {
       const an = (-90 + k * 360 / 7) * rad, ox = 220 + 190 * Math.cos(an), oy = 220 + 190 * Math.sin(an);
@@ -2367,7 +2442,7 @@ class Component extends DCLogic {
       openCal: () => this.setState({ mode: 'calendar', mind: false, calSel: null }), closeCal: () => this.setState({ mode: 'ambient' }),
       coreOn: !s.mind && s.mode !== 'briefing' && s.mode !== 'world' && s.mode !== 'calendar' && s.mode !== 'ask', worldOn: s.mode === 'world' && !s.mind,
       wDay, wNight, wRoute, wFlights, wCount, wxCloudD, wxCloudN, wxCloudCore, wxRain, wxStorm, wxBolt, wxSun,
-      toggleWx: () => this.setState({ wx: !this.state.wx }), wxBtn: s.wx ? 'Weather: on' : 'Weather: off', hovOn: !!hov, hov: hov || {}, orbitPath,
+      toggleWx: () => this.setState({ wx: !this.state.wx }), wxBtn: bLive ? 'Weather: n/a' : s.wx ? 'Weather: on' : 'Weather: off', hovOn: !!hov, hov: hov || {}, orbitPath,
       openWorld: () => this.setState({ mode: 'world', mind: false }),
       closeWorld: () => this.setState({ mode: 'ambient', hov: null }),
       gDown: (ev) => { this.setState({ drag: { x: ev.clientX, y: ev.clientY, lon: this.state.rotLon, lat: this.state.rotLat } }); },
@@ -2398,7 +2473,7 @@ class Component extends DCLogic {
         const done = steps.length > 0 && el >= steps.length * 650 + 250;
         const r = s.askRoute;
         return { askSteps: stepVals, askDone: done, askSummary: s.askSay || '', askIntents: s.askChips || [],
-          askMeta: (steps.length ? steps.length + ' agent calls · ' : '') + (done ? 'briefed' : 'working…') + ' · [DEMO DATA]',
+          askMeta: (steps.length ? steps.length + ' agent calls · ' : '') + (done ? 'briefed' : 'working…') + ' · ' + (s.askSrc === 'live' ? 'LIVE' : s.askSrc === 'offline' ? 'MODEL OFFLINE' : '[DEMO DATA]'),
           askFollow: (s.askFollow || []).map((label) => ({ label, go: () => this.runCommand(label) })),
           askRouteOn: !!r && done, askRoute: r ? { from: r.from, to: r.to, segs: r.segs, line1: r.km + ' km · ' + (r.now >= 60 ? Math.floor(r.now / 60) + ' h ' + (r.now % 60) + ' min' : r.now + ' min') + ' now · usual ' + (r.base >= 60 ? Math.floor(r.base / 60) + ' h ' + (r.base % 60) + ' min' : r.base + ' min') + ' · via ' + r.road,
             line2: r.delay >= 10 ? '⚠ +' + r.delay + ' min delay' : '+' + r.delay + ' min', flagColor: r.delay >= 10 ? '#FF8A73' : '#67C7EB' } : { segs: [] } };
@@ -2422,6 +2497,7 @@ class Component extends DCLogic {
       })(),
       tgStatus, tgSent, voiceBars, voiceOpacity, voiceGlowW, voiceGlowO, voiceScaleOuter, voiceScaleInner, statusColor,
       bootOn: ov.on, bootCls: ov.cls, bootPhase: ov.phase, bootPct: ov.pct, bootCount: ov.count, bootCols: ov.cols, bootLog: ov.log, replyText, approvalCount,
+      demoOnly: !CON, calTag: bLive ? (LCal ? 'LIVE' : 'WAITING FOR CALENDAR MANAGER') : '[DEMO DATA]',
       standbyOn: s.off === 'standby', confirmOn: s.confirmOff, musicLabel: 'Music: ' + (s.music ? 'on' : 'off'),
       skipBoot: () => this.setState(this.state.off === 'down' ? { off: 'standby' } : { boot: false }),
       goHome: () => this.setState({ page: 0, mind: false, mode: 'ambient', voiceMenu: false }),
