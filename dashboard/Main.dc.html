@@ -28,6 +28,30 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
 @keyframes vcoreimg{0%,100%{filter:brightness(.75) drop-shadow(0 0 3px rgba(251,202,3,.3))}50%{filter:brightness(1.45) drop-shadow(0 0 22px rgba(251,202,3,.95))}}
 .coreimg{animation:vcoreimg 2.4s ease-in-out infinite}
 .corebtn:hover .coreimg{animation-duration:1.4s}
+@keyframes vlisten{0%{transform:scale(.62);opacity:.95}100%{transform:scale(1.25);opacity:0}}
+@keyframes vcorelisten{0%,100%{filter:brightness(1) drop-shadow(0 0 8px rgba(103,199,235,.6))}50%{filter:brightness(1.5) drop-shadow(0 0 26px rgba(103,199,235,1))}}
+.lring{display:none}
+.lring-on{transform-box:view-box;transform-origin:center;animation:vlisten 1.3s ease-out infinite}
+.coreimg-listen{animation:vcorelisten 1s ease-in-out infinite}
+@keyframes holosweep{to{top:110%}}
+@keyframes hologlow{0%,100%{box-shadow:0 0 22px rgba(var(--h),.28),inset 0 0 36px rgba(var(--h),.10)}50%{box-shadow:0 0 36px rgba(var(--h),.5),inset 0 0 44px rgba(var(--h),.16)}}
+@keyframes holobeam{0%,100%{opacity:.7}50%{opacity:1}}
+.holo{position:absolute;left:50%;top:0;width:520px;height:100%;margin-left:-260px;box-sizing:border-box;padding:18px 22px;border-radius:14px;border:1px solid rgba(var(--h),.75);background:linear-gradient(180deg,rgba(var(--h),.14),rgba(var(--h),.04));box-shadow:0 0 22px rgba(var(--h),.28),inset 0 0 36px rgba(var(--h),.10);text-shadow:0 0 8px rgba(var(--h),.45);overflow:hidden;cursor:pointer;display:flex;flex-direction:column;gap:8px;transition:transform .55s cubic-bezier(.2,.8,.2,1),opacity .55s ease;backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}
+.holo-on{cursor:default;animation:hologlow 3.2s ease-in-out infinite}
+.holo-scan::before{content:'';position:absolute;left:0;top:0;right:0;bottom:0;pointer-events:none;background:repeating-linear-gradient(to bottom,rgba(var(--h),.09) 0 1px,transparent 1px 4px)}
+.holo-scan::after{content:'';position:absolute;left:0;right:0;height:70px;top:-70px;pointer-events:none;background:linear-gradient(to bottom,transparent,rgba(255,244,214,.13),transparent);animation:holosweep 4.5s linear infinite}
+.hcn{position:absolute;width:14px;height:14px;border:2px solid rgb(var(--h))}
+.hc1{left:7px;top:7px;border-right:0;border-bottom:0}.hc2{right:7px;top:7px;border-left:0;border-bottom:0}.hc3{left:7px;bottom:7px;border-right:0;border-top:0}.hc4{right:7px;bottom:7px;border-left:0;border-top:0}
+.holo-kick{font-family:'Michroma',sans-serif;font-size:10px;letter-spacing:3px;color:rgb(var(--h))}
+.holo-title{font-family:'Michroma',sans-serif;font-size:19px;letter-spacing:2px;color:#FFF4D6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.holo-row{display:flex;justify-content:space-between;gap:14px;padding:6px 0;border-bottom:1px solid rgba(var(--h),.2);font-size:14px;font-weight:600}
+.holo-num{font-family:'JetBrains Mono',monospace;font-size:13px;text-align:right;min-width:0}
+.holo-body{font-size:14.5px;line-height:1.5;color:#EDE6D6;white-space:pre-wrap;padding-top:4px}
+.holo-scroll{flex:1;min-height:0;overflow-y:auto;padding-right:8px;scrollbar-width:thin;scrollbar-color:rgba(var(--h),.7) transparent}
+.holo-scroll::-webkit-scrollbar{width:6px}
+.holo-scroll::-webkit-scrollbar-track{background:rgba(var(--h),.08);border-radius:3px}
+.holo-scroll::-webkit-scrollbar-thumb{background:rgba(var(--h),.65);border-radius:3px;box-shadow:0 0 6px rgba(var(--h),.8)}
+.holo-cone{position:absolute;left:50%;bottom:92px;top:70px;width:620px;margin-left:-310px;z-index:1;pointer-events:none;background:linear-gradient(to top,rgba(var(--h),.26),rgba(var(--h),.05) 60%,transparent);clip-path:polygon(47% 100%,53% 100%,100% 0,0 0);filter:blur(5px);animation:holobeam 3.2s ease-in-out infinite}
 .blink{animation:vblink 1.4s ease-in-out infinite}
 .tab{border-radius:8px;background:transparent;border:1px solid #3A3222;color:#B97D10;font-family:'Michroma',sans-serif;font-size:11px;letter-spacing:2px;padding:0 18px;height:44px;cursor:pointer}
 .tab-on{border-radius:8px;background:#2A2210;border:1px solid #FBCA03;color:#FBCA03;font-family:'Michroma',sans-serif;font-size:11px;letter-spacing:2px;padding:0 18px;height:44px;cursor:pointer;box-shadow:0 0 12px rgba(251,202,3,.35)}
@@ -227,6 +251,13 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
     <div style="font-size: 11.5px; color: #9A8F76; line-height: 1.4">{{voiceHint}}</div>
     <button class="qa" onClick="{{testVoice}}" style="height: 36px; background: #AA0505; border-color: #AA0505; color: #FFF4D6">Test voice</button>
     <button class="qa" onClick="{{toggleMusic}}" style="height: 36px">{{musicLabel}}</button>
+    <button class="qa" onClick="{{toggleWake}}" style="height: 36px">{{wakeLabel}}</button>
+    <div style="font-size: 11.5px; color: #9A8F76; line-height: 1.4">{{wakeHint}}</div>
+    <div style="display: flex; gap: 6px">
+      <button class="qa" onClick="{{toggleTilt}}" style="height: 34px; flex: 1; padding: 0 6px; font-size: 13px">{{tiltLabel}}</button>
+      <button class="qa" onClick="{{toggleScan}}" style="height: 34px; flex: 1; padding: 0 6px; font-size: 13px">{{scanLabel}}</button>
+      <button class="qa" onClick="{{toggleTint}}" style="height: 34px; flex: 1; padding: 0 6px; font-size: 13px">{{tintLabel}}</button>
+    </div>
   </div>
   </sc-if>
   <div style="flex-grow: 1; min-height: 0; overflow: hidden; position: relative">
@@ -298,6 +329,7 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
         <circle cx="220" cy="220" r="214" fill="none" stroke="#262A33" stroke-width="1"></circle>
         <circle class="ping" cx="220" cy="220" r="160" fill="none" stroke="#AA0505" stroke-width="2"></circle>
         <circle class="ping2" cx="220" cy="220" r="160" fill="none" stroke="#FBCA03" stroke-width="1.5"></circle>
+        <circle class="{{listenRing}}" cx="220" cy="220" r="150" fill="none" stroke="#67C7EB" stroke-width="3"></circle>
         <g class="sweep">
           <path d="M220 220 L220 12 A208 208 0 0 1 367 73 Z" fill="url(#vsweep)"></path>
           <line x1="220" y1="220" x2="367" y2="73" stroke="#FBCA03" stroke-width="1.5" opacity="0.8"></line>
@@ -327,7 +359,7 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
         <circle cx="220" cy="220" r="100" fill="url(#vcore)" opacity="0.5"></circle>
       </svg>
       <div style="position: absolute; left: 0; top: 0; width: 430px; height: 430px; display: flex; align-items: center; justify-content: center; pointer-events: none">
-        <img class="coreimg" src="/dashboard/core.webp" alt="" style="position: relative; top: 15px; width: 250px; height: 250px">
+        <img class="{{coreImgCls}}" src="/dashboard/core.webp" alt="" style="position: relative; top: 15px; width: 250px; height: 250px">
       </div>
       </button>
       <sc-for list="{{orbMarks}}" as="om" hint-placeholder-count="7">
@@ -376,6 +408,7 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
         <circle cx="220" cy="220" r="214" fill="none" stroke="#262A33" stroke-width="1"></circle>
         <circle class="ping" cx="220" cy="220" r="160" fill="none" stroke="#AA0505" stroke-width="2"></circle>
         <circle class="ping2" cx="220" cy="220" r="160" fill="none" stroke="#FBCA03" stroke-width="1.5"></circle>
+        <circle class="{{listenRing}}" cx="220" cy="220" r="150" fill="none" stroke="#67C7EB" stroke-width="3"></circle>
         <g class="sweep">
           <path d="M220 220 L220 12 A208 208 0 0 1 367 73 Z" fill="url(#vsweep)"></path>
           <line x1="220" y1="220" x2="367" y2="73" stroke="#FBCA03" stroke-width="1.5" opacity="0.8"></line>
@@ -405,7 +438,7 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
         <circle cx="220" cy="220" r="100" fill="url(#vcore)" opacity="0.5"></circle>
       </svg>
       <div style="position: absolute; left: 0; top: 0; width: 430px; height: 430px; display: flex; align-items: center; justify-content: center; pointer-events: none">
-        <img class="coreimg" src="/dashboard/core.webp" alt="" style="position: relative; top: 15px; width: 250px; height: 250px">
+        <img class="{{coreImgCls}}" src="/dashboard/core.webp" alt="" style="position: relative; top: 15px; width: 250px; height: 250px">
       </div>
           </div>
         </div>
@@ -560,10 +593,16 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
       </div>
       </sc-if>
 
-      <sc-if value="{{briefOn}}" hint-placeholder-val="{{ false }}">
-      <div class="mindbox" style="position: relative; width: 100%; height: 100%; min-height: 468px; overflow: hidden; isolation: isolate; background: transparent; border: 1px solid #3A3222; box-sizing: border-box; padding: 14px 18px; display: flex; flex-direction: column; gap: 12px; border-radius: 8px">
-        <div style="position: absolute; left: 0; top: 0; right: 0; bottom: 0; z-index: -1; display: flex; align-items: center; justify-content: center; pointer-events: none">
-          <div style="position: relative; width: 430px; height: 430px; flex-shrink: 0">
+      <sc-if value="{{deckOn}}" hint-placeholder-val="{{ false }}">
+      <div class="mindbox" style="position: relative; width: 100%; height: 100%; min-height: 468px; overflow: hidden; box-sizing: border-box; border-radius: 8px; --h: {{holoRGB}}">
+        <div style="position: absolute; left: 14px; right: 14px; top: 10px; display: flex; align-items: center; gap: 12px; z-index: 20">
+          <div style="font-family: 'Michroma', sans-serif; font-size: 12px; letter-spacing: 3px; color: #FBCA03">{{deckTitle}}</div>
+          <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #9A8F76">{{deckMeta}}</div>
+          <div style="flex-grow: 1"></div>
+          <button class="qa" onClick="{{deckToggle}}" style="height: 32px">{{deckTalkLabel}}</button>
+          <button class="qa" onClick="{{closeBrief}}" style="height: 32px">Close</button>
+        </div>
+        <div style="position: absolute; left: 50%; bottom: -118px; width: 430px; height: 430px; margin-left: -215px; transform: scale(0.42); pointer-events: none; z-index: 2">
       <svg width="430" height="430" viewBox="0 0 440 440" aria-hidden="true">
         <defs>
           <linearGradient id="vsweep" x1="0" y1="0" x2="1" y2="0">
@@ -580,6 +619,7 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
         <circle cx="220" cy="220" r="214" fill="none" stroke="#262A33" stroke-width="1"></circle>
         <circle class="ping" cx="220" cy="220" r="160" fill="none" stroke="#AA0505" stroke-width="2"></circle>
         <circle class="ping2" cx="220" cy="220" r="160" fill="none" stroke="#FBCA03" stroke-width="1.5"></circle>
+        <circle class="{{listenRing}}" cx="220" cy="220" r="150" fill="none" stroke="#67C7EB" stroke-width="3"></circle>
         <g class="sweep">
           <path d="M220 220 L220 12 A208 208 0 0 1 367 73 Z" fill="url(#vsweep)"></path>
           <line x1="220" y1="220" x2="367" y2="73" stroke="#FBCA03" stroke-width="1.5" opacity="0.8"></line>
@@ -609,61 +649,33 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
         <circle cx="220" cy="220" r="100" fill="url(#vcore)" opacity="0.5"></circle>
       </svg>
       <div style="position: absolute; left: 0; top: 0; width: 430px; height: 430px; display: flex; align-items: center; justify-content: center; pointer-events: none">
-        <img class="coreimg" src="/dashboard/core.webp" alt="" style="position: relative; top: 15px; width: 250px; height: 250px">
+        <img class="{{coreImgCls}}" src="/dashboard/core.webp" alt="" style="position: relative; top: 15px; width: 250px; height: 250px">
       </div>
-          </div>
         </div>
-        <div style="display: flex; align-items: center; gap: 12px">
-          <div style="font-family: 'Michroma', sans-serif; font-size: 12px; letter-spacing: 3px; color: #FBCA03">VISION MORNING BRIEF</div>
-          <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #9A8F76">{{briefDate}} · {{briefTag}}</div>
-          <div style="flex-grow: 1"></div>
-          <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #67C7EB; border: 1px solid #2C5566; padding: 6px 8px; border-radius: 8px">{{tgSent}}</div>
-          <button class="qa" onClick="{{closeBrief}}" style="height: 36px">Close brief</button>
-        </div>
-        <div style="background: rgba(21,19,11,0.6); border: 1px solid #B97D10; padding: 8px 12px; font-size: 14px; color: #EDE6D6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-radius: 8px"><span style="font-family: 'Michroma', sans-serif; font-size: 10px; letter-spacing: 2px; color: #FBCA03">VISION ›</span>  {{replyText}}</div>
-        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px">
-          <div style="background: rgba(13,15,20,0.55); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); border: 1px solid #262A33; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; border-radius: 8px">
-            <div style="font-family: 'Michroma', sans-serif; font-size: 10px; letter-spacing: 2px; color: #B97D10">{{bPortsTitle}}</div>
-            <sc-for list="{{bPorts}}" as="bp" hint-placeholder-count="5">
-              <div style="display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; font-weight: 600; padding: 1px 0; border-bottom: 1px solid #1C1F26">
-                <span style="color: {{bp.nameColor}}">{{bp.name}}</span>
-                <span style="font-family: 'JetBrains Mono', monospace; font-size: 13px; color: {{bp.color}}">{{bp.val}}</span>
-              </div>
-            </sc-for>
-          </div>
-          <div style="background: rgba(13,15,20,0.55); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); border: 1px solid #262A33; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; border-radius: 8px">
-            <div style="font-family: 'Michroma', sans-serif; font-size: 10px; letter-spacing: 2px; color: #B97D10">{{bMktsTitle}}</div>
-            <sc-for list="{{bMkts}}" as="bm" hint-placeholder-count="6">
-              <div style="display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; font-weight: 600; padding: 1px 0; border-bottom: 1px solid #1C1F26">
-                <span style="color: #EDE6D6">{{bm.name}}</span>
-                <span style="font-family: 'JetBrains Mono', monospace; font-size: 13px; color: {{bm.color}}">{{bm.val}}</span>
-              </div>
-            </sc-for>
-          </div>
-        </div>
-        <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px">
-          <sc-for list="{{bMasters}}" as="bmr" hint-placeholder-count="8">
-            <div style="background: rgba(13,15,20,0.55); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); border: 1px solid {{bmr.border}}; border-radius: 8px; padding: 5px 8px; min-width: 0">
-              <div style="font-family: 'Michroma', sans-serif; font-size: 9px; letter-spacing: 1px; color: #FBCA03; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{bmr.name}}</div>
-              <div style="font-size: 12px; color: {{bmr.color}}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{bmr.line}}</div>
+        <div class="holo-cone"></div>
+        <div style="position: absolute; left: 0; right: 0; top: 52px; bottom: 205px; perspective: 1200px; z-index: 5">
+          <sc-for list="{{deckCards}}" as="hc" hint-placeholder-count="3">
+            <div class="{{hc.cls}}" onClick="{{hc.pick}}" style="transform: {{hc.tf}}; opacity: {{hc.op}}; z-index: {{hc.z}}; pointer-events: {{hc.pe}}">
+              <span class="hcn hc1"></span><span class="hcn hc2"></span><span class="hcn hc3"></span><span class="hcn hc4"></span>
+              <div class="holo-kick">{{hc.kick}}</div>
+              <div class="holo-title">{{hc.title}}</div>
+              <sc-if value="{{hc.center}}" hint-placeholder-val="{{ true }}">
+                <div class="holo-scroll">
+                  <sc-for list="{{hc.rows}}" as="hr" hint-placeholder-count="4">
+                    <div class="holo-row"><span style="color: {{hr.ac}}; flex-shrink: 0">{{hr.a}}</span><span class="holo-num" style="color: {{hr.bc}}">{{hr.b}}</span></div>
+                  </sc-for>
+                  <sc-if value="{{hc.hasBody}}" hint-placeholder-val="{{ false }}">
+                    <div class="holo-body">{{hc.body}}</div>
+                  </sc-if>
+                </div>
+              </sc-if>
             </div>
           </sc-for>
         </div>
-        <div style="display: flex; gap: 8px; min-height: 0">
-        <div style="flex-grow: 1; min-width: 0; background: rgba(13,15,20,0.55); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); border: 1px solid #262A33; padding: 8px 12px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3px 14px; border-radius: 8px">
-          <sc-for list="{{bNews}}" as="bn" hint-placeholder-count="5">
-            <div style="font-size: 13px; color: #EDE6D6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis"><span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #FBCA03">{{bn.tag}}</span>  {{bn.text}}</div>
-          </sc-for>
-        </div>
-        <div style="width: 230px; flex-shrink: 0; background: {{tr.bg}}; border: 1px solid {{tr.border}}; border-radius: 8px; padding: 7px 10px; display: flex; flex-direction: column; gap: 2px">
-          <div style="display: flex; justify-content: space-between; align-items: center; gap: 6px">
-            <span style="font-family: 'Michroma', sans-serif; font-size: 9px; letter-spacing: 2px; color: #B97D10">TRAFFIC STATUS</span>
-            <span style="font-family: 'JetBrains Mono', monospace; font-size: 9px; color: #6E6654">{{tr.src}}</span>
-          </div>
-          <div style="font-family: 'Michroma', sans-serif; font-size: 11px; letter-spacing: 1px; color: #FBCA03; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{tr.title}}</div>
-          <div style="font-size: 12.5px; color: #EDE6D6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{tr.count}}</div>
-          <div style="font-size: 12px; font-weight: 700; color: {{tr.flagColor}}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{tr.flag}}</div>
-        </div>
+        <div style="position: absolute; left: 14px; right: 14px; bottom: 10px; display: flex; align-items: center; justify-content: space-between; z-index: 20">
+          <button class="qa" onClick="{{deckPrev}}" style="height: 34px">‹ Back</button>
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: #6E6654">← → to step · space to pause</span>
+          <button class="qa" onClick="{{deckNext}}" style="height: 34px">Next ›</button>
         </div>
       </div>
       </sc-if>
@@ -695,6 +707,7 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
       <div style="position: relative; width: 100%; max-width: 640px; display: flex; align-items: center; gap: 10px; background: rgba(13,15,20,0.82); border: 1px solid #B97D10; padding: 0 0 0 16px; height: 52px; box-sizing: border-box; border-radius: 8px; overflow: hidden">
         <label for="vision-ask" style="font-family: 'Michroma', sans-serif; font-size: 11px; letter-spacing: 2px; color: #FBCA03">ASK</label>
         <input id="vision-ask" value="{{cmd}}" onChange="{{onCmd}}" onKeyDown="{{onCmdKey}}" placeholder="Try: open mind" style="flex-grow: 1; background: transparent; border: none; color: #EDE6D6; font-family: 'Pixelywave', sans-serif; font-size: 14px; height: 44px; outline: none">
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 1px; color: {{wakeColor}}; white-space: nowrap; padding-right: 10px">{{wakeTag}}</span>
         <button class="{{micCls}}" onClick="{{startVoice}}" aria-label="Voice command" style="width: 52px; height: 50px; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFF4D6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0"></path><path d="M12 18v3"></path></svg>
         </button>
@@ -718,7 +731,7 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
         </div>
         <div style="display: flex; flex-direction: column; gap: 1px">
         <sc-for list="{{agents}}" as="a" hint-placeholder-count="7">
-          <div style="display: flex; align-items: center; gap: 10px; padding: 2px 0; line-height: 1.2; border-bottom: 1px solid #1C1F26">
+          <div onClick="{{a.pick}}" style="display: flex; align-items: center; gap: 10px; padding: 2px 0; line-height: 1.2; border-bottom: 1px solid #1C1F26; cursor: {{a.cursor}}">
             <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #6E6654; width: 18px">{{a.n}}</span>
             <div class="{{a.dot}}"></div>
             <span style="flex-grow: 1; font-size: 13px; font-weight: 600; color: #EDE6D6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{a.name}}</span>
@@ -941,7 +954,7 @@ class Component extends DCLogic {
   constructor(props) {
     super(props);
     this.state = { mode: 'ambient', master: 'trading', now: new Date(), tick: 0,
-      a: 0, voiceMenu: false, voices: [], voiceName: null, kVoices: [], kVoice: null, wx: true, page: 0, orbA: 0, orbHov: null, speaking: false, pulse: 0, boot: true, bootT: 0, rotLon: -40, rotLat: 22, drag: null, hov: null, mind: false, openT: 0, sel: 'root', cmd: '', listening: false, flash: '', flashUntil: 0,
+      a: 0, voiceMenu: false, voices: [], voiceName: null, kVoices: [], kVoice: null, wakeOn: false, wakeLive: false, wakeHeard: false, deckI: 0, deckTalk: false, issueText: {}, holoTilt: true, holoScan: true, holoBlue: false, wx: true, page: 0, orbA: 0, orbHov: null, speaking: false, pulse: 0, boot: true, bootT: 0, rotLon: -40, rotLat: 22, drag: null, hov: null, mind: false, openT: 0, sel: 'root', cmd: '', listening: false, flash: '', flashUntil: 0,
       cpu: 13, ram: 94, gpu: 2, vram: 16, music: true, confirmOff: false, off: null, offT: 0,
       log: [
         { t: '13:22', msg: 'Screenwriter · draft 2 of Episode 04 started' },
@@ -950,7 +963,9 @@ class Component extends DCLogic {
       ] };
   }
   componentDidMount() {
-    if (this.isLocal()) this.setState({ log: [] });   // on the Mac the log is the backend's; sample lines are for the preview
+    if (this.isLocal()) this.setState({ log: [] });
+    try { if (window.localStorage.getItem('vision-wake') === 'on') this.setState({ wakeOn: true }); } catch (e) {}
+    try { const h = JSON.parse(window.localStorage.getItem('vision-holo') || 'null'); if (h) this.setState({ holoTilt: h.tilt !== false, holoScan: h.scan !== false, holoBlue: !!h.blue }); } catch (e) {}   // on the Mac the log is the backend's; sample lines are for the preview
     this.loadVoices = () => {
       try {
         const all = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
@@ -991,6 +1006,9 @@ class Component extends DCLogic {
     const j = (v, amt, lo, hi) => clamp(Math.round(v + (Math.random() * 2 - 1) * amt), lo, hi);
     this.timer = setInterval(() => {
       const s = this.state;
+      // "Hey Vision": the wake listener runs only while VISION is neither listening for a command nor speaking
+      if (this.wakeRec && (s.listening || s.speaking || s.off || !s.wakeOn)) this.wakeStop();
+      else if (s.wakeOn && !this.wakeRec && !s.listening && !s.speaking && !s.off) this.wakeStart();
       const now = new Date();
       const next = { now, tick: s.tick + 1,
         cpu: j(s.cpu, 6, 4, 60), ram: j(s.ram, 1, 88, 97), gpu: j(s.gpu, 3, 1, 35), vram: j(s.vram, 2, 10, 30) };
@@ -1002,8 +1020,12 @@ class Component extends DCLogic {
     }, 1000);
     this.connectLive();
     this.onKey = (e) => {
+      if ((e.key === 'ArrowRight' || e.key === 'ArrowLeft' || e.key === ' ') && /^(briefing|issues)$/.test(this.state.mode) && !this.state.mind && !/^(INPUT|TEXTAREA)$/.test((e.target && e.target.tagName) || '')) {
+        e.preventDefault(); if (e.key === ' ') this.deckToggle(); else this.deckGo(e.key === 'ArrowRight' ? 1 : -1); return;
+      }
       if (e.key !== 'Escape') return;
       const s = this.state;
+      if (s.mode === 'briefing' || s.mode === 'issues') { this.stopSpeech(); this.setState({ deckTalk: false }); }
       if (s.page === 1) this.scrollToTop();
       else if (s.mind) this.setState({ mind: false });
       else if (s.voiceMenu) this.setState({ voiceMenu: false });
@@ -1038,6 +1060,7 @@ class Component extends DCLogic {
     try { window.speechSynthesis && window.speechSynthesis.removeEventListener('voiceschanged', this.loadVoices); } catch (e) {}
     clearInterval(this.timer);
     clearInterval(this.anim);
+    this.wakeStop();
     clearInterval(this.musicTimer); window.removeEventListener('pointerdown', this.onGesture); window.removeEventListener('keydown', this.onGesture);
     [this.songBoot, this.songAmb].forEach((a) => { try { a && a.pause(); } catch (e) {} });
     if (this.rec) { try { this.rec.abort(); } catch (e) {} }
@@ -1414,6 +1437,7 @@ class Component extends DCLogic {
   }
   runCommand(raw) {
     const t0 = (raw || '').toLowerCase().trim().replace(/^(hey|hi|ok|okay|yo)\s+(viz|vision)[,!.]*\s*/, '');
+    if (/\b(what'?s wrong|what is wrong|any (issues|errors|problems)|show (me )?(the )?(issues|errors|problems)|what (failed|broke|went wrong))\b/.test(t0)) { this.openIssues(); return; }
     if (this.state.liveUp && !this.useLocal && t0 && !this.isNavCommand(t0)) { this.askLive(raw); return; }
     this.runLocal(raw);
   }
@@ -1470,7 +1494,7 @@ class Component extends DCLogic {
       return;
     }
     if (t.includes('brief') || t.includes('p&l') || t.includes('pnl') || t.includes('yesterday')) {
-      this.setState({ mode: 'briefing', mind: false });
+      this.startBrief();
       this.scrollToTop();
       return;
     }
@@ -1602,6 +1626,58 @@ class Component extends DCLogic {
       });
     } catch (e) {}
   }
+  // ---- Holographic deck: cards projected from the core; the briefing narrates itself card by card ----
+  stopSpeech() {
+    this.deckTok = (this.deckTok || 0) + 1; clearTimeout(this.speakTimer);
+    try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch (e) {}
+    if (this.audioSrc) { try { this.audioSrc.onended = null; this.audioSrc.stop(); } catch (e) {} }
+    this.setState({ speaking: false });
+  }
+  deckSpeak() {
+    const tok = this.deckTok = (this.deckTok || 0) + 1, c = (this.deck || [])[this.deckIdx];
+    if (!c) return;
+    this.speak(c.say, () => {
+      if (tok !== this.deckTok || !this.state.deckTalk || !/^(briefing|issues)$/.test(this.state.mode)) return;
+      if (this.deckIdx < this.deck.length - 1) { this.deckIdx += 1; this.setState({ deckI: this.deckIdx }); setTimeout(() => { if (tok === this.deckTok) this.deckSpeak(); }, 500); }
+      else this.setState({ deckTalk: false });
+    });
+  }
+  deckGo(d) {
+    const n = (this.deck || []).length; if (!n) return;
+    const i = Math.max(0, Math.min(n - 1, this.deckIdx + d)); if (i === this.deckIdx) return;
+    this.deckIdx = i; this.setState({ deckI: i });
+    if (this.state.mode === 'issues') { this.stopSpeech(); this.explainIssue(i, this.state.deckTalk); }
+    else if (this.state.deckTalk) setTimeout(() => this.deckSpeak(), 60); else this.stopSpeech();
+  }
+  deckToggle() {
+    if (this.state.deckTalk) { this.setState({ deckTalk: false }); this.stopSpeech(); return; }
+    this.setState({ deckTalk: true });
+    if (this.state.mode === 'issues') this.explainIssue(this.deckIdx, true); else setTimeout(() => this.deckSpeak(), 60);
+  }
+  startBrief() {
+    this.stopSpeech(); this.deckIdx = 0;
+    this.setState({ mode: 'briefing', mind: false, page: 0, deckI: 0, deckTalk: true });
+    setTimeout(() => this.deckSpeak(), 700);
+  }
+  openIssues(key) {
+    this.stopSpeech();
+    this.setState({ mode: 'issues', mind: false, page: 0, deckI: 0, deckTalk: true });
+    setTimeout(() => { const i = Math.max(0, (this.deck || []).findIndex((c) => c.key === key)); this.deckIdx = i; this.setState({ deckI: i }); this.explainIssue(i, true); }, 80);
+  }
+  async explainIssue(i, speak) {
+    const c = (this.deck || [])[i]; if (!c) return;
+    let text = (this.state.issueText || {})[c.key];
+    if (!text && c.key.includes('/') && this.state.liveUp) {
+      try {
+        const cut = c.key.indexOf('/');
+        const r = await fetch('/api/issues/explain', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ master: c.key.slice(0, cut), agent: c.key.slice(cut + 1) }) });
+        const j = r.ok ? await r.json() : null; text = j && j.text;
+      } catch (e) {}
+      if (text) this.setState({ issueText: Object.assign({}, this.state.issueText, { [c.key]: text }) });
+    }
+    if (speak && this.state.mode === 'issues' && this.deckIdx === i) { const tok = this.deckTok = (this.deckTok || 0) + 1; this.speak(text || c.say, () => { if (tok === this.deckTok) this.setState({ deckTalk: false }); }); }
+  }
+  static WAKE_RE = /\b(hey|hi|hay|ok|okay)[\s,]*(vision|visions|fission|revision|division|vizhen)\b/;
   async loadKokoroVoices() {
     // Kokoro runs on the Mac: its voices replace the browser's list in the voice menu
     try {
@@ -1673,7 +1749,39 @@ class Component extends DCLogic {
       rec.start(); this.setState({ listening: true }); requestAnimationFrame(watch);
     } catch (e) { this.setState({ listening: false }); this.sttFailed = true; this.startVoice(true); }
   }
+  // ---- "Hey Vision": Chrome's speech recognition kept open, reacting only to the wake phrase ----
+  wakeStart() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR || this.wakeRec || !this.state.wakeOn) return;
+    try {
+      const r = new SR(); r.lang = 'en-US'; r.continuous = true; r.interimResults = true;
+      r.onresult = (e) => {
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          const txt = (e.results[i][0].transcript || '').toLowerCase(), m = txt.match(Component.WAKE_RE);
+          if (!m) continue;
+          if (!this.state.wakeHeard) this.setState({ wakeHeard: true });      // the core shows it heard you straight away
+          if (e.results[i].isFinal) { this.wakeHit(txt.slice(m.index + m[0].length).replace(/^[\s,.!?]+/, '').trim()); return; }
+        }
+      };
+      r.onerror = (ev) => { if (ev && (ev.error === 'not-allowed' || ev.error === 'service-not-allowed')) { this.setState({ wakeOn: false }); this.say('The microphone is blocked for this page, so the wake word is off. Allow the microphone in Chrome and switch it on again.'); } };
+      r.onend = () => { if (this.wakeRec === r) { this.wakeRec = null; this.setState({ wakeLive: false, wakeHeard: false }); } };   // Chrome ends it about once a minute; the timer restarts it
+      r.start(); this.wakeRec = r; this.setState({ wakeLive: true });
+    } catch (e) { this.wakeRec = null; }
+  }
+  wakeStop() {
+    const r = this.wakeRec; this.wakeRec = null;
+    if (r) { try { r.onend = null; r.onresult = null; r.abort(); } catch (e) {} }
+    if (this.state.wakeLive || this.state.wakeHeard) this.setState({ wakeLive: false, wakeHeard: false });
+  }
+  wakeHit(rest) {
+    this.wakeStop();
+    if (this.state.off) return;
+    this.voiceAt = Date.now();
+    if (rest && rest.length > 2) { this.setState({ cmd: rest }); this.runCommand(rest); return; }   // "Hey Vision, brief me" in one breath
+    this.startVoice(true);
+  }
   startVoice(quiet) {
+    this.wakeStop();
     const V = this.state.liveUp && this.state.live && this.state.live.voice;
     if (V && V.stt && !this.sttFailed) { this.listenLocal(); return; }
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -1716,7 +1824,7 @@ class Component extends DCLogic {
       label, cls: s.mode === id ? 'tab-on' : 'tab',
       pick: () => this.setState({ mode: id })
     }));
-    const modeLabel = (modeDefs.find((m) => m[0] === s.mode) || ['ask', 'ASK'])[1] + ' MODE';
+    const modeLabel = (modeDefs.find((m) => m[0] === s.mode) || ['x', s.mode === 'issues' ? 'ISSUES' : 'ASK'])[1] + ' MODE';
 
     const data = {
       film: { name: 'FILM STUDIO', dot: 'd-work', agents: [
@@ -1776,7 +1884,7 @@ class Component extends DCLogic {
       pick: () => this.setState({ master: id })
     }));
     const sel = data[s.master];
-    const allAg = sel.agents.map((a, i) => ({ n: pad(i + 1), name: a[0] + (a[0] === Component.REPORTERS[s.master] ? '  ▲' : ''), dot: 'd-' + (a[1] === 'off' ? 'idle' : a[1]), status: a[2] }));
+    const allAg = sel.agents.map((a, i) => ({ n: pad(i + 1), name: a[0] + (a[0] === Component.REPORTERS[s.master] ? '  ▲' : ''), dot: 'd-' + (a[1] === 'off' ? 'idle' : a[1]), status: a[2], cursor: a[1] === 'error' ? 'pointer' : 'default', pick: a[1] === 'error' ? () => this.openIssues(s.master + '/' + a[0]) : () => {} }));
     const PG = 10, pgN = Math.ceil(allAg.length / PG);
     if (s.agHold == null) this.agPg = Math.floor(s.tick / 5) % pgN;
     const agPgI = Math.min(this.agPg || 0, pgN - 1);
@@ -1838,10 +1946,10 @@ class Component extends DCLogic {
     const voiceOpacity = Math.min(1, vp * 1.4).toFixed(2);
     const voiceGlowW = (2 + vp * 10).toFixed(1), voiceGlowO = (vp * 0.6).toFixed(2);
     const voiceScaleOuter = (1 + vp * 0.045).toFixed(3), voiceScaleInner = (1 - vp * 0.03).toFixed(3);
-    const statusColor = s.speaking ? '#FBCA03' : '#EDE6D6';
+    const statusColor = s.listening || s.wakeHeard ? '#67C7EB' : s.speaking ? '#FBCA03' : '#EDE6D6';
     const liveMsgs = CON ? Object.keys(s.live.reports || {}).filter((m) => data[m] && s.live.reports[m]).map((m) => data[m].name.charAt(0) + data[m].name.slice(1).toLowerCase() + ': ' + s.live.reports[m]) : [];
     const rotMsgs = CON ? (liveMsgs.length ? liveMsgs : ['Waiting for the first reports.']) : msgs;
-    const statusMsg = (s.flash && Date.now() < s.flashUntil) ? s.flash : rotMsgs[Math.floor(s.tick / 5) % rotMsgs.length];
+    const statusMsg = s.listening || s.wakeHeard ? 'Listening…' : (s.flash && Date.now() < s.flashUntil) ? s.flash : rotMsgs[Math.floor(s.tick / 5) % rotMsgs.length];
 
     const f = (n) => n.toFixed(1);
     // ---- VISION Mind: knowledge graph (Obsidian-style) ----
@@ -2270,6 +2378,44 @@ class Component extends DCLogic {
     const RDn = (s.live && s.live.report_data && s.live.report_data.news) || null;
     if (bLive && !(RDn && RDn.headlines && RDn.headlines.length)) bNews.splice(0, bNews.length, { tag: 'NEWS', text: RDn ? 'No fresh headlines' : 'Waiting for News Desk' });
     if (RDn && RDn.headlines && RDn.headlines.length) bNews.splice(0, bNews.length, ...RDn.headlines.slice(0, 6).map((x) => ({ tag: x.tag, text: x.text + (x.source && x.tag !== 'WEATHER' ? ' · ' + x.source : '') })));
+    // ---- Holographic deck: the briefing (or agent issues) as cards projected from the core ----
+    const spk = (x) => String(x).replace(/▲ \+/g, 'up ').replace(/▼ −/g, 'down ').replace(/[−-](?=[\d₹C$])/g, 'minus ').replace(/\+(?=[\d₹C$])/g, 'plus ')
+      .replace(/C\$/g, '').replace(/₹/g, '').replace(/%/g, ' percent').replace(/—/g, 'no data').replace(/[·()▲▼]/g, ', ').replace(/\s+/g, ' ').replace(/( ,)+/g, ',').replace(/,\s*\./g, '.');
+    const spkMoney = (name, val) => { const m = String(val).match(/([+−-])\s*(C\$|₹)?([\d,.]+)\s*\(([+−-])([\d.]+)%\)/);
+      return name.replace(/\s*\(.*?\)/, '') + (m ? (m[1] === '+' ? ' up ' : ' down ') + m[3] + (m[2] === '₹' ? ' rupees' : ' dollars') + ', ' + m[5] + ' percent' : ' ' + spk(val)); };
+    let deck = [];
+    if (s.mode === 'issues') {
+      const LMi = (CON && s.live.masters) || {};
+      Object.keys(LMi).forEach((m) => { const ags = LMi[m].agents || [], mn = data[m] ? data[m].name : m.toUpperCase();
+        ags.filter((a) => a.status === 'error').forEach((a) => {
+          const blocked = ags.filter((b) => b.label === 'BLOCKED' && (b.summary || '').includes(a.name)).map((b) => b.name);
+          const key = m + '/' + a.name, why = (s.issueText || {})[key];
+          deck.push({ key, kick: 'ISSUE · ' + mn, title: a.name,
+            rows: [{ a: 'Status', b: a.label || 'ERROR', ac: '#C9C0AC', bc: '#FF8A73' }, { a: 'Blocked', b: blocked.length ? blocked.join(', ') : 'nothing', ac: '#C9C0AC', bc: '#EDE6D6' }],
+            body: (why ? why + '\n\n' : '') + 'Error: ' + (a.summary || 'no details reported'), say: why || a.name + ' in ' + mn.toLowerCase() + ' failed. ' + (a.summary || '') });
+        }); });
+      if (!deck.length) deck.push({ key: 'ok', kick: 'ISSUES', title: 'All clear', rows: [], body: CON ? 'No agent is reporting an error right now.' : 'Connect to VISION to see agent errors.', say: 'No agent is reporting an error right now.' });
+    } else {
+      const summary = replyText.replace(' [demo data]', '');
+      deck = [
+        { key: 'sum', kick: 'BRIEFING · ' + briefDate, title: greet, rows: [], body: summary, say: spk(summary) },
+        { key: 'port', kick: 'BRIEFING · ' + bPortsTitle, title: 'Portfolio', rows: bPorts.map((p) => ({ a: p.name, b: p.val, ac: p.nameColor, bc: p.color })), say: 'Portfolio. ' + bPorts.map((p) => spkMoney(p.name, p.val)).join('. ') + '.' },
+        { key: 'mkt', kick: 'BRIEFING · ' + bMktsTitle, title: 'Markets', rows: bMkts.map((m) => ({ a: m.name, b: m.val, ac: '#EDE6D6', bc: m.color })), say: 'Markets. ' + spk(bMkts.map((m) => m.name + ' ' + m.val).join('. ')) + '.' },
+        { key: 'desk', kick: 'BRIEFING · DESKS', title: 'Your desks', rows: bMasters.map((x) => ({ a: x.name, b: x.line, ac: '#FBCA03', bc: x.color })), say: 'Your desks. ' + spk(bMasters.map((x) => x.name.toLowerCase() + ': ' + x.line).join('. ')) + '.' },
+        { key: 'news', kick: 'BRIEFING · NEWS', title: 'Headlines', rows: bNews.map((n) => ({ a: n.tag, b: n.text, ac: '#FBCA03', bc: '#EDE6D6' })), say: 'In the news. ' + bNews.slice(0, 4).map((n) => n.text).join('. ') + '.' }
+      ];
+      if (T) deck.push({ key: 'traffic', kick: 'BRIEFING · TRAFFIC', title: tr.title.replace('TRAFFIC: ', ''), rows: [], body: tr.count + '\n' + tr.flag, say: 'Traffic in ' + T.city + '. ' + spk(tr.count) + '. ' + spk(tr.flag) + '.' });
+    }
+    const di = Math.max(0, Math.min(deck.length - 1, s.deckI || 0));
+    const deckCards = deck.map((c, k) => {
+      const dd = k - di, ad = Math.abs(dd), sg = dd < 0 ? -1 : 1;
+      const tf = ad === 0 ? 'translateX(0px) translateZ(0px) rotateY(0deg)' + (s.holoTilt ? ' rotateX(7deg)' : '')
+        : ad === 1 ? 'translateX(' + sg * 285 + 'px) translateZ(-230px) rotateY(' + -sg * 42 + 'deg)' : 'translateX(' + sg * 430 + 'px) translateZ(-400px) rotateY(' + -sg * 54 + 'deg)';
+      return Object.assign({}, c, { tf, op: ad === 0 ? '1' : ad === 1 ? '0.42' : ad === 2 ? '0.14' : '0', z: String(10 - Math.min(ad, 9)), pe: ad > 2 ? 'none' : 'auto', center: ad === 0, hasBody: !!c.body,
+        cls: 'holo' + (s.holoScan ? ' holo-scan' : '') + (ad === 0 ? ' holo-on' : ''), pick: () => this.deckGo(k - di) });
+    });
+    this.deck = deck; this.deckIdx = di;
+    const saveHolo = (p) => { const n = Object.assign({ tilt: s.holoTilt, scan: s.holoScan, blue: s.holoBlue }, p); try { window.localStorage.setItem('vision-holo', JSON.stringify(n)); } catch (e) {} this.setState({ holoTilt: n.tilt, holoScan: n.scan, holoBlue: n.blue }); };
     // ---- World Watch: dotted globe, day/night, flights (demo) ----
     const LAND = [-55,-67,-52,-74,-52,-70,-50,-72,-47,-73,-47,-69,-44,-71,-44,-67,-44,169,-42,-72,-42,-68,-42,148,-42,172,-39,-73,-39,-69,-39,-66,-39,-63,-39,176,-37,-70,-37,-67,-37,-63,-37,-60,-37,-57,-37,141,-37,144,-37,147,-34,-70,-34,-67,-34,-64,-34,-61,-34,-58,-34,-55,-34,21,-34,24,-34,118,-34,140,-34,143,-34,146,-34,149,-31,-70,-31,-67,-31,-64,-31,-61,-31,-58,-31,-55,-31,-52,-31,18,-31,21,-31,24,-31,27,-31,119,-31,122,-31,125,-31,128,-31,131,-31,134,-31,137,-31,140,-31,143,-31,146,-31,149,-31,152,-29,-70,-29,-67,-29,-64,-29,-61,-29,-58,-29,-55,-29,-52,-29,-49,-29,19,-29,22,-29,25,-29,28,-29,31,-29,117,-29,120,-29,123,-29,126,-29,129,-29,132,-29,135,-29,137,-29,140,-29,143,-29,146,-29,149,-29,152,-26,-70,-26,-67,-26,-64,-26,-61,-26,-58,-26,-55,-26,-53,-26,-50,-26,17,-26,20,-26,23,-26,26,-26,29,-26,32,-26,116,-26,118,-26,121,-26,124,-26,127,-26,130,-26,133,-26,136,-26,139,-26,142,-26,145,-26,147,-26,150,-24,-69,-24,-67,-24,-64,-24,-61,-24,-58,-24,-55,-24,-52,-24,-49,-24,-47,-24,16,-24,19,-24,21,-24,24,-24,27,-24,30,-24,33,-24,44,-24,47,-24,115,-24,118,-24,121,-24,124,-24,126,-24,129,-24,132,-24,135,-24,138,-24,141,-24,143,-24,146,-24,149,-21,-69,-21,-66,-21,-63,-21,-60,-21,-57,-21,-55,-21,-52,-21,-49,-21,-46,-21,-44,-21,15,-21,18,-21,21,-21,23,-21,26,-21,29,-21,32,-21,34,-21,46,-21,48,-21,118,-21,121,-21,124,-21,126,-21,129,-21,132,-21,135,-21,137,-21,140,-21,143,-21,146,-21,149,-21,165,-18,-68,-18,-65,-18,-62,-18,-59,-18,-57,-18,-54,-18,-51,-18,-48,-18,-46,-18,-43,-18,-40,-18,15,-18,17,-18,20,-18,23,-18,26,-18,28,-18,31,-18,34,-18,36,-18,45,-18,47,-18,124,-18,127,-18,130,-18,132,-18,135,-18,138,-18,141,-18,143,-18,146,-16,-72,-16,-69,-16,-67,-16,-64,-16,-61,-16,-58,-16,-56,-16,-53,-16,-50,-16,-48,-16,-45,-16,-42,-16,-39,-16,12,-16,15,-16,17,-16,20,-16,23,-16,25,-16,28,-16,31,-16,33,-16,36,-16,39,-16,47,-16,50,-16,125,-16,128,-16,131,-16,133,-16,136,-16,142,-16,144,-13,-76,-13,-73,-13,-71,-13,-68,-13,-65,-13,-62,-13,-60,-13,-57,-13,-54,-13,-52,-13,-49,-13,-46,-13,-44,-13,-41,-13,15,-13,18,-13,20,-13,23,-13,26,-13,28,-13,31,-13,34,-13,36,-13,39,-13,50,-13,132,-13,135,-13,143,-11,-77,-11,-74,-11,-72,-11,-69,-11,-66,-11,-64,-11,-61,-11,-58,-11,-56,-11,-53,-11,-50,-11,-48,-11,-45,-11,-42,-11,-40,-11,-37,-11,16,-11,18,-11,21,-11,24,-11,26,-11,29,-11,32,-11,34,-11,37,-11,40,-8,-78,-8,-75,-8,-72,-8,-70,-8,-67,-8,-64,-8,-62,-8,-59,-8,-57,-8,-54,-8,-51,-8,-49,-8,-46,-8,-43,-8,-41,-8,-38,-8,-36,-8,14,-8,17,-8,20,-8,22,-8,25,-8,27,-8,30,-8,33,-8,35,-8,38,-8,111,-8,114,-8,140,-8,143,-5,-81,-5,-78,-5,-76,-5,-73,-5,-70,-5,-68,-5,-65,-5,-62,-5,-60,-5,-57,-5,-55,-5,-52,-5,-49,-5,-47,-5,-44,-5,-42,-5,-39,-5,-36,-5,13,-5,16,-5,18,-5,21,-5,24,-5,26,-5,29,-5,32,-5,34,-5,37,-5,105,-5,120,-5,123,-5,139,-5,141,-5,144,-5,152,-3,-78,-3,-76,-3,-73,-3,-71,-3,-68,-3,-65,-3,-63,-3,-60,-3,-58,-3,-55,-3,-52,-3,-50,-3,-47,-3,-42,-3,10,-3,13,-3,15,-3,18,-3,20,-3,23,-3,26,-3,28,-3,31,-3,33,-3,36,-3,39,-3,104,-3,106,-3,112,-3,114,-3,119,-3,122,-3,132,-3,138,-3,140,0,-79,0,-76,0,-73,0,-71,0,-68,0,-66,0,-63,0,-60,0,-58,0,-55,0,-53,0,-50,0,10,0,12,0,15,0,18,0,20,0,23,0,25,0,28,0,31,0,33,0,36,0,38,0,41,0,101,0,103,0,111,0,114,0,116,0,122,2,-79,2,-76,2,-73,2,-71,2,-68,2,-65,2,-63,2,-60,2,-58,2,-55,2,-52,2,10,2,13,2,15,2,18,2,20,2,23,2,26,2,28,2,31,2,33,2,36,2,39,2,41,2,44,2,98,2,104,2,111,2,114,2,117,5,-76,5,-73,5,-70,5,-68,5,-65,5,-63,5,-60,5,-57,5,-55,5,-8,5,-3,5,8,5,11,5,13,5,16,5,18,5,21,5,24,5,26,5,29,5,31,5,34,5,37,5,39,5,42,5,44,5,47,5,97,5,102,5,118,8,-80,8,-78,8,-75,8,-72,8,-70,8,-67,8,-65,8,-62,8,-59,8,-12,8,-10,8,-7,8,-4,8,-2,8,1,8,4,8,6,8,9,8,11,8,14,8,17,8,19,8,22,8,25,8,27,8,30,8,32,8,35,8,38,8,40,8,43,8,46,8,48,8,124,10,-85,10,-74,10,-69,10,-66,10,-64,10,-61,10,-14,10,-11,10,-8,10,-6,10,-3,10,0,10,2,10,5,10,8,10,10,10,13,10,15,10,18,10,21,10,23,10,26,10,29,10,31,10,34,10,37,10,39,10,42,10,45,10,47,10,50,10,76,10,79,10,105,13,-87,13,-84,13,-15,13,-12,13,-9,13,-7,13,-4,13,-1,13,1,13,4,13,7,13,9,13,12,13,15,13,17,13,20,13,23,13,25,13,28,13,31,13,33,13,36,13,39,13,41,13,44,13,76,13,79,13,100,13,103,13,105,13,108,13,121,13,124,15,-91,15,-88,15,-86,15,-61,15,-15,15,-13,15,-10,15,-7,15,-5,15,-2,15,1,15,3,15,6,15,9,15,11,15,14,15,17,15,20,15,22,15,25,15,28,15,30,15,33,15,36,15,38,15,44,15,47,15,49,15,76,15,79,15,100,15,103,15,106,15,109,18,-101,18,-98,18,-95,18,-93,18,-90,18,-16,18,-13,18,-11,18,-8,18,-5,18,-2,18,0,18,3,18,6,18,9,18,11,18,14,18,17,18,20,18,22,18,25,18,28,18,31,18,33,18,36,18,44,18,47,18,50,18,52,18,55,18,74,18,77,18,80,18,82,18,96,18,99,18,102,18,104,18,121,21,-105,21,-102,21,-99,21,-88,21,-16,21,-13,21,-11,21,-8,21,-5,21,-2,21,1,21,3,21,6,21,9,21,12,21,14,21,17,21,20,21,23,21,26,21,28,21,31,21,34,21,37,21,42,21,45,21,48,21,51,21,53,21,56,21,59,21,76,21,78,21,81,21,84,21,87,21,95,21,98,21,101,21,103,21,106,23,-104,23,-101,23,-98,23,-16,23,-13,23,-10,23,-7,23,-5,23,-2,23,1,23,4,23,7,23,10,23,12,23,15,23,18,23,21,23,24,23,26,23,29,23,32,23,35,23,41,23,43,23,46,23,49,23,52,23,55,23,58,23,69,23,72,23,75,23,77,23,80,23,83,23,86,23,89,23,92,23,94,23,97,23,100,23,103,23,106,23,109,23,111,23,114,26,-108,26,-105,26,-102,26,-99,26,-13,26,-10,26,-7,26,-4,26,-1,26,2,26,5,26,8,26,11,26,13,26,16,26,19,26,22,26,25,26,28,26,31,26,34,26,39,26,42,26,45,26,48,26,51,26,60,26,63,26,65,26,68,26,71,26,74,26,77,26,80,26,83,26,86,26,89,26,91,26,94,26,97,26,100,26,103,26,106,26,109,26,112,26,115,26,117,28,-109,28,-106,28,-103,28,-100,28,-97,28,-82,28,-9,28,-6,28,-3,28,0,28,3,28,6,28,9,28,12,28,15,28,18,28,21,28,24,28,27,28,30,28,33,28,36,28,39,28,42,28,45,28,48,28,54,28,56,28,59,28,62,28,65,28,68,28,71,28,74,28,77,28,80,28,83,28,86,28,89,28,92,28,95,28,98,28,101,28,104,28,107,28,110,28,113,28,116,28,119,28,121,31,-116,31,-110,31,-107,31,-104,31,-101,31,-98,31,-95,31,-92,31,-89,31,-86,31,-83,31,-7,31,-4,31,-1,31,2,31,5,31,8,31,11,31,14,31,17,31,20,31,23,31,26,31,32,31,35,31,38,31,41,31,44,31,47,31,51,31,54,31,57,31,60,31,63,31,66,31,69,31,72,31,75,31,78,31,81,31,84,31,87,31,90,31,93,31,96,31,99,31,102,31,105,31,108,31,111,31,114,31,117,31,120,34,-118,34,-114,34,-111,34,-108,34,-105,34,-102,34,-99,34,-96,34,-93,34,-89,34,-86,34,-83,34,-80,34,-5,34,-2,34,1,34,4,34,7,34,10,34,39,34,42,34,45,34,48,34,51,34,54,34,57,34,60,34,63,34,67,34,70,34,73,34,76,34,79,34,82,34,85,34,88,34,92,34,95,34,98,34,101,34,104,34,107,34,110,34,113,34,117,34,120,36,-119,36,-116,36,-112,36,-109,36,-106,36,-103,36,-99,36,-96,36,-93,36,-90,36,-87,36,-83,36,-80,36,-77,36,-6,36,0,36,4,36,7,36,10,36,23,36,33,36,36,36,39,36,42,36,46,36,49,36,52,36,55,36,58,36,62,36,65,36,68,36,71,36,75,36,78,36,81,36,84,36,87,36,91,36,94,36,97,36,100,36,104,36,107,36,110,36,113,36,116,36,120,36,129,36,139,39,-123,39,-120,39,-117,39,-113,39,-110,39,-107,39,-103,39,-100,39,-97,39,-93,39,-90,39,-87,39,-83,39,-80,39,-77,39,-7,39,-3,39,0,39,24,39,30,39,34,39,37,39,40,39,44,39,47,39,50,39,54,39,57,39,60,39,64,39,67,39,70,39,74,39,77,39,80,39,84,39,87,39,90,39,94,39,97,39,100,39,104,39,107,39,110,39,114,39,117,39,127,39,140,41,-121,41,-118,41,-114,41,-111,41,-107,41,-104,41,-100,41,-97,41,-93,41,-90,41,-86,41,-83,41,-79,41,-76,41,-73,41,-7,41,-3,41,0,41,14,41,21,41,25,41,28,41,35,41,42,41,45,41,49,41,52,41,56,41,59,41,63,41,66,41,70,41,73,41,76,41,80,41,83,41,87,41,90,41,94,41,97,41,101,41,104,41,108,41,111,41,115,41,118,41,122,41,125,41,128,44,-122,44,-119,44,-115,44,-111,44,-108,44,-104,44,-100,44,-97,44,-93,44,-90,44,-86,44,-82,44,-79,44,-75,44,-72,44,1,44,4,44,8,44,12,44,19,44,22,44,26,44,40,44,44,44,48,44,51,44,55,44,59,44,62,44,66,44,69,44,73,44,77,44,80,44,84,44,87,44,91,44,95,44,98,44,102,44,106,44,109,44,113,44,116,44,120,44,124,44,127,44,131,44,134,44,142,47,-123,47,-119,47,-116,47,-112,47,-108,47,-104,47,-101,47,-97,47,-93,47,-89,47,-85,47,-82,47,-78,47,-74,47,-70,47,-66,47,2,47,5,47,9,47,13,47,17,47,21,47,24,47,28,47,36,47,39,47,43,47,47,47,51,47,55,47,58,47,62,47,66,47,70,47,74,47,77,47,81,47,85,47,89,47,92,47,96,47,100,47,104,47,108,47,111,47,115,47,119,47,123,47,127,47,130,47,134,47,138,49,-124,49,-120,49,-116,49,-112,49,-108,49,-104,49,-100,49,-96,49,-92,49,-88,49,-85,49,-81,49,-77,49,-73,49,-69,49,-57,49,-1,49,3,49,7,49,11,49,15,49,19,49,23,49,27,49,31,49,35,49,39,49,43,49,47,49,51,49,55,49,59,49,63,49,67,49,71,49,75,49,79,49,83,49,87,49,91,49,95,49,99,49,103,49,106,49,110,49,114,49,118,49,122,49,126,49,130,49,134,49,138,49,142,52,-125,52,-121,52,-117,52,-113,52,-109,52,-104,52,-100,52,-96,52,-92,52,-88,52,-83,52,-75,52,-71,52,-66,52,-62,52,-58,52,-3,52,1,52,5,52,9,52,13,52,18,52,22,52,26,52,30,52,34,52,39,52,43,52,47,52,51,52,55,52,60,52,64,52,68,52,72,52,76,52,81,52,85,52,89,52,93,52,97,52,102,52,106,52,110,52,114,52,119,52,123,52,127,52,131,52,135,52,140,54,-126,54,-122,54,-117,54,-113,54,-109,54,-104,54,-100,54,-95,54,-91,54,-86,54,-77,54,-73,54,-68,54,-64,54,-59,54,-6,54,-1,54,17,54,21,54,25,54,30,54,34,54,39,54,43,54,48,54,52,54,57,54,61,54,66,54,70,54,75,54,79,54,84,54,88,54,92,54,97,54,101,54,106,54,110,54,115,54,119,54,124,54,128,54,133,54,159,57,-132,57,-127,57,-123,57,-118,57,-113,57,-108,57,-104,57,-99,57,-94,57,-75,57,-70,57,-65,57,-3,57,16,57,25,57,30,57,35,57,40,57,44,57,49,57,54,57,59,57,63,57,68,57,73,57,78,57,83,57,87,57,92,57,97,57,102,57,106,57,111,57,116,57,121,57,126,57,130,57,135,57,159,60,-159,60,-154,60,-139,60,-134,60,-129,60,-123,60,-118,60,-113,60,-108,60,-103,60,-98,60,-77,60,-72,60,10,60,15,60,26,60,31,60,36,60,41,60,46,60,51,60,56,60,61,60,67,60,72,60,77,60,82,60,87,60,92,60,97,60,103,60,108,60,113,60,118,60,123,60,128,60,133,60,139,60,144,60,149,60,154,62,-163,62,-158,62,-152,62,-147,62,-141,62,-135,62,-130,62,-124,62,-119,62,-113,62,-108,62,-102,62,-96,62,-80,62,-74,62,-46,62,-7,62,10,62,15,62,26,62,32,62,37,62,43,62,49,62,54,62,60,62,65,62,71,62,76,62,82,62,88,62,93,62,99,62,104,62,110,62,115,62,121,62,127,62,132,62,138,62,143,62,149,62,154,62,160,62,166,62,171,65,-174,65,-162,65,-156,65,-149,65,-143,65,-137,65,-131,65,-125,65,-119,65,-113,65,-107,65,-101,65,-95,65,-88,65,-76,65,-70,65,-52,65,-46,65,-21,65,-15,65,15,65,28,65,34,65,46,65,52,65,58,65,64,65,70,65,76,65,83,65,89,65,95,65,101,65,107,65,113,65,119,65,125,65,131,65,138,65,144,65,150,65,156,65,162,65,168,65,174,67,-180,67,-160,67,-153,67,-146,67,-139,67,-133,67,-126,67,-119,67,-112,67,-106,67,-99,67,-92,67,-85,67,-72,67,-65,67,-51,67,-45,67,-38,67,16,67,23,67,30,67,37,67,50,67,57,67,64,67,70,67,77,67,84,67,91,67,97,67,104,67,111,67,118,67,124,67,131,67,138,67,145,67,152,67,158,67,165,67,172,67,179,70,-157,70,-150,70,-112,70,-104,70,-74,70,-51,70,-43,70,-36,70,-28,70,25,70,71,70,78,70,86,70,94,70,101,70,109,70,116,70,124,70,132,70,139,70,147,70,154,73,-102,73,-84,73,-50,73,-41,73,-32,73,-23,73,55,73,72,73,90,73,98,73,107,73,116,73,124,73,142,75,-109,75,-99,75,-88,75,-58,75,-48,75,-38,75,-27,75,95,75,105,78,-82,78,-69,78,-57,78,-45,78,-32];
     const R = 205, GCX = 350, GCY = 234, rad = Math.PI / 180;
@@ -2451,7 +2597,7 @@ class Component extends DCLogic {
       gStages: cols.map((c) => ({ title: c.title, left: c.left, width: c.width, top: c.top })), gCards: cards, gEdges, gFlow, gLoop, gHasLoop: flow.loop, gLoopX, gLoopY, gDebate, gHeads, gNotes, modeLabel: s.mind ? 'MIND OPEN' : modeLabel, masters, agents, selName: sel.name, gauges, gaugeTag, log: s.log, statusMsg,
       calOn: s.mode === 'calendar' && !s.mind, calDays, calSelTitle, calSelWx, calSelEvents,
       openCal: () => this.setState({ mode: 'calendar', mind: false, calSel: null }), closeCal: () => this.setState({ mode: 'ambient' }),
-      coreOn: !s.mind && s.mode !== 'briefing' && s.mode !== 'world' && s.mode !== 'calendar' && s.mode !== 'ask', worldOn: s.mode === 'world' && !s.mind,
+      coreOn: !s.mind && s.mode !== 'briefing' && s.mode !== 'issues' && s.mode !== 'world' && s.mode !== 'calendar' && s.mode !== 'ask', worldOn: s.mode === 'world' && !s.mind,
       wDay, wNight, wRoute, wFlights, wCount, wxCloudD, wxCloudN, wxCloudCore, wxRain, wxStorm, wxBolt, wxSun,
       toggleWx: () => this.setState({ wx: !this.state.wx }), wxBtn: bLive ? 'Weather: n/a' : s.wx ? 'Weather: on' : 'Weather: off', hovOn: !!hov, hov: hov || {}, orbitPath,
       openWorld: () => this.setState({ mode: 'world', mind: false }),
@@ -2459,7 +2605,7 @@ class Component extends DCLogic {
       gDown: (ev) => { this.setState({ drag: { x: ev.clientX, y: ev.clientY, lon: this.state.rotLon, lat: this.state.rotLat } }); },
       gMove: (ev) => { const dr = this.state.drag; if (!dr) return; this.setState({ rotLon: dr.lon - (ev.clientX - dr.x) * 0.35, rotLat: Math.max(-60, Math.min(60, dr.lat + (ev.clientY - dr.y) * 0.35)) }); },
       gUp: () => { if (this.state.drag) this.setState({ drag: null }); }, mindOn: s.mind, briefOn: s.mode === 'briefing' && !s.mind,
-      openBrief: () => this.setState({ mode: 'briefing', mind: false }),
+      openBrief: () => this.startBrief(),
       readDraft: () => this.speak(this.draftText),
       voiceMenuOn: s.voiceMenu, voiceBtnCls: s.voiceMenu ? 'qa-on' : 'qa',
       toggleVoiceMenu: () => { if (!this.state.voices.length && this.loadVoices) this.loadVoices(); this.setState({ voiceMenu: !this.state.voiceMenu }); },
@@ -2511,6 +2657,16 @@ class Component extends DCLogic {
       })(),
       tgStatus, tgSent, voiceBars, voiceOpacity, voiceGlowW, voiceGlowO, voiceScaleOuter, voiceScaleInner, statusColor,
       bootOn: ov.on, bootCls: ov.cls, bootPhase: ov.phase, bootPct: ov.pct, bootCount: ov.count, bootCols: ov.cols, bootLog: ov.log, replyText, approvalCount,
+      deckOn: (s.mode === 'briefing' || s.mode === 'issues') && !s.mind, deckCards, holoRGB: s.holoBlue ? '103,199,235' : '251,202,3',
+      deckTitle: s.mode === 'issues' ? 'VISION ISSUES' : 'VISION BRIEF', deckMeta: (di + 1) + ' / ' + deck.length + ' · ' + (s.mode === 'issues' ? (CON ? 'LIVE' : 'NOT CONNECTED') : briefTag),
+      deckTalkLabel: s.deckTalk ? 'Pause' : s.mode === 'issues' ? 'Explain' : 'Read aloud', deckToggle: () => this.deckToggle(), deckPrev: () => this.deckGo(-1), deckNext: () => this.deckGo(1),
+      toggleTilt: () => saveHolo({ tilt: !s.holoTilt }), toggleScan: () => saveHolo({ scan: !s.holoScan }), toggleTint: () => saveHolo({ blue: !s.holoBlue }),
+      tiltLabel: 'Tilt: ' + (s.holoTilt ? 'on' : 'off'), scanLabel: 'Scan: ' + (s.holoScan ? 'on' : 'off'), tintLabel: 'Tint: ' + (s.holoBlue ? 'blue' : 'gold'),
+      listenRing: s.listening || s.wakeHeard ? 'lring-on' : 'lring', coreImgCls: s.listening || s.wakeHeard ? 'coreimg coreimg-listen' : 'coreimg',
+      wakeTag: s.wakeOn ? (s.wakeLive ? '● HEY VISION' : '○ HEY VISION') : '', wakeColor: s.wakeLive ? '#67C7EB' : '#6E6654',
+      wakeLabel: !(window.SpeechRecognition || window.webkitSpeechRecognition) ? 'Wake word: needs Chrome' : 'Wake word: ' + (s.wakeOn ? 'on' : 'off'),
+      wakeHint: s.wakeOn ? 'Say "Hey Vision". While this is on, Chrome sends the microphone audio to Google to recognise it.' : 'Turn on to wake VISION by saying "Hey Vision" (Chrome, dashboard open).',
+      toggleWake: () => { const on = !this.state.wakeOn; try { window.localStorage.setItem('vision-wake', on ? 'on' : 'off'); } catch (e) {} this.setState({ wakeOn: on }); if (on) setTimeout(() => this.wakeStart(), 0); else this.wakeStop(); },
       demoOnly: !CON, calTag: bLive ? (LCal ? 'LIVE' : 'WAITING FOR CALENDAR MANAGER') : '[DEMO DATA]',
       standbyOn: s.off === 'standby', confirmOn: s.confirmOff, musicLabel: 'Music: ' + (s.music ? 'on' : 'off'),
       skipBoot: () => this.setState(this.state.off === 'down' ? { off: 'standby' } : { boot: false }),
@@ -2526,7 +2682,7 @@ class Component extends DCLogic {
       powerOn: () => { if (this.state.liveUp) fetch('/api/boot', { method: 'POST' }).catch(() => {}); this.setState({ off: null, offT: 0, boot: true, bootT: 0, mode: 'ambient', mind: false }); },
       toggleMusic: () => { const m = !this.state.music; try { window.localStorage.setItem('vision-music', m ? 'on' : 'off'); } catch (e) {} this.setState({ music: m }); },
       hostLabel: s.liveUp ? 'LIVE · CORE CONNECTED' : this.isLocal() ? 'CORE OFFLINE · RETRYING' : 'PREVIEW · DEMO DATA',
-      closeBrief: () => this.setState({ mode: 'ambient' }),
+      closeBrief: () => { this.stopSpeech(); this.setState({ mode: 'ambient', deckTalk: false }); },
       briefDate: briefDate, briefTag, bPortsTitle, bMktsTitle, bPorts, bMkts, bNews, bMasters, tr,
       openMind: () => this.setState({ mind: true, openT: 0, sel: 'root' }),
       closeMind: () => this.setState({ mind: false, openT: 0 }),

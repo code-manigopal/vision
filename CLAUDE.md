@@ -89,6 +89,7 @@ Tests: mock HTTP with `httpx.MockTransport`; use `FakeLLM` from tests/test_phase
 ### API
 `GET /api/state` · `POST /api/boot` · `POST /api/shutdown` (standby) · `POST /api/masters/{id}/run` · `GET /api/brief` · `POST /api/brief/send`
 · `GET/POST /api/approvals` · `POST /api/approvals/{id}/{approved|rejected}` · `POST /api/ask {text, session}`
+· `GET /api/issues` · `POST /api/issues/explain {master, agent}` → `{text, source}` · `GET /api/approvals/{id}/email` (full body + attachments) · `GET /api/approvals/{id}/attachments/{att}` (streamed, never stored)
 · `POST /api/tts {text, voice?}` → wav · `GET /api/voices` (Kokoro's English voices) · `POST /api/stt` (raw audio body) → `{text}` · `GET /api/traffic?city=`
 · `/auth/{google|microsoft}/login?account=` + `/callback` · `/auth/fyers/login` + `/callback` · `WS /ws`
 
@@ -110,6 +111,14 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
 - Voice: `speak()` uses `/api/tts` when `voice.tts` is available (rings follow real loudness), else the
   browser voice pinned to a natural female voice (cloud/neural first). `startVoice()` uses `/api/stt`
   (MediaRecorder + silence detection) when available, else browser speech recognition. `wake` event opens the mic.
+- Holographic deck (`deckOn`, modes `briefing` and `issues`): cards projected from a small copy of the core, cover-flow
+  carousel (centre card full, neighbours dimmed and title-only), ← → to step, space to pause. The briefing narrates one
+  card at a time (`startBrief` / `deckSpeak`); clicking a red agent or asking "what's wrong" opens issue cards and VISION
+  explains via `/api/issues/explain`. Tilt, scan lines and tint are switches in the voice menu (`vision-holo`).
+  `node tests/dashboard_smoke.mjs` runs the dashboard logic without a browser.
+- "Hey Vision": a browser wake listener (`wakeStart` / `wakeHit`, Chrome speech recognition, switch in the voice menu,
+  `vision-wake`, off by default; audio goes to Google while on). It pauses while VISION listens or speaks. Listening mode
+  shows on the core: blue ring, blue emblem glow, "Listening…". The backend `wake` event (openWakeWord) triggers the same path.
 - Music: `dashboard/audio/inspired.mp3` during the boot roll call, fading into `roadside.mp3` as a quiet loop
   that ducks while VISION speaks or listens. Switch in the voice menu (`vision-music` in localStorage).
 - Power button: confirmation → `/api/shutdown` → the roll call in reverse → standby screen; "Power on" calls `/api/boot`.
