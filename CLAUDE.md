@@ -91,7 +91,7 @@ Tests: mock HTTP with `httpx.MockTransport`; use `FakeLLM` from tests/test_phase
 · `GET/POST /api/approvals` · `POST /api/approvals/{id}/{approved|rejected}` · `POST /api/ask {text, session}`
 · `GET /api/issues` · `POST /api/issues/explain {master, agent}` → `{text, source}` · `GET /api/approvals/{id}/email` (full body + attachments) · `GET /api/approvals/{id}/attachments/{att}` (streamed, never stored)
 · `GET /api/desk/{master}` (read-only pipeline: stages + items + artifacts) · `GET /api/files/{path}` (only `data/sites`, `data/applications`)
-· `POST /api/tts {text, voice?}` → wav · `GET /api/voices` (Kokoro's English voices) · `POST /api/stt` (raw audio body) → `{text}` · `GET /api/traffic?city=`
+· `POST /api/tts {text, voice?}` → wav · `GET /api/voices` (Kokoro's English voices) · `POST /api/stt` (raw audio body) → `{text}` · `GET /api/traffic?city=` · `GET /api/weather/grid` (globe weather, ~100 points, cached 1 h)
 · `/auth/{google|microsoft}/login?account=` + `/callback` · `/auth/fyers/login` + `/callback` · `WS /ws`
 
 WebSocket events: `snapshot, agent, master_report(+data), boot, log, notice, notice_clear, approval,
@@ -123,6 +123,9 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   stage chips with counts and one card per record from `GET /api/desk/{master}` (`vision/desk.py`); files and links open
   inside the card (`/api/files/...`, only `data/sites` and `data/applications`). Approved pitches = Web Designer → Pitched.
   `node tests/dashboard_smoke.mjs` runs the dashboard logic without a browser.
+- World view: holographic globe (gold wireframe, grid, scan lines; land as dots, bright by day). Aircraft are plane icons
+  turned to their real heading with a short trail, coral within `near_km` of home; the hover card shows real progress only
+  when the route's origin is known. Weather icons come from `/api/weather/grid` (Open-Meteo); the preview uses a made-up grid.
 - "Hey Vision": a browser wake listener (`wakeStart` / `wakeHit`, Chrome speech recognition, switch in the voice menu,
   `vision-wake`, off by default; audio goes to Google while on). It pauses while VISION listens or speaks. Listening mode
   shows on the core: blue ring, blue emblem glow, "Listening…". The backend `wake` event (openWakeWord) triggers the same path.
@@ -154,7 +157,8 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   (4 styles: luxe, sunny, trade, editorial), colours from `masters/palettes.json` (ColorHunt) via `pick_theme`.
 - Trading: practice account default; live needs OANDA_ENV=live AND options.live_trading: true;
   approval TTL 30 min; refuse if price moved > 0.5 ATR; units capped.
-- Weather Agent belongs to News Desk; World Watch is flights only. Film Studio is on hold (stub, disabled).
+- Weather Agent belongs to News Desk; World Watch is flights only (the globe's weather icons are a plain data endpoint, not an agent).
+  World Watch shows `near_slots` (10) flights nearest home first, the rest spread worldwide; a route lookup is spent only on callsigns not yet known. Film Studio is on hold (stub, disabled).
 - Traffic Desk is read-only (no approval gate).
 
 ## Status

@@ -121,6 +121,19 @@ for (const q of ['how are we doing', 'hey vision, how are you', "what's up", 'Ho
   const sq = mk({ liveUp: true, live: live.full }); sq.speak = () => {}; let asked = 0; sq.askLive = () => { asked++; }; sq.renderVals(); sq.runCommand(q);
   if (sq.state.mode !== 'briefing' || !sq.state.deckTalk || asked) fail('status question should open the narrated cards', q, sq.state.mode);
 }
+// world view: planes point along their heading, progress is real only when the origin is known, weather comes from the grid
+{ const fl = [{ cs: 'ACA056', lat: 43.0, lon: -80.0, alt: 10000, spd: 240, trk: 90, airline: 'Air Canada', from: 'YYZ', to: 'LHR', from_city: 'Toronto', to_city: 'London', dest: [51.47, -0.45], orig: [43.68, -79.63], eta_min: 380 },
+    { cs: 'XYZ1', lat: 40.0, lon: -100.0, alt: 9000, spd: 220, trk: 270, dest: [34, -118], eta_min: 120 }];
+  const L = Object.assign({}, live.full, { report_data: Object.assign({}, live.full.report_data, { world: { flights: fl, total_airborne: 9000, at: Date.now() / 1000, home: [42.05, -82.6], near_km: 400 } }) });
+  globalThis.fetch = async () => ({ ok: true, json: async () => ({ points: [{ la: 40, lo: -96, kind: 'rain', day: true }, { la: 40, lo: -72, kind: 'clear', day: true }, { la: 20, lo: -96, kind: 'storm', day: false }] }) });
+  const wq = mk({ liveUp: true, live: L, mode: 'world', rotLon: -85, rotLat: 30, hov: 'ACA056' }); let wv = wq.renderVals(); await wait(30); wv = wq.renderVals();
+  if (wv.wFlights.length !== 2 || !/deg$/.test(wv.wFlights[0].rot) || wv.wFlights[0].col !== '#FFFFFF' || wv.wFlights[1].col !== '#FFF4D6') fail('planes wrong', JSON.stringify(wv.wFlights.map((x) => [x.rot, x.col, x.sc])));
+  if (!wv.hov.hasPct || !/^\d+%$/.test(wv.hov.pct) || wv.hov.pct === '50%' || !/% flown/.test(wv.hov.left2)) fail('flight progress should be computed from origin and destination', wv.hov.pct, wv.hov.left2);
+  wq.setState({ hov: 'XYZ1' }); wv = wq.renderVals(); if (wv.hov.hasPct) fail('no progress bar when the origin is unknown');
+  if (!wv.wxRn || !wv.wxSu || !wv.wxBl || wv.wxBtn !== 'Weather: on' || !wv.wGrid || !wv.wTrail || !wv.wHome) fail('weather icons, grid, trails or home missing', wv.wxBtn);
+  wq.setState({ wx: false }); if (wq.renderVals().wxRn) fail('weather switch should hide the icons');
+  const pv = mk({ mode: 'world' }).renderVals(); if (!pv.wFlights.length || !pv.wxCl || pv.wxBtn !== 'Weather: on') fail('preview globe should still show sample flights and weather');
+}
 console.log('spoken:', said.map((x) => x.slice(0, 70)));
 console.log(fails ? fails + ' problem(s)' : 'dashboard logic OK: no crashes, no sample values while connected, deck works');
 process.exit(fails ? 1 : 0);

@@ -124,6 +124,7 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
 .dot3{width:8px;height:8px;border-radius:50%;background:#67C7EB;color:#67C7EB;opacity:.9}
 .nd-on .dot0,.nd-on .dot1,.nd-on .dot2,.nd-on .dot3{outline:2px solid #FFF4D6;outline-offset:3px}
 .fdot{position:absolute;transform:translate(-50%,-50%);width:22px;height:22px;padding:0;background:transparent;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.whome{position:absolute;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;border:1.5px solid #AA0505;pointer-events:none;animation:vping 2.2s ease-out infinite}
 .fd{width:7px;height:7px;border-radius:50%;background:#67C7EB;box-shadow:0 0 6px #67C7EB}
 .fd-on{width:11px;height:11px;border-radius:50%;background:#FFF4D6;box-shadow:0 0 12px #67C7EB;outline:2px solid #67C7EB;outline-offset:2px}
 @keyframes vfade{0%{opacity:1}100%{opacity:0}}
@@ -555,48 +556,57 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
       </sc-if>
 
       <sc-if value="{{worldOn}}" hint-placeholder-val="{{ false }}">
-      <div class="mindbox" style="position: relative; width: 700px; height: 468px; background: rgba(8,9,12,0.88); border: 1px solid #3A3222; overflow: hidden; touch-action: none; cursor: grab; border-radius: 8px" onPointerDown="{{gDown}}" onPointerMove="{{gMove}}" onPointerUp="{{gUp}}" onPointerLeave="{{gUp}}">
+      <div class="mindbox" style="position: relative; width: 700px; height: 468px; --h: {{holoRGB}}; background: radial-gradient(circle at 50% 50%, rgba(var(--h),.08), rgba(8,9,12,0.9) 66%); border: 1px solid rgba(var(--h),.45); box-shadow: inset 0 0 50px rgba(var(--h),.06); overflow: hidden; touch-action: none; cursor: grab; border-radius: 8px" onPointerDown="{{gDown}}" onPointerMove="{{gMove}}" onPointerUp="{{gUp}}" onPointerLeave="{{gUp}}">
         <svg width="700" height="468" viewBox="0 0 700 468" aria-hidden="true" style="position: absolute; left: 0; top: 0">
-          <circle cx="350" cy="234" r="214" fill="none" stroke="#6A0C0B" stroke-width="10" opacity="0.35"></circle>
-          <circle cx="350" cy="234" r="205" fill="#0A0B0F" stroke="#B97D10" stroke-width="1.2"></circle>
-          <path d="{{wNight}}" fill="#6B5A2E" opacity="0.55"></path>
-          <path d="{{wDay}}" fill="#FBCA03" opacity="0.9"></path>
-          <path d="{{wxCloudN}}" fill="#8C96A8" opacity="0.10"></path>
-          <path d="{{wxCloudD}}" fill="#F2F4F8" opacity="0.16"></path>
-          <path d="{{wxCloudCore}}" fill="#F2F4F8" opacity="0.14"></path>
-          <path d="{{wxRain}}" fill="none" stroke="#67C7EB" stroke-width="1.3" stroke-linecap="round" class="rainfall" opacity="0.85"></path>
-          <path d="{{wxStorm}}" fill="#5B6478" opacity="0.28"></path>
-          <path d="{{wxBolt}}" fill="#FFF4D6" class="bolt"></path>
-          <path d="{{wxSun}}" fill="#FBCA03" stroke="#FBCA03" stroke-width="1.2" stroke-linecap="round" class="sunpulse"></path>
+          <defs>
+            <radialGradient id="watm" cx="50%" cy="50%" r="50%"><stop offset="86%" stop-color="{{holoCol}}" stop-opacity="0"></stop><stop offset="95%" stop-color="{{holoCol}}" stop-opacity="0.3"></stop><stop offset="100%" stop-color="{{holoCol}}" stop-opacity="0"></stop></radialGradient>
+            <radialGradient id="wball" cx="38%" cy="32%" r="75%"><stop offset="0%" stop-color="#16130A"></stop><stop offset="100%" stop-color="#050608"></stop></radialGradient>
+          </defs>
+          <circle cx="350" cy="234" r="230" fill="url(#watm)"></circle>
+          <circle cx="350" cy="234" r="205" fill="url(#wball)" stroke="{{holoCol}}" stroke-width="1.3" class="tglow"></circle>
+          <path d="{{wGrid}}" fill="none" stroke="{{holoCol}}" stroke-width="0.6" opacity="0.16"></path>
+          <path d="{{wNight}}" fill="{{holoCol}}" opacity="0.24"></path>
+          <path d="{{wDay}}" fill="{{holoCol}}" opacity="0.92"></path>
+          <path d="{{wxCl}}" fill="#F2F4F8" opacity="0.5"></path>
+          <path d="{{wxSt}}" fill="#8792A8" opacity="0.78"></path>
+          <path d="{{wxFg}}" fill="none" stroke="#C9C0AC" stroke-width="1" stroke-linecap="round" opacity="0.5"></path>
+          <path d="{{wxRn}}" fill="none" stroke="#67C7EB" stroke-width="1.2" stroke-linecap="round" class="rainfall"></path>
+          <path d="{{wxSn}}" fill="none" stroke="#F2F4F8" stroke-width="1" opacity="0.9"></path>
+          <path d="{{wxBl}}" fill="#FFF4D6" class="bolt"></path>
+          <path d="{{wxSu}}" fill="{{holoCol}}" stroke="{{holoCol}}" stroke-width="0.9" stroke-linecap="round" class="sunpulse"></path>
+          <path d="{{wTrail}}" fill="none" stroke="#FFF4D6" stroke-width="1" opacity="0.3"></path>
           <path d="{{wRoute}}" fill="none" stroke="#67C7EB" stroke-width="1.6" stroke-dasharray="4 4" class="flowslow"></path>
+          <path d="{{wDest}}" fill="none" stroke="#67C7EB" stroke-width="1.5"></path>
+          <path d="{{wHome}}" fill="#FF8A73"></path>
         </svg>
+        <div class="holo-scan" style="position: absolute; left: 0; top: 0; right: 0; bottom: 0; overflow: hidden; pointer-events: none"></div>
+        <div class="whome" style="left: {{wHomeX}}; top: {{wHomeY}}; display: {{wHomeShow}}"></div>
         <sc-for list="{{wFlights}}" as="fl" hint-placeholder-count="20">
           <button class="fdot" aria-label="{{fl.aria}}" onMouseEnter="{{fl.enter}}" onMouseLeave="{{fl.leave}}" onClick="{{fl.enter}}" style="left: {{fl.left}}; top: {{fl.top}}">
-            <span class="{{fl.dotCls}}"></span>
+            <svg width="18" height="18" viewBox="-9 -9 18 18" aria-hidden="true" style="overflow: visible; transform: rotate({{fl.rot}}) scale({{fl.sc}}); filter: {{fl.glow}}"><path d="M0 -7L1.6 -2L7 1.4V3L1.6 1.6L1.2 5L3 6.4V7.4L0 6.6L-3 7.4V6.4L-1.2 5L-1.6 1.6L-7 3V1.4L-1.6 -2Z" fill="{{fl.col}}"></path></svg>
           </button>
         </sc-for>
         <div style="position: absolute; left: 14px; top: 12px; font-family: 'Michroma', sans-serif; font-size: 11px; letter-spacing: 3px; color: #FBCA03">WORLD WATCH</div>
         <div style="position: absolute; left: 14px; top: 32px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #9A8F76">{{wCount}}</div>
         <button class="qa" onClick="{{closeWorld}}" style="position: absolute; right: 12px; top: 10px; height: 40px">Close</button>
-        <div style="position: absolute; right: 14px; bottom: 12px; display: flex; flex-direction: column; gap: 4px; align-items: flex-end; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #9A8F76; background: rgba(13,15,20,0.7); border: 1px solid #262A33; border-radius: 8px; padding: 8px 10px">
-          <div style="display: flex; gap: 10px; align-items: center">
-            <span><span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #F2F4F8; opacity: 0.6"></span> clouds</span>
-            <span style="color: #67C7EB">⁄⁄ rain</span>
-            <span><span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #5B6478"></span> storm</span>
-            <span style="color: #FBCA03">☀ sunny</span>
+        <div style="position: absolute; right: 14px; bottom: 12px; display: flex; flex-direction: column; gap: 4px; align-items: flex-end; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #9A8F76; background: rgba(7,8,10,0.55); border: 1px solid rgba(var(--h),.3); border-radius: 8px; padding: 8px 10px; pointer-events: none">
+          <div style="display: flex; gap: 9px; align-items: center">
+            <span style="color: #F2F4F8">☁ cloud</span><span style="color: #67C7EB">⁄⁄ rain</span><span style="color: #F2F4F8">✳ snow</span><span style="color: #FFF4D6">ϟ storm</span><span style="color: #FBCA03">☀ clear</span><span style="color: #FF8A73">✈ near home</span>
           </div>
-          <div>drag to rotate · hover a dot · gold = day</div>
+          <div>drag to rotate · hover a plane · bright land = day</div>
         </div>
         <button class="qa" onClick="{{toggleWx}}" style="position: absolute; right: 92px; top: 10px; height: 40px">{{wxBtn}}</button>
         <sc-if value="{{hovOn}}" hint-placeholder-val="{{ false }}">
-          <div style="position: absolute; left: {{hov.left}}; top: {{hov.top}}; width: 230px; background: rgba(13,15,20,0.82); border: 1px solid #FBCA03; box-shadow: 0 0 14px rgba(251,202,3,.35); padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; pointer-events: none; border-radius: 8px">
+          <div style="position: absolute; left: {{hov.left}}; top: {{hov.top}}; width: 236px; background: linear-gradient(180deg, rgba(var(--h),.16), rgba(7,8,10,.78)); border: 1px solid rgba(var(--h),.75); box-shadow: 0 0 22px rgba(var(--h),.3); text-shadow: 0 0 8px rgba(var(--h),.4); backdrop-filter: blur(4px); padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; pointer-events: none; border-radius: 12px; z-index: 6">
             <div style="display: flex; justify-content: space-between; align-items: baseline">
               <span style="font-family: 'Michroma', sans-serif; font-size: 13px; color: #FBCA03">{{hov.no}}</span>
               <span style="font-size: 13px; color: #C9C0AC">{{hov.airline}}</span>
             </div>
             <div style="font-size: 14px; font-weight: 700; color: #EDE6D6">{{hov.route}}</div>
             <div style="font-size: 13px; color: #C9C0AC">{{hov.cities}}</div>
-            <div style="height: 4px; background: #1C1F26"><div style="height: 4px; width: {{hov.pct}}; background: #67C7EB"></div></div>
+            <sc-if value="{{hov.hasPct}}" hint-placeholder-val="{{ true }}">
+            <div style="height: 4px; background: rgba(var(--h),.18); border-radius: 2px"><div style="height: 4px; width: {{hov.pct}}; background: #67C7EB; border-radius: 2px"></div></div>
+          </sc-if>
             <div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #67C7EB">ETA {{hov.eta}}</div>
             <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #9A8F76">{{hov.left2}}</div>
           </div>
@@ -1006,7 +1016,7 @@ class Component extends DCLogic {
   constructor(props) {
     super(props);
     this.state = { mode: 'ambient', master: 'trading', now: new Date(), tick: 0,
-      a: 0, voiceMenu: false, voices: [], voiceName: null, kVoices: [], kVoice: null, wakeOn: false, wakeLive: false, wakeHeard: false, wakeLast: '', wakeErr: '', deckI: 0, deckTalk: false, mail: {}, prev: null, desk: {}, deskFor: null, deskStage: null, issueText: {}, holoTilt: true, holoScan: true, holoBlue: false, wx: true, page: 0, orbA: 0, orbHov: null, speaking: false, pulse: 0, boot: true, bootT: 0, rotLon: -40, rotLat: 22, drag: null, hov: null, mind: false, openT: 0, sel: 'root', cmd: '', listening: false, flash: '', flashUntil: 0,
+      a: 0, voiceMenu: false, voices: [], voiceName: null, kVoices: [], kVoice: null, wakeOn: false, wakeLive: false, wakeHeard: false, wakeLast: '', wakeErr: '', wxGrid: null, deckI: 0, deckTalk: false, mail: {}, prev: null, desk: {}, deskFor: null, deskStage: null, issueText: {}, holoTilt: true, holoScan: true, holoBlue: false, wx: true, page: 0, orbA: 0, orbHov: null, speaking: false, pulse: 0, boot: true, bootT: 0, rotLon: -40, rotLat: 22, drag: null, hov: null, mind: false, openT: 0, sel: 'root', cmd: '', listening: false, flash: '', flashUntil: 0,
       cpu: 13, ram: 94, gpu: 2, vram: 16, music: true, confirmOff: false, off: null, offT: 0,
       log: [
         { t: '13:22', msg: 'Screenwriter · draft 2 of Episode 04 started' },
@@ -1738,6 +1748,10 @@ class Component extends DCLogic {
     let j = null;
     try { const r = await fetch('/api/desk/' + m); j = r.ok ? await r.json() : null; } catch (e) {}
     this.setState({ desk: Object.assign({}, this.state.desk, { [m]: j || { failed: true } }) });
+  }
+  async loadWxGrid() {
+    // real weather for the globe: ~100 points worldwide, cached an hour on the backend
+    try { const r = await fetch('/api/weather/grid'); const j = r.ok ? await r.json() : null; this.setState(j && j.points ? { wxGrid: j.points, wxFail: false } : { wxGrid: [], wxFail: true }); } catch (e) { this.setState({ wxGrid: [], wxFail: true }); }
   }
   async loadMail(id) {
     // the original email and its attachment list for a drafted reply, fetched when its card comes up
@@ -2594,8 +2608,11 @@ class Component extends DCLogic {
     const doy = Math.floor((d - new Date(d.getFullYear(), 0, 0)) / 86400000);
     const decl = 23.44 * Math.sin(2 * Math.PI * (284 + doy) / 365) * rad;
     const sunLon = -15 * (utcH - 12) * rad;
-    let wDay = '', wNight = '';
+    let wDay = '', wNight = '', wGrid = '';
     if (s.mode === 'world') {
+      const line = (pts) => { let first = true; pts.forEach(([la, lo]) => { const q = proj(la, lo); if (q[2] > 0) { wGrid += (first ? 'M' : 'L') + f(q[0]) + ' ' + f(q[1]); first = false; } else first = true; }); };
+      for (let la = -60; la <= 60; la += 30) line(Array.from({ length: 73 }, (_, k) => [la, -180 + k * 5]));
+      for (let lo = -180; lo < 180; lo += 30) line(Array.from({ length: 35 }, (_, k) => [-85 + k * 5, lo]));
       for (let i = 0; i < LAND.length; i += 2) {
         const la = LAND[i], lo = LAND[i + 1];
         const q = proj(la, lo);
@@ -2626,57 +2643,50 @@ class Component extends DCLogic {
       const v = [A[0] * k1 + B[0] * k2, A[1] * k1 + B[1] * k2, A[2] * k1 + B[2] * k2];
       return [Math.asin(v[2]) / rad, Math.atan2(v[1], v[0]) / rad];
     };
-    // ---- World weather layer (demo systems, drifting; live = Open-Meteo grid) ----
-    const WX = [
-      [55, -30, 12, 'rain', 0.5], [44, -83, 5, 'cloud', 0.4], [48, -132, 9, 'rain', 0.45], [50, 5, 8, 'cloud', 0.5],
-      [62, 60, 10, 'cloud', 0.4], [38, 150, 9, 'rain', 0.5], [18, 125, 6, 'storm', -0.3], [15, 88, 7, 'rain', -0.2],
-      [8, -35, 6, 'storm', -0.35], [6, 5, 5, 'storm', -0.3], [-4, -62, 7, 'storm', -0.2], [0, 22, 6, 'storm', -0.2],
-      [7, 160, 6, 'storm', -0.35], [-50, 20, 13, 'rain', 0.6], [-48, 110, 12, 'rain', 0.6], [-52, -120, 12, 'cloud', 0.6],
-      [-35, -55, 7, 'cloud', 0.4], [10, -95, 5, 'storm', -0.3], [28, -60, 8, 'cloud', 0.4], [-15, 75, 7, 'cloud', -0.3]
-    ];
-    const SUN = [[23, 10], [23, 47], [-25, 133], [34, -112], [-24, -69], [-23, 22], [42, 65], [16, -3], [30, 78]];
-    let wxCloudD = '', wxCloudN = '', wxCloudCore = '', wxRain = '', wxStorm = '', wxBolt = '', wxSun = '';
-    const circ = (x, y, r) => 'M' + f(x - r) + ' ' + f(y) + 'a' + f(r) + ' ' + f(r) + ' 0 1 0 ' + f(2 * r) + ' 0a' + f(r) + ' ' + f(r) + ' 0 1 0 ' + f(-2 * r) + ' 0';
+    // ---- World weather: icons at grid points. Connected = Open-Meteo via /api/weather/grid; the preview uses a made-up grid ----
     const isDay = (la, lo) => Math.sin(la * rad) * Math.sin(decl) + Math.cos(la * rad) * Math.cos(decl) * Math.cos(lo * rad - sunLon) > 0;
-    if (s.mode === 'world' && s.wx && !bLive) {   // the weather systems are illustrative, so they are hidden when connected
-      WX.forEach((w, i) => {
-        const la0 = w[0], lo0 = w[1] + w[4] * s.a * 1.2, rd = w[2], kind = w[3];
-        for (let k = 0; k < 6; k++) {
-          const an = (k * 60 + i * 37) * rad, dd = k === 0 ? 0 : rd * 0.55;
-          const la = la0 + Math.sin(an) * dd, lo = lo0 + Math.cos(an) * dd / Math.max(0.3, Math.cos(la0 * rad));
-          const q = proj(la, lo);
-          if (q[2] <= 0.04) continue;
-          const pr = R * Math.sin((rd * (k === 0 ? 0.6 : 0.5)) * rad) * (0.45 + 0.55 * q[2]);
-          const day = isDay(la, lo);
-          if (kind === 'storm') wxStorm += circ(q[0], q[1], pr * 1.05);
-          if (day) wxCloudD += circ(q[0], q[1], pr); else wxCloudN += circ(q[0], q[1], pr);
-          if (k === 0) wxCloudCore += circ(q[0], q[1], pr * 0.6);
-          if (kind === 'storm' && k === 0) wxBolt += 'M' + f(q[0] + 1) + ' ' + f(q[1] - 7) + 'l-4 7h3l-2 6l5 -8h-3l2 -5z';
-          if ((kind === 'rain' || kind === 'storm') && k < 4) {
-            for (let m = 0; m < 3; m++) {
-              const sx = q[0] + (((i * 7 + k * 13 + m * 29) % 17) - 8) * pr / 10, sy = q[1] + (((i * 11 + k * 5 + m * 19) % 13) - 4) * pr / 10;
-              wxRain += 'M' + f(sx) + ' ' + f(sy) + 'l-3 9';
-            }
-          }
-        }
-      });
-      SUN.forEach((p2) => {
-        if (!isDay(p2[0], p2[1])) return;
-        const q = proj(p2[0], p2[1]);
-        if (q[2] <= 0.15) return;
-        const r0 = 3.5 + 1.5 * q[2];
-        wxSun += circ(q[0], q[1], r0);
-        for (let k = 0; k < 8; k++) {
-          const an = k * Math.PI / 4;
-          wxSun += 'M' + f(q[0] + Math.cos(an) * (r0 + 2)) + ' ' + f(q[1] + Math.sin(an) * (r0 + 2)) + 'L' + f(q[0] + Math.cos(an) * (r0 + 5)) + ' ' + f(q[1] + Math.sin(an) * (r0 + 5));
-        }
+    let wxCl = '', wxSt = '', wxFg = '', wxRn = '', wxSn = '', wxBl = '', wxSu = '';
+    if (s.mode === 'world' && CON && (!this.wxReq || Date.now() - this.wxReq > 1800000)) { this.wxReq = Date.now(); setTimeout(() => this.loadWxGrid(), 0); }
+    if (s.mode === 'world' && s.wx) {
+      let WG = s.wxGrid || [];
+      if (!CON) { WG = []; for (let la = -60; la <= 60; la += 20) for (let lo = -168; lo <= 168; lo += 24) { const h = Math.abs(Math.sin(la * 12.9898 + lo * 78.233) * 43758.5453) % 1;
+        WG.push({ la, lo, day: isDay(la, lo), kind: h < 0.42 ? 'clear' : h < 0.74 ? 'cloud' : h < 0.9 ? (Math.abs(la) > 45 ? 'snow' : 'rain') : h < 0.95 ? 'fog' : 'storm' }); } }
+      const cloud = (x, y, k) => 'M' + f(x - 7 * k) + ' ' + f(y + 3 * k) + 'a' + f(3.5 * k) + ' ' + f(3.5 * k) + ' 0 0 1 ' + f(1.5 * k) + ' ' + f(-6.6 * k) + 'a' + f(4.6 * k) + ' ' + f(4.6 * k) + ' 0 0 1 ' + f(8.6 * k) + ' ' + f(-1.2 * k) + 'a' + f(3.6 * k) + ' ' + f(3.6 * k) + ' 0 0 1 ' + f(3.4 * k) + ' ' + f(7.8 * k) + 'z';
+      WG.forEach((p) => {
+        const q = proj(p.la, p.lo); if (q[2] < 0.22) return;
+        const x = q[0], y = q[1], k = 0.5 + q[2] * 0.42;
+        if (p.kind === 'clear') { if (!p.day) return;
+          wxSu += 'M' + f(x - 2.4 * k) + ' ' + f(y) + 'a' + f(2.4 * k) + ' ' + f(2.4 * k) + ' 0 1 0 ' + f(4.8 * k) + ' 0a' + f(2.4 * k) + ' ' + f(2.4 * k) + ' 0 1 0 ' + f(-4.8 * k) + ' 0';
+          for (let a2 = 0; a2 < 8; a2++) { const c = Math.cos(a2 * Math.PI / 4), n = Math.sin(a2 * Math.PI / 4); wxSu += 'M' + f(x + c * 3.8 * k) + ' ' + f(y + n * 3.8 * k) + 'L' + f(x + c * 5.6 * k) + ' ' + f(y + n * 5.6 * k); }
+          return; }
+        if (p.kind === 'fog') { for (let r3 = -1; r3 <= 1; r3++) wxFg += 'M' + f(x - 6 * k) + ' ' + f(y + r3 * 3 * k) + 'h' + f(12 * k); return; }
+        if (p.kind === 'storm') wxSt += cloud(x, y, k); else wxCl += cloud(x, y, k);
+        if (p.kind === 'rain') for (let r3 = -1; r3 <= 1; r3++) wxRn += 'M' + f(x + r3 * 3.4 * k) + ' ' + f(y + 5 * k) + 'l' + f(-1.6 * k) + ' ' + f(4.6 * k);
+        if (p.kind === 'snow') for (let r3 = -1; r3 <= 1; r3++) { const sx = x + r3 * 3.6 * k, sy = y + 7 * k; wxSn += 'M' + f(sx - 1.4) + ' ' + f(sy) + 'h2.8M' + f(sx) + ' ' + f(sy - 1.4) + 'v2.8'; }
+        if (p.kind === 'storm') wxBl += 'M' + f(x + k) + ' ' + f(y + 3 * k) + 'l' + f(-3 * k) + ' ' + f(5 * k) + 'h' + f(2.6 * k) + 'l' + f(-2 * k) + ' ' + f(4.6 * k) + 'l' + f(5.4 * k) + ' ' + f(-6.4 * k) + 'h' + f(-2.6 * k) + 'z';
       });
     }
     const nowH = d.getTime() / 3600000;
     const hm = (h) => Math.floor(h) + 'h ' + pad(Math.round((h % 1) * 60)) + 'm';
     const wFlights = [];
-    let hov = null, wRoute = '';
+    let hov = null, wRoute = '', wTrail = '', wDest = '';
     const LFd = s.live && s.live.report_data && s.live.report_data.world;
+    const HOME = (LFd && LFd.home) || [42.05, -82.6], nearKm = (LFd && LFd.near_km) || 400;
+    const along = (la, lo, trk, dist) => { const br = trk * rad, la1 = la * rad, lo1 = lo * rad, la2 = Math.asin(Math.sin(la1) * Math.cos(dist) + Math.cos(la1) * Math.sin(dist) * Math.cos(br));
+      return [la2 / rad, (lo1 + Math.atan2(Math.sin(br) * Math.sin(dist) * Math.cos(la1), Math.cos(dist) - Math.sin(la1) * Math.sin(la2))) / rad]; };
+    const kmB = (a, b) => { const A = vec(a[0], a[1]), B = vec(b[0], b[1]); return 6371 * Math.acos(Math.max(-1, Math.min(1, A[0] * B[0] + A[1] * B[1] + A[2] * B[2]))); };
+    // an aircraft on the globe: plane icon turned to its heading on screen, a short trail, coral when near home
+    const plane = (key, la, lo, trk, q, on, aria) => {
+      const qa = proj.apply(null, along(la, lo, trk, 0.012)), qb = proj.apply(null, along(la, lo, trk + 180, 0.035));
+      if (qb[2] > 0) wTrail += 'M' + f(qb[0]) + ' ' + f(qb[1]) + 'L' + f(q[0]) + ' ' + f(q[1]);
+      const near = kmB([la, lo], HOME) < nearKm;
+      wFlights.push({ left: f(q[0]) + 'px', top: f(q[1]) + 'px', aria, rot: f(Math.atan2(qa[1] - q[1], qa[0] - q[0]) / rad + 90) + 'deg', sc: ((on ? 1.9 : 1) * (0.42 + q[2] * 0.26)).toFixed(2),
+        col: on ? '#FFFFFF' : near ? '#FF8A73' : '#FFF4D6', glow: on ? 'drop-shadow(0 0 5px #67C7EB)' : 'none',
+        enter: () => this.setState({ hov: key }), leave: () => this.setState({ hov: null }) });
+    };
+    const destMark = (la, lo) => { const dq = proj(la, lo); if (dq[2] > 0) wDest = 'M' + f(dq[0] - 4) + ' ' + f(dq[1]) + 'a4 4 0 1 0 8 0a4 4 0 1 0 -8 0'; };
+    const hq = proj(HOME[0], HOME[1]);
+    const wHome = s.mode === 'world' && hq[2] > 0 ? 'M' + f(hq[0] - 2.4) + ' ' + f(hq[1]) + 'a2.4 2.4 0 1 0 4.8 0a2.4 2.4 0 1 0 -4.8 0' : '';
     if (s.mode === 'world' && LFd && LFd.flights && LFd.flights.length) {
       const dtS = Math.max(0, (Date.now() / 1000) - (LFd.at || Date.now() / 1000));
       LFd.flights.forEach((fl) => {
@@ -2691,19 +2701,20 @@ class Component extends DCLogic {
             const A = vec(la2 / rad, lo2 / rad), B = vec(fl.dest[0], fl.dest[1]);
             let first = true;
             for (let k = 0; k <= 48; k++) { const pp = slerp(A, B, k / 48), qq = proj(pp[0], pp[1]); if (qq[2] > 0) { wRoute += (first ? 'M' : 'L') + f(qq[0]) + ' ' + f(qq[1]); first = false; } else first = true; }
+            destMark(fl.dest[0], fl.dest[1]);
           }
+          const whole = fl.orig && fl.dest ? kmB(fl.orig, fl.dest) : 0, flown = whole > 50 ? Math.max(0, Math.min(1, 1 - kmB([la2 / rad, lo2 / rad], fl.dest) / whole)) : null;
           const left = fl.eta_min != null ? Math.max(0, fl.eta_min - dtS / 60) : null;
           const arr = left != null ? new Date(Date.now() + left * 60000) : null;
           const hx = Math.min(700 - 244, Math.max(8, q[0] + 16)), hy = Math.min(468 - 170, Math.max(50, q[1] - 70));
           hov = { no: fl.cs, airline: fl.airline || fl.country || '', route: (fl.from || '?') + ' → ' + (fl.to || '?'),
             cities: fl.from_city && fl.to_city ? fl.from_city + ' to ' + fl.to_city : 'Route not published',
             eta: arr ? pad(arr.getHours()) + ':' + pad(arr.getMinutes()) + ' your time' : '—',
-            left2: (left != null ? hm(left / 60) + ' remaining · ' : '') + Math.round((fl.alt || 0) * 3.281).toLocaleString() + ' ft',
-            pct: left != null && fl.eta_min ? '50%' : '0%', left: f(hx) + 'px', top: f(hy) + 'px' };
+            left2: (left != null ? hm(left / 60) + ' left · ' : '') + (flown != null ? Math.round(flown * 100) + '% flown · ' : '') + Math.round((fl.alt || 0) * 3.281).toLocaleString() + ' ft · ' + Math.round((fl.spd || 0) * 3.6) + ' km/h',
+            hasPct: flown != null, pct: flown != null ? Math.round(flown * 100) + '%' : '0%', left: f(hx) + 'px', top: f(hy) + 'px' };
         }
         if (q[2] <= 0.05) return;
-        wFlights.push({ left: f(q[0]) + 'px', top: f(q[1]) + 'px', dotCls: on ? 'fd-on' : 'fd', aria: fl.cs + ' ' + (fl.from || '') + ' to ' + (fl.to || ''),
-          enter: () => this.setState({ hov: fl.cs }), leave: () => this.setState({ hov: null }) });
+        plane(fl.cs, la2 / rad, lo2 / rad, fl.trk || 0, q, on, fl.cs + ' ' + (fl.from || '') + ' to ' + (fl.to || ''));
       });
     } else if (s.mode === 'world') {
       FL.forEach((fl, i) => {
@@ -2722,14 +2733,15 @@ class Component extends DCLogic {
             const pp = slerp(A, B, k / 48), qq = proj(pp[0], pp[1]);
             if (qq[2] > 0) { wRoute += (first ? 'M' : 'L') + f(qq[0]) + ' ' + f(qq[1]); first = false; } else first = true;
           }
+          destMark(de[1], de[2]);
           const hx = Math.min(700 - 244, Math.max(8, q[0] + 16)), hy = Math.min(468 - 170, Math.max(50, q[1] - 70));
           hov = { no: fl[0], airline: fl[1], route: fl[2] + ' → ' + fl[3], cities: o[0] + ' to ' + de[0], eta,
-            left2: hm(remain) + ' remaining · ' + Math.round(u * 100) + '% flown', pct: Math.round(u * 100) + '%', left: f(hx) + 'px', top: f(hy) + 'px' };
+            left2: hm(remain) + ' remaining · ' + Math.round(u * 100) + '% flown', hasPct: true, pct: Math.round(u * 100) + '%', left: f(hx) + 'px', top: f(hy) + 'px' };
         }
         if (q[2] <= 0.05) return;
-        wFlights.push({ left: f(q[0]) + 'px', top: f(q[1]) + 'px', dotCls: on ? 'fd-on' : 'fd',
-          aria: fl[0] + ' ' + fl[2] + ' to ' + fl[3],
-          enter: () => this.setState({ hov: fl[0] }), leave: () => this.setState({ hov: null }) });
+        const nx = slerp(A, B, Math.min(1, u + 0.01)), lo1 = pos[1] * rad, lo2n = nx[1] * rad, la1 = pos[0] * rad, la2n = nx[0] * rad;   // heading = bearing to the next point on its route
+        const brg = Math.atan2(Math.sin(lo2n - lo1) * Math.cos(la2n), Math.cos(la1) * Math.sin(la2n) - Math.sin(la1) * Math.cos(la2n) * Math.cos(lo2n - lo1)) / rad;
+        plane(fl[0], pos[0], pos[1], brg, q, on, fl[0] + ' ' + fl[2] + ' to ' + fl[3]);
       });
     }
     const wCount = LFd && LFd.flights && LFd.flights.length ? (LFd.total_airborne || LFd.flights.length).toLocaleString() + ' in the air · showing ' + LFd.flights.length + ' · ' + wFlights.length + ' on this side · LIVE'
@@ -2761,8 +2773,9 @@ class Component extends DCLogic {
       calOn: s.mode === 'calendar' && !s.mind, calDays, calSelTitle, calSelWx, calSelEvents,
       openCal: () => this.setState({ mode: 'calendar', mind: false, calSel: null }), closeCal: () => this.setState({ mode: 'ambient' }),
       coreOn: !s.mind && !Component.DECK.test(s.mode) && s.mode !== 'world' && s.mode !== 'calendar' && s.mode !== 'ask', worldOn: s.mode === 'world' && !s.mind,
-      wDay, wNight, wRoute, wFlights, wCount, wxCloudD, wxCloudN, wxCloudCore, wxRain, wxStorm, wxBolt, wxSun,
-      toggleWx: () => this.setState({ wx: !this.state.wx }), wxBtn: bLive ? 'Weather: n/a' : s.wx ? 'Weather: on' : 'Weather: off', hovOn: !!hov, hov: hov || {}, orbitPath,
+      wDay, wNight, wGrid, wRoute, wTrail, wDest, wHome, wHomeX: f(hq[0]) + 'px', wHomeY: f(hq[1]) + 'px', wHomeShow: hq[2] > 0 ? 'block' : 'none', wFlights, wCount, wxCl, wxSt, wxFg, wxRn, wxSn, wxBl, wxSu,
+      holoCol: 'rgb(' + (s.holoBlue ? '103,199,235' : '251,202,3') + ')',
+      toggleWx: () => this.setState({ wx: !this.state.wx }), wxBtn: !s.wx ? 'Weather: off' : CON && s.wxFail ? 'Weather: unavailable' : CON && !s.wxGrid ? 'Weather: loading' : 'Weather: on', hovOn: !!hov, hov: hov || {}, orbitPath,
       openWorld: () => this.setState({ mode: 'world', mind: false }),
       closeWorld: () => this.setState({ mode: 'ambient', hov: null }),
       gDown: (ev) => { this.setState({ drag: { x: ev.clientX, y: ev.clientY, lon: this.state.rotLon, lat: this.state.rotLat } }); },
