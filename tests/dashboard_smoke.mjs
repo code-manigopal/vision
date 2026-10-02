@@ -40,6 +40,16 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 c.renderVals(); c.startBrief(); await wait(800); let v = c.renderVals();
 if (c.state.mode !== 'briefing' || !v.deckOn || v.deckCards.length < 5) fail('deck did not open', c.state.mode, v.deckCards.length);
 if (v.deckCards.filter((x) => x.center).length !== 1 || !v.deckCards[0].center) fail('first card should be the centre one');
+if (/Portfolio|percent|NIFTY|cloudy/i.test(said[0])) fail('the opening card should only greet; each topic is read on its own card', said[0]);
+{ // every card is read in order, and the card on screen is the one being read
+  const q = mk({ liveUp: true, live: live.full }); const order = []; q.speak = (t2, after) => { const cc = q.renderVals().deckCards.find((x) => x.center); order.push([cc.key, t2.slice(0, 24)]); q._a = after; };
+  q.renderVals(); q.startBrief(); await wait(800); const n = q.renderVals().deckCards.length;
+  for (let k = 0; k < n + 1; k++) { q._a && q._a(); await wait(560); q.renderVals(); }
+  const keys = q.renderVals().deckCards.map((x) => x.key);
+  if (order.map((o) => o[0]).join() !== keys.join()) fail('narration order does not match the cards', order.map((o) => o[0]).join(), '!=', keys.join());
+  if (q.state.deckTalk) fail('narration should stop after the last card');
+  console.log('narration order:', order.map((o) => o[0]).join(' → '));
+}
 c._after(); await wait(600); v = c.renderVals();                       // speech ended -> advances and reads the next card
 if (c.state.deckI !== 1 || said.length !== 2) fail('voice did not advance the deck', c.state.deckI, said.length);
 c.deckGo(2); await wait(120); v = c.renderVals();                      // arrow keys jump and VISION picks up there

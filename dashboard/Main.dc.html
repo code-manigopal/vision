@@ -2548,14 +2548,21 @@ class Component extends DCLogic {
       });
       if (!deck.length) deck.push({ key: 'none', kick: 'DECISIONS', title: 'Nothing waiting', rows: [], body: CON ? 'No approval is waiting for you right now.' : 'Connect to VISION to see approvals.', say: 'Nothing is waiting for you right now.' });
     } else {
-      const summary = replyText.replace(' [demo data]', '');
-      deck = [
-        { key: 'sum', kick: 'BRIEFING · ' + briefDate, title: greet, rows: [], body: summary, say: spk(summary) },
-        { key: 'port', kick: 'BRIEFING · ' + bPortsTitle, title: 'Portfolio', rows: bPorts.map((p) => ({ a: p.name, b: p.val, ac: p.nameColor, bc: p.color })), say: 'Portfolio. ' + bPorts.map((p) => spkMoney(p.name, p.val)).join('. ') + '.' },
-        { key: 'mkt', kick: 'BRIEFING · ' + bMktsTitle, title: 'Markets', rows: bMkts.map((m) => ({ a: m.name, b: m.val, ac: '#EDE6D6', bc: m.color })), say: 'Markets. ' + spk(bMkts.map((m) => m.name + ' ' + m.val).join('. ')) + '.' },
-        { key: 'desk', kick: 'BRIEFING · DESKS', title: 'Your desks', rows: bMasters.map((x) => ({ a: x.name, b: x.line, ac: '#FBCA03', bc: x.color })), say: 'Your desks. ' + spk(bMasters.map((x) => x.name.toLowerCase() + ': ' + x.line).join('. ')) + '.' },
-        { key: 'news', kick: 'BRIEFING · NEWS', title: 'Headlines', rows: bNews.map((n) => ({ a: n.tag, b: n.text, ac: '#FBCA03', bc: '#EDE6D6' })), say: 'In the news. ' + bNews.slice(0, 4).map((n) => n.text).join('. ') + '.' }
-      ];
+      // One card per thing VISION says, in the order it says it: the card on screen is always the one being read.
+      const needs = (this.statusModel && this.statusModel.needs) || [];
+      const intro = greet + ', Mani. ' + (bLive ? (liveLines.length ? liveLines.length + ' of ' + mReports.length + ' desks have reported.' : 'No desk has reported yet.') : onlineMasters + ' desks reporting, Film Studio on hold.')
+        + ' ' + (needs.length ? needs.length + (needs.length === 1 ? ' thing needs you.' : ' things need you.') : 'Nothing needs you right now.');
+      const wx = bLive ? (RD.news && RD.news.weather) : { city: 'Leamington', temp: 22, words: 'cloudy' };
+      const heads = bNews.filter((n) => n.tag !== 'WEATHER');
+      deck = [{ key: 'sum', kick: 'BRIEFING · ' + briefDate, title: greet, rows: [], body: intro, say: intro }];
+      if (needs.length) deck.push({ key: 'needs', kick: 'BRIEFING · NEEDS YOU', title: 'Waiting for you', rows: needs.map((n) => ({ a: this.cap1(n.text), b: '', ac: '#FF8A73', bc: '#EDE6D6' })),
+        say: 'Waiting for you. ' + needs.map((n) => this.cap1(n.text)).join('. ') + '.' });
+      deck.push({ key: 'port', kick: 'BRIEFING · ' + bPortsTitle, title: 'Portfolio', rows: bPorts.map((p) => ({ a: p.name, b: p.val, ac: p.nameColor, bc: p.color })), say: 'Portfolio. ' + bPorts.map((p) => spkMoney(p.name, p.val)).join('. ') + '.' });
+      deck.push({ key: 'mkt', kick: 'BRIEFING · ' + bMktsTitle, title: 'Markets', rows: bMkts.map((m) => ({ a: m.name, b: m.val, ac: '#EDE6D6', bc: m.color })), say: 'Markets. ' + spk(bMkts.map((m) => m.name + ' ' + m.val).join('. ')) + '.' });
+      deck.push({ key: 'desk', kick: 'BRIEFING · DESKS', title: 'Your desks', rows: bMasters.map((x) => ({ a: x.name, b: x.line, ac: '#FBCA03', bc: x.color })), say: 'Your desks. ' + spk(bMasters.map((x) => x.name.toLowerCase() + ': ' + x.line).join('. ')) + '.' });
+      if (heads.length) deck.push({ key: 'news', kick: 'BRIEFING · NEWS', title: 'Headlines', rows: heads.map((n) => ({ a: n.tag, b: n.text, ac: '#FBCA03', bc: '#EDE6D6' })), say: 'In the news. ' + heads.slice(0, 4).map((n) => n.text).join('. ') + '.' });
+      if (wx) deck.push({ key: 'wx', kick: 'BRIEFING · WEATHER', title: wx.city || 'Weather', rows: [{ a: 'Now', b: wx.temp + '° · ' + wx.words, ac: '#C9C0AC', bc: '#EDE6D6' }],
+        say: "It's " + wx.temp + ' degrees and ' + wx.words + (wx.city ? ' in ' + wx.city : '') + '.' });
       if (T) deck.push({ key: 'traffic', kick: 'BRIEFING · TRAFFIC', title: tr.title.replace('TRAFFIC: ', ''), rows: [], body: tr.count + '\n' + tr.flag, say: 'Traffic in ' + T.city + '. ' + spk(tr.count) + '. ' + spk(tr.flag) + '.' });
     }
     const di = Math.max(0, Math.min(deck.length - 1, s.deckI || 0));
