@@ -27,7 +27,7 @@ let fails = 0; const seen = new Set();
 const fail = (...a) => { fails++; console.log(...a); };
 const mk = (st) => { const c = new Component({}); Object.assign(c.state, { log: [], boot: false }, st); c.scrollToTop = () => {}; return c; };
 for (const [name, L] of [['preview', null], ['connected-empty', live.empty], ['connected-full', live.full]])
-  for (const mode of ['ambient', 'briefing', 'issues', 'decide', 'calendar', 'world', 'ask']) for (const master of ['trading', 'traffic', 'film']) {
+  for (const mode of ['ambient', 'briefing', 'issues', 'decide', 'desk', 'calendar', 'world', 'ask']) for (const master of ['trading', 'traffic', 'film']) {
     const c = mk({ mode, master, liveUp: !!L, live: L, askSrc: 'offline', askSteps: [['VISION', 'A', 'b', '']], askChips: ['X'], askQ: 'q', askSay: 's', askAt: Date.now() - 5000, askFollow: [] });
     let v; try { v = c.renderVals(); } catch (e) { fail('CRASH', name, mode, master, String(e).slice(0, 200)); continue; }
     if (L) for (const key of Object.keys(v)) { const txt = JSON.stringify(v[key], (k, x) => typeof x === 'function' ? undefined : x) || '';
@@ -90,6 +90,21 @@ if (!/Sell 352 units/.test(JSON.stringify(dc.rows)) || !/in 20 min/.test(JSON.st
 dc.reject(); if (posts[posts.length - 1] !== '/api/approvals/3/rejected') fail('reject did not post', posts.join());
 const nd = mk({ liveUp: true, live: live.empty, mode: 'decide' }).renderVals().deckCards;
 if (nd.length !== 1 || nd[0].title !== 'Nothing waiting' || nd[0].hasActs) fail('empty decision deck wrong');
+// master desk: stages as chips, one card per record, artifacts previewed in the card
+globalThis.fetch = async (url) => ({ ok: url === '/api/desk/web', json: async () => ({ master: 'web', name: 'WEB DESIGNER',
+  stages: [{ id: 'building', label: 'Building', count: 0 }, { id: 'live', label: 'Live', count: 1 }, { id: 'pitched', label: 'Pitched', count: 1 }],
+  items: [{ id: 'l1', stage: 'live', title: 'Hot Nails', sub: 'Nail salon', ts: 1790000000, rows: [['Phone', '519 555 0101']], body: '', links: [{ label: 'Live demo', url: 'https://demo-hot-nails.x.workers.dev' }], files: [] },
+    { id: 'l2', stage: 'pitched', title: '77 Bakery', sub: 'Bakery', ts: 1790000500, rows: [['Phone', '519 326 0000']], body: 'Hi 77 Bakery team', links: [{ label: 'Live demo', url: 'https://demo-77.x.workers.dev' }], files: [{ label: 'Local page', url: '/api/files/sites/77-bakery/index.html', mime: 'text/html' }] }] }) });
+const dk = mk({ liveUp: true, live: live.full }); dk.speak = () => {};
+await dk.openDesk('web'); let kv2 = dk.renderVals(); let kc = kv2.deckCards.find((x) => x.center);
+if (dk.state.mode !== 'desk' || !kv2.deskOn || kv2.deskStages.map((x) => x.label).join() !== 'Building · 0,Live · 1,Pitched · 1') fail('desk stages wrong', JSON.stringify(kv2.deskStages.map((x) => x.label)));
+if (!kc || kc.title !== 'Hot Nails' || !/holo-chip-on/.test(kv2.deskStages[1].cls)) fail('desk should open on the first stage that has records', kc && kc.title);
+kv2.deskStages[2].pick(); kc = dk.renderVals().deckCards.find((x) => x.center);
+if (kc.title !== '77 Bakery' || !/Hi 77 Bakery/.test(kc.body) || kc.atts.length !== 2 || !/519 326/.test(JSON.stringify(kc.rows))) fail('approved pitch card wrong', kc.title, kc.atts.length);
+kc.atts[0].open(); kc = dk.renderVals().deckCards.find((x) => x.center);
+if (!kc.showPrev || !kc.prevBox || kc.prevSrc !== '/api/files/sites/77-bakery/index.html' || kc.prevSandbox !== 'allow-scripts') fail('local demo page preview wrong');
+await dk.openDesk('news'); kc = dk.renderVals().deckCards.find((x) => x.center); if (!/Could not load/.test(kc.title)) fail('a desk that fails to load should say so', kc.title);
+dk.runCommand('show my approved pitches'); if (dk.state.deskFor !== 'web' || dk.state.deskStage !== 'pitched') fail('"approved pitches" should open the Web Designer desk on Pitched');
 console.log('spoken:', said.map((x) => x.slice(0, 70)));
 console.log(fails ? fails + ' problem(s)' : 'dashboard logic OK: no crashes, no sample values while connected, deck works');
 process.exit(fails ? 1 : 0);

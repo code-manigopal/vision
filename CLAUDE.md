@@ -90,6 +90,7 @@ Tests: mock HTTP with `httpx.MockTransport`; use `FakeLLM` from tests/test_phase
 `GET /api/state` · `POST /api/boot` · `POST /api/shutdown` (standby) · `POST /api/masters/{id}/run` · `GET /api/brief` · `POST /api/brief/send`
 · `GET/POST /api/approvals` · `POST /api/approvals/{id}/{approved|rejected}` · `POST /api/ask {text, session}`
 · `GET /api/issues` · `POST /api/issues/explain {master, agent}` → `{text, source}` · `GET /api/approvals/{id}/email` (full body + attachments) · `GET /api/approvals/{id}/attachments/{att}` (streamed, never stored)
+· `GET /api/desk/{master}` (read-only pipeline: stages + items + artifacts) · `GET /api/files/{path}` (only `data/sites`, `data/applications`)
 · `POST /api/tts {text, voice?}` → wav · `GET /api/voices` (Kokoro's English voices) · `POST /api/stt` (raw audio body) → `{text}` · `GET /api/traffic?city=`
 · `/auth/{google|microsoft}/login?account=` + `/callback` · `/auth/fyers/login` + `/callback` · `WS /ws`
 
@@ -118,6 +119,9 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   Mode `decide` is the decision deck: one wide card per approval (Review button, or "show my decisions"); an email reply
   shows the original beside the draft with attachment chips (`/api/approvals/{id}/email`, previewed in the card), a pitch
   previews its demo site, a trade shows its numbers, reasoning and time left. Decisions never auto-advance.
+  Mode `desk` is a master's desk ("Desk ›" in the agent panel, "show my approved pitches", "open the jobs desk"):
+  stage chips with counts and one card per record from `GET /api/desk/{master}` (`vision/desk.py`); files and links open
+  inside the card (`/api/files/...`, only `data/sites` and `data/applications`). Approved pitches = Web Designer → Pitched.
   `node tests/dashboard_smoke.mjs` runs the dashboard logic without a browser.
 - "Hey Vision": a browser wake listener (`wakeStart` / `wakeHit`, Chrome speech recognition, switch in the voice menu,
   `vision-wake`, off by default; audio goes to Google while on). It pauses while VISION listens or speaks. Listening mode

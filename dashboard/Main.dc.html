@@ -57,6 +57,7 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
 .holo-pk{font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:1px;color:rgb(var(--h))}
 .holo-prev{flex:1;min-height:0;display:flex;flex-direction:column;gap:8px}
 .holo-chip{font-family:'JetBrains Mono',monospace;font-size:11px;color:#FFF4D6;background:rgba(var(--h),.12);border:1px solid rgba(var(--h),.55);border-radius:14px;padding:4px 10px;cursor:pointer;text-decoration:none;white-space:nowrap}
+.holo-chip-on{background:rgba(var(--h),.42);border-color:rgb(var(--h))}
 .holo-chip:hover{background:rgba(var(--h),.28)}
 .holo-cone{position:absolute;left:50%;bottom:92px;top:70px;width:620px;margin-left:-310px;z-index:1;pointer-events:none;background:linear-gradient(to top,rgba(var(--h),.26),rgba(var(--h),.05) 60%,transparent);clip-path:polygon(47% 100%,53% 100%,100% 0,0 0);filter:blur(5px);animation:holobeam 3.2s ease-in-out infinite}
 .blink{animation:vblink 1.4s ease-in-out infinite}
@@ -660,7 +661,12 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
       </div>
         </div>
         <div class="holo-cone"></div>
-        <div style="position: absolute; left: 0; right: 0; top: 52px; bottom: 205px; perspective: 1200px; z-index: 5">
+        <sc-if value="{{deskOn}}" hint-placeholder-val="{{ false }}">
+          <div style="position: absolute; left: 14px; right: 14px; top: 48px; display: flex; flex-wrap: wrap; gap: 6px; z-index: 20">
+            <sc-for list="{{deskStages}}" as="ds" hint-placeholder-count="4"><button class="{{ds.cls}}" onClick="{{ds.pick}}">{{ds.label}}</button></sc-for>
+          </div>
+        </sc-if>
+        <div style="position: absolute; left: 0; right: 0; top: {{deckTop}}; bottom: 205px; perspective: 1200px; z-index: 5">
           <sc-for list="{{deckCards}}" as="hc" hint-placeholder-count="3">
             <div class="{{hc.cls}}" onClick="{{hc.pick}}" style="transform: {{hc.tf}}; opacity: {{hc.op}}; z-index: {{hc.z}}; pointer-events: {{hc.pe}}">
               <span class="hcn hc1"></span><span class="hcn hc2"></span><span class="hcn hc3"></span><span class="hcn hc4"></span>
@@ -767,7 +773,10 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
       <div class="panel" style="background: rgba(13,15,20,0.82); border: 1px solid #262A33; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; border-radius: 8px">
         <div style="display: flex; justify-content: space-between; align-items: center">
           <div style="font-family: 'Michroma', sans-serif; font-size: 11px; letter-spacing: 2px; color: #FBCA03">{{selName}}</div>
-          <button class="qa" onClick="{{scrollGraph}}" style="height: 30px; font-size: 13px; padding: 0 10px">Agent graph ›</button>
+          <div style="display: flex; gap: 6px">
+            <button class="qa" onClick="{{openDesk}}" style="height: 30px; font-size: 13px; padding: 0 10px">Desk ›</button>
+            <button class="qa" onClick="{{scrollGraph}}" style="height: 30px; font-size: 13px; padding: 0 10px">Agent graph ›</button>
+          </div>
         </div>
         <div style="display: flex; flex-direction: column; gap: 1px">
         <sc-for list="{{agents}}" as="a" hint-placeholder-count="7">
@@ -995,7 +1004,7 @@ class Component extends DCLogic {
   constructor(props) {
     super(props);
     this.state = { mode: 'ambient', master: 'trading', now: new Date(), tick: 0,
-      a: 0, voiceMenu: false, voices: [], voiceName: null, kVoices: [], kVoice: null, wakeOn: false, wakeLive: false, wakeHeard: false, deckI: 0, deckTalk: false, mail: {}, prev: null, issueText: {}, holoTilt: true, holoScan: true, holoBlue: false, wx: true, page: 0, orbA: 0, orbHov: null, speaking: false, pulse: 0, boot: true, bootT: 0, rotLon: -40, rotLat: 22, drag: null, hov: null, mind: false, openT: 0, sel: 'root', cmd: '', listening: false, flash: '', flashUntil: 0,
+      a: 0, voiceMenu: false, voices: [], voiceName: null, kVoices: [], kVoice: null, wakeOn: false, wakeLive: false, wakeHeard: false, deckI: 0, deckTalk: false, mail: {}, prev: null, desk: {}, deskFor: null, deskStage: null, issueText: {}, holoTilt: true, holoScan: true, holoBlue: false, wx: true, page: 0, orbA: 0, orbHov: null, speaking: false, pulse: 0, boot: true, bootT: 0, rotLon: -40, rotLat: 22, drag: null, hov: null, mind: false, openT: 0, sel: 'root', cmd: '', listening: false, flash: '', flashUntil: 0,
       cpu: 13, ram: 94, gpu: 2, vram: 16, music: true, confirmOff: false, off: null, offT: 0,
       log: [
         { t: '13:22', msg: 'Screenwriter · draft 2 of Episode 04 started' },
@@ -1480,6 +1489,9 @@ class Component extends DCLogic {
     const t0 = (raw || '').toLowerCase().trim().replace(/^(hey|hi|ok|okay|yo)\s+(viz|vision)[,!.]*\s*/, '');
     if (/\b(what'?s wrong|what is wrong|any (issues|errors|problems)|show (me )?(the )?(issues|errors|problems)|what (failed|broke|went wrong))\b/.test(t0)) { this.openIssues(); return; }
     if (/\b(what needs (me|my)|(show|review|open) (me )?(the |my )?(approvals?|decisions?)|anything to (approve|decide)|what('?s| is) waiting)\b/.test(t0)) { this.openDecide(); return; }
+    if (/\b(approved pitches|my pitches|show (me )?(the )?pitches)\b/.test(t0)) { this.openDesk('web', 'pitched'); return; }
+    { const dm = t0.match(/\b(?:show|open)\b.*?\b(email|calendar|trading|invest\w*|news|web|job\w*|world|traffic)?\b.*\bdesk\b/);
+      if (dm) { const k = (dm[1] || '').replace(/^invest.*/, 'invest').replace(/^job.*/, 'jobs'); this.openDesk(k || this.state.master); return; } }
     if (this.state.liveUp && !this.useLocal && t0 && !this.isNavCommand(t0)) { this.askLive(raw); return; }
     this.runLocal(raw);
   }
@@ -1688,14 +1700,14 @@ class Component extends DCLogic {
     const n = (this.deck || []).length; if (!n) return;
     const i = Math.max(0, Math.min(n - 1, this.deckIdx + d)); if (i === this.deckIdx) return;
     this.deckIdx = i; this.setState({ deckI: i });
-    if (this.state.mode === 'decide') { this.stopSpeech(); this.setState({ prev: null, deckTalk: false }); }
+    if (this.state.mode === 'decide' || this.state.mode === 'desk') { this.stopSpeech(); this.setState({ prev: null, deckTalk: false }); }
     else if (this.state.mode === 'issues') { this.stopSpeech(); this.explainIssue(i, this.state.deckTalk); }
     else if (this.state.deckTalk) setTimeout(() => this.deckSpeak(), 60); else this.stopSpeech();
   }
   deckToggle() {
     if (this.state.deckTalk) { this.setState({ deckTalk: false }); this.stopSpeech(); return; }
     this.setState({ deckTalk: true });
-    if (this.state.mode === 'decide') { const c = (this.deck || [])[this.deckIdx], tok = this.deckTok = (this.deckTok || 0) + 1; if (c) this.speak(c.say, () => { if (tok === this.deckTok) this.setState({ deckTalk: false }); }); }
+    if (this.state.mode === 'decide' || this.state.mode === 'desk') { const c = (this.deck || [])[this.deckIdx], tok = this.deckTok = (this.deckTok || 0) + 1; if (c) this.speak(c.say, () => { if (tok === this.deckTok) this.setState({ deckTalk: false }); }); }
     else if (this.state.mode === 'issues') this.explainIssue(this.deckIdx, true); else setTimeout(() => this.deckSpeak(), 60);
   }
   startBrief() {
@@ -1712,6 +1724,17 @@ class Component extends DCLogic {
     this.stopSpeech();
     this.setState({ mode: 'decide', mind: false, page: 0, deckI: 0, deckTalk: false, prev: null });
     setTimeout(() => { const i = Math.max(0, (this.deck || []).findIndex((c) => c.key === 'ap:' + id)); this.deckIdx = i; this.setState({ deckI: i }); }, 80);
+  }
+  async openDesk(master, stage) {
+    // a master's records and artifacts (leads, pitches, job packages, drafts, trades...), one card each
+    const m = master || this.state.master;
+    this.stopSpeech();
+    this.setState({ mode: 'desk', mind: false, page: 0, master: m, deskFor: m, deskStage: stage || null, deckI: 0, deckTalk: false, prev: null });
+    this.deckIdx = 0;
+    if (!this.state.liveUp) return;
+    let j = null;
+    try { const r = await fetch('/api/desk/' + m); j = r.ok ? await r.json() : null; } catch (e) {}
+    this.setState({ desk: Object.assign({}, this.state.desk, { [m]: j || { failed: true } }) });
   }
   async loadMail(id) {
     // the original email and its attachment list for a drafted reply, fetched when its card comes up
@@ -1734,7 +1757,7 @@ class Component extends DCLogic {
     }
     if (speak && this.state.mode === 'issues' && this.deckIdx === i) { const tok = this.deckTok = (this.deckTok || 0) + 1; this.speak(text || c.say, () => { if (tok === this.deckTok) this.setState({ deckTalk: false }); }); }
   }
-  static DECK = /^(briefing|issues|decide)$/;
+  static DECK = /^(briefing|issues|decide|desk)$/;
   static WAKE_RE = /\b(hey|hi|hay|ok|okay)[\s,]*(vision|visions|fission|revision|division|vizhen)\b/;
   async loadKokoroVoices() {
     // Kokoro runs on the Mac: its voices replace the browser's list in the voice menu
@@ -1882,7 +1905,7 @@ class Component extends DCLogic {
       label, cls: s.mode === id ? 'tab-on' : 'tab',
       pick: () => this.setState({ mode: id })
     }));
-    const modeLabel = (modeDefs.find((m) => m[0] === s.mode) || ['x', s.mode === 'issues' ? 'ISSUES' : s.mode === 'decide' ? 'DECISION' : 'ASK'])[1] + ' MODE';
+    const modeLabel = (modeDefs.find((m) => m[0] === s.mode) || ['x', s.mode === 'issues' ? 'ISSUES' : s.mode === 'decide' ? 'DECISION' : s.mode === 'desk' ? 'DESK' : 'ASK'])[1] + ' MODE';
 
     const data = {
       film: { name: 'FILM STUDIO', dot: 'd-work', agents: [
@@ -1939,7 +1962,7 @@ class Component extends DCLogic {
       trust: ({ traffic: 'OBSERVE', calendar: 'SUGGEST', email: 'SUGGEST', trading: 'OBSERVE', invest: 'OBSERVE', news: 'OBSERVE', web: 'SUGGEST', jobs: 'ACT', world: 'OBSERVE', film: 'HOLD' })[id],
       trustColor: ({ traffic: '#67C7EB', calendar: '#FBCA03', email: '#FBCA03', trading: '#67C7EB', invest: '#67C7EB', news: '#67C7EB', web: '#FBCA03', jobs: '#67C7EB', world: '#67C7EB', film: '#6E6654' })[id],
       cls: s.master === id ? 'mst-on' : 'mst',
-      pick: () => this.setState({ master: id })
+      pick: () => { if (this.state.mode === 'desk') this.openDesk(id); else this.setState({ master: id }); }
     }));
     const sel = data[s.master];
     const allAg = sel.agents.map((a, i) => ({ n: pad(i + 1), name: a[0] + (a[0] === Component.REPORTERS[s.master] ? '  ▲' : ''), dot: 'd-' + (a[1] === 'off' ? 'idle' : a[1]), status: a[2], cursor: a[1] === 'error' ? 'pointer' : 'default', pick: a[1] === 'error' ? () => this.openIssues(s.master + '/' + a[0]) : () => {} }));
@@ -2442,6 +2465,8 @@ class Component extends DCLogic {
     const spkMoney = (name, val) => { const m = String(val).match(/([+−-])\s*(C\$|₹)?([\d,.]+)\s*\(([+−-])([\d.]+)%\)/);
       return name.replace(/\s*\(.*?\)/, '') + (m ? (m[1] === '+' ? ' up ' : ' down ') + m[3] + (m[2] === '₹' ? ' rupees' : ' dollars') + ', ' + m[5] + ' percent' : ' ' + spk(val)); };
     let deck = [];
+    const deskD = s.desk[s.deskFor], deskStgs = (deskD && deskD.stages) || [];
+    const deskStg = s.deskStage && deskStgs.some((x) => x.id === s.deskStage) ? s.deskStage : ((deskStgs.find((x) => x.count > 0) || deskStgs[0] || {}).id || null);
     if (s.mode === 'issues') {
       const LMi = (CON && s.live.masters) || {};
       Object.keys(LMi).forEach((m) => { const ags = LMi[m].agents || [], mn = data[m] ? data[m].name : m.toUpperCase();
@@ -2453,6 +2478,25 @@ class Component extends DCLogic {
             body: (why ? why + '\n\n' : '') + 'Error: ' + (a.summary || 'no details reported'), say: why || a.name + ' in ' + mn.toLowerCase() + ' failed. ' + (a.summary || '') });
         }); });
       if (!deck.length) deck.push({ key: 'ok', kick: 'ISSUES', title: 'All clear', rows: [], body: CON ? 'No agent is reporting an error right now.' : 'Connect to VISION to see agent errors.', say: 'No agent is reporting an error right now.' });
+    } else if (s.mode === 'desk') {
+      const D = s.desk[s.deskFor], mn = data[s.deskFor] ? data[s.deskFor].name : String(s.deskFor || '').toUpperCase();
+      if (!D || D.failed) deck.push({ key: 'desk:none', kick: 'DESK · ' + mn, title: !CON ? 'Not connected' : D ? 'Could not load this desk' : 'Loading…', rows: [],
+        body: !CON ? 'Connect to VISION to browse this desk.' : D ? 'VISION did not return the records. If it was started before today, restart it.' : '', say: '' });
+      else {
+        const stg = deskStg, lab = ((D.stages || []).find((x) => x.id === stg) || {}).label || '';
+        (D.items || []).filter((it) => it.stage === stg).forEach((it) => {
+          const key = 'dk:' + it.id, kindOf = (mime) => /^image\//.test(mime) ? 'img' : mime === 'application/pdf' ? 'pdf' : /^text\//.test(mime) ? 'box' : 'none';
+          const c = { key, kick: 'DESK · ' + mn + (lab ? ' · ' + lab.toUpperCase() : ''), title: it.title || '(untitled)', body: it.body || '',
+            rows: (it.sub ? [{ a: it.sub, b: '', ac: '#C9C0AC', bc: '#EDE6D6' }] : []).concat((it.rows || []).map((r) => ({ a: r[0], b: String(r[1] == null ? '—' : r[1]), ac: '#C9C0AC', bc: '#EDE6D6' })))
+              .concat(it.ts ? [{ a: 'When', b: (() => { const t = new Date(it.ts * 1000); return days[t.getDay()] + ' ' + t.getDate() + ' ' + mons[t.getMonth()] + ' · ' + pad(t.getHours()) + ':' + pad(t.getMinutes()); })(), ac: '#C9C0AC', bc: '#EDE6D6' }] : []),
+            atts: (it.files || []).map((f2) => ({ label: f2.label, open: () => this.setState({ prev: { key, name: f2.label, src: f2.url, type: kindOf(f2.mime || ''), sandbox: f2.mime === 'text/html' && /^\/api\/files\/sites\//.test(f2.url) ? 'allow-scripts' : '' } }) }))
+              .concat((it.links || []).map((l) => ({ label: l.label + ' ↗', open: () => this.setState({ prev: { key, name: l.label + ' · ' + l.url, src: l.url, type: 'box', sandbox: 'allow-scripts' } }) }))),
+            say: (it.title || '') + '. ' + (it.body || it.sub || '') };
+          if (s.prev && s.prev.key === key) Object.assign(c, { prevOpen: true, prevName: s.prev.name, prevSrc: s.prev.src, prevType: s.prev.type, prevSandbox: s.prev.sandbox });
+          deck.push(c);
+        });
+        if (!deck.length) deck.push({ key: 'desk:empty', kick: 'DESK · ' + mn, title: (D.stages || []).length ? 'Nothing here yet' : 'No records', rows: [], body: (D.stages || []).length ? 'This stage is empty.' : 'This desk has nothing to show.', say: '' });
+      }
     } else if (s.mode === 'decide') {
       const AP = (CON && s.live.approvals) || [], fmtT = (x) => { const t = new Date(x); return isNaN(t) ? String(x || '') : days[t.getDay()] + ' ' + t.getDate() + ' ' + mons[t.getMonth()] + ' · ' + pad(t.getHours()) + ':' + pad(t.getMinutes()); };
       const R = (a, b, bc) => ({ a, b: String(b == null ? '—' : b), ac: '#C9C0AC', bc: bc || '#EDE6D6' });
@@ -2511,13 +2555,13 @@ class Component extends DCLogic {
     const deckCards = deck.map((c, k) => {
       const dd = k - di, ad = Math.abs(dd), sg = dd < 0 ? -1 : 1;
       const tf = ad === 0 ? 'translateX(0px) translateZ(0px) rotateY(0deg)' + (s.holoTilt ? ' rotateX(7deg)' : '')
-        : ad === 1 ? 'translateX(' + sg * (s.mode === 'decide' ? 410 : 285) + 'px) translateZ(-230px) rotateY(' + -sg * 42 + 'deg)' : 'translateX(' + sg * (s.mode === 'decide' ? 600 : 430) + 'px) translateZ(-400px) rotateY(' + -sg * 54 + 'deg)';
+        : ad === 1 ? 'translateX(' + sg * (s.mode === 'decide' || s.mode === 'desk' ? 410 : 285) + 'px) translateZ(-230px) rotateY(' + -sg * 42 + 'deg)' : 'translateX(' + sg * (s.mode === 'decide' || s.mode === 'desk' ? 600 : 430) + 'px) translateZ(-400px) rotateY(' + -sg * 54 + 'deg)';
       const cen = ad === 0, pO = cen && !!c.prevOpen;
       if (cen && s.mode === 'decide' && c.key.startsWith('ap:') && CON) { const ap = (s.live.approvals || []).find((x) => 'ap:' + x.id === c.key); if (ap && (ap.payload || {}).kind === 'email_reply' && !s.mail[ap.id]) setTimeout(() => this.loadMail(ap.id), 0); }
       return Object.assign({}, c, { showMain: cen && !pO && !c.mail, showMail: cen && !pO && !!c.mail, showPrev: pO, prevImg: pO && c.prevType === 'img', prevPdf: pO && c.prevType === 'pdf', prevBox: pO && c.prevType === 'box', prevNone: pO && c.prevType === 'none',
         prevClose: () => this.setState({ prev: null }), hasAtts: cen && !pO && !!(c.atts && c.atts.length), atts: c.atts || [], hasActs: cen && !!c.hasActs, hasDemo: cen && !!c.demo, hasLink: cen && !!c.link,
         demo: c.demo || (() => {}), approve: c.approve || (() => {}), reject: c.reject || (() => {}), tf, op: ad === 0 ? '1' : ad === 1 ? '0.42' : ad === 2 ? '0.14' : '0', z: String(10 - Math.min(ad, 9)), pe: ad > 2 ? 'none' : 'auto', center: ad === 0, hasBody: !!c.body,
-        cls: 'holo' + (s.mode === 'decide' ? ' holo-wide' : '') + (s.holoScan ? ' holo-scan' : '') + (ad === 0 ? ' holo-on' : ''), pick: () => this.deckGo(k - di) });
+        cls: 'holo' + (s.mode === 'decide' || s.mode === 'desk' ? ' holo-wide' : '') + (s.holoScan ? ' holo-scan' : '') + (ad === 0 ? ' holo-on' : ''), pick: () => this.deckGo(k - di) });
     });
     this.deck = deck; this.deckIdx = di;
     const saveHolo = (p) => { const n = Object.assign({ tilt: s.holoTilt, scan: s.holoScan, blue: s.holoBlue }, p); try { window.localStorage.setItem('vision-holo', JSON.stringify(n)); } catch (e) {} this.setState({ holoTilt: n.tilt, holoScan: n.scan, holoBlue: n.blue }); };
@@ -2763,7 +2807,9 @@ class Component extends DCLogic {
       tgStatus, tgSent, voiceBars, voiceOpacity, voiceGlowW, voiceGlowO, voiceScaleOuter, voiceScaleInner, statusColor,
       bootOn: ov.on, bootCls: ov.cls, bootPhase: ov.phase, bootPct: ov.pct, bootCount: ov.count, bootCols: ov.cols, bootLog: ov.log, replyText, approvalCount,
       deckOn: Component.DECK.test(s.mode) && !s.mind, deckCards, holoRGB: s.holoBlue ? '103,199,235' : '251,202,3',
-      deckTitle: s.mode === 'issues' ? 'VISION ISSUES' : s.mode === 'decide' ? 'YOUR DECISIONS' : 'VISION BRIEF', deckMeta: (di + 1) + ' / ' + deck.length + ' · ' + (s.mode === 'briefing' ? briefTag : CON ? 'LIVE' : 'NOT CONNECTED'),
+      deckTitle: s.mode === 'issues' ? 'VISION ISSUES' : s.mode === 'decide' ? 'YOUR DECISIONS' : s.mode === 'desk' ? (data[s.deskFor] ? data[s.deskFor].name : '') + ' DESK' : 'VISION BRIEF',
+      deskOn: s.mode === 'desk' && !s.mind && deskStgs.length > 0, deckTop: s.mode === 'desk' && deskStgs.length ? '86px' : '52px', openDesk: () => this.openDesk(s.master),
+      deskStages: deskStgs.map((x) => ({ label: x.label + ' · ' + x.count, cls: x.id === deskStg ? 'holo-chip holo-chip-on' : 'holo-chip', pick: () => { this.stopSpeech(); this.deckIdx = 0; this.setState({ deskStage: x.id, deckI: 0, prev: null, deckTalk: false }); } })), deckMeta: (di + 1) + ' / ' + deck.length + ' · ' + (s.mode === 'briefing' ? briefTag : CON ? 'LIVE' : 'NOT CONNECTED'),
       deckTalkLabel: s.deckTalk ? (s.mode === 'briefing' ? 'Pause' : 'Stop') : s.mode === 'issues' ? 'Explain' : 'Read aloud', deckToggle: () => this.deckToggle(), deckPrev: () => this.deckGo(-1), deckNext: () => this.deckGo(1),
       toggleTilt: () => saveHolo({ tilt: !s.holoTilt }), toggleScan: () => saveHolo({ scan: !s.holoScan }), toggleTint: () => saveHolo({ blue: !s.holoBlue }),
       tiltLabel: 'Tilt: ' + (s.holoTilt ? 'on' : 'off'), scanLabel: 'Scan: ' + (s.holoScan ? 'on' : 'off'), tintLabel: 'Tint: ' + (s.holoBlue ? 'blue' : 'gold'),
