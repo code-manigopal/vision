@@ -63,6 +63,8 @@ w.wakeStart(); if (!w.state.wakeLive) fail('wake listener did not start');
 hear('what a nice television', true); if (ran.length || w.state.wakeHeard) fail('woke on the wrong words');
 hear('hey vision', false); if (!w.state.wakeHeard || w.renderVals().listenRing !== 'lring-on') fail('core did not show it heard the wake phrase');
 hear('hey vision brief me', true); if (ran[0] !== 'brief me' || w.wakeRec) fail('command in the same breath was not run', JSON.stringify(ran));
+if (!/heard “hey vision brief me”/.test(w.renderVals().wakeTitle)) fail('the wake button should say what was heard', w.renderVals().wakeTitle);
+if (!/off/.test(mk({}).renderVals().wakeTitle) || mk({}).renderVals().wakeBtnCls !== 'qa') fail('the wake button should read off by default');
 w.wakeStart(); const sr2 = FakeSR.last; w.startVoice = () => { listened++; }; hear('Hey, Vision.', true);
 if (listened !== 1 || !sr2.aborted) fail('bare wake phrase should open the mic and stop the wake listener', listened);
 // decision deck: every approval is a card; the email card shows the original, the draft and its attachments
@@ -105,6 +107,10 @@ kc.atts[0].open(); kc = dk.renderVals().deckCards.find((x) => x.center);
 if (!kc.showPrev || !kc.prevBox || kc.prevSrc !== '/api/files/sites/77-bakery/index.html' || kc.prevSandbox !== 'allow-scripts') fail('local demo page preview wrong');
 await dk.openDesk('news'); kc = dk.renderVals().deckCards.find((x) => x.center); if (!/Could not load/.test(kc.title)) fail('a desk that fails to load should say so', kc.title);
 dk.runCommand('show my approved pitches'); if (dk.state.deskFor !== 'web' || dk.state.deskStage !== 'pitched') fail('"approved pitches" should open the Web Designer desk on Pitched');
+for (const q of ['how are we doing', 'hey vision, how are you', "what's up", 'How are you doing?', 'status report']) {
+  const sq = mk({ liveUp: true, live: live.full }); sq.speak = () => {}; let asked = 0; sq.askLive = () => { asked++; }; sq.renderVals(); sq.runCommand(q);
+  if (sq.state.mode !== 'briefing' || !sq.state.deckTalk || asked) fail('status question should open the narrated cards', q, sq.state.mode);
+}
 console.log('spoken:', said.map((x) => x.slice(0, 70)));
 console.log(fails ? fails + ' problem(s)' : 'dashboard logic OK: no crashes, no sample values while connected, deck works');
 process.exit(fails ? 1 : 0);

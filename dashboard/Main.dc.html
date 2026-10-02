@@ -231,6 +231,9 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
         <div class="blink" style="width: 8px; height: 8px; border-radius: 50%; background: #AA0505"></div>
         {{approvalCount}}
       </div>
+      <button class="{{wakeBtnCls}}" onClick="{{toggleWake}}" aria-label="{{wakeTitle}}" title="{{wakeTitle}}" style="height: 36px; width: 40px; padding: 0; display: flex; align-items: center; justify-content: center">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="{{wakeStroke}}" stroke-width="2" stroke-linecap="round"><path d="M4 10v4"></path><path d="M8 7v10"></path><path d="M12 4v16"></path><path d="M16 7v10"></path><path d="M20 10v4"></path></svg>
+      </button>
       <button class="{{voiceBtnCls}}" onClick="{{toggleVoiceMenu}}" aria-label="VISION voice settings" style="height: 36px; width: 40px; padding: 0; display: flex; align-items: center; justify-content: center">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FBCA03" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4z"></path><path d="M15.5 8.5a5 5 0 0 1 0 7"></path><path d="M18.5 5.5a9 9 0 0 1 0 13"></path></svg>
       </button>
@@ -753,7 +756,6 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
       <div style="position: relative; width: 100%; max-width: 640px; display: flex; align-items: center; gap: 10px; background: rgba(13,15,20,0.82); border: 1px solid #B97D10; padding: 0 0 0 16px; height: 52px; box-sizing: border-box; border-radius: 8px; overflow: hidden">
         <label for="vision-ask" style="font-family: 'Michroma', sans-serif; font-size: 11px; letter-spacing: 2px; color: #FBCA03">ASK</label>
         <input id="vision-ask" value="{{cmd}}" onChange="{{onCmd}}" onKeyDown="{{onCmdKey}}" placeholder="Try: open mind" style="flex-grow: 1; background: transparent; border: none; color: #EDE6D6; font-family: 'Pixelywave', sans-serif; font-size: 14px; height: 44px; outline: none">
-        <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 1px; color: {{wakeColor}}; white-space: nowrap; padding-right: 10px">{{wakeTag}}</span>
         <button class="{{micCls}}" onClick="{{startVoice}}" aria-label="Voice command" style="width: 52px; height: 50px; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFF4D6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0"></path><path d="M12 18v3"></path></svg>
         </button>
@@ -1004,7 +1006,7 @@ class Component extends DCLogic {
   constructor(props) {
     super(props);
     this.state = { mode: 'ambient', master: 'trading', now: new Date(), tick: 0,
-      a: 0, voiceMenu: false, voices: [], voiceName: null, kVoices: [], kVoice: null, wakeOn: false, wakeLive: false, wakeHeard: false, deckI: 0, deckTalk: false, mail: {}, prev: null, desk: {}, deskFor: null, deskStage: null, issueText: {}, holoTilt: true, holoScan: true, holoBlue: false, wx: true, page: 0, orbA: 0, orbHov: null, speaking: false, pulse: 0, boot: true, bootT: 0, rotLon: -40, rotLat: 22, drag: null, hov: null, mind: false, openT: 0, sel: 'root', cmd: '', listening: false, flash: '', flashUntil: 0,
+      a: 0, voiceMenu: false, voices: [], voiceName: null, kVoices: [], kVoice: null, wakeOn: false, wakeLive: false, wakeHeard: false, wakeLast: '', wakeErr: '', deckI: 0, deckTalk: false, mail: {}, prev: null, desk: {}, deskFor: null, deskStage: null, issueText: {}, holoTilt: true, holoScan: true, holoBlue: false, wx: true, page: 0, orbA: 0, orbHov: null, speaking: false, pulse: 0, boot: true, bootT: 0, rotLon: -40, rotLat: 22, drag: null, hov: null, mind: false, openT: 0, sel: 'root', cmd: '', listening: false, flash: '', flashUntil: 0,
       cpu: 13, ram: 94, gpu: 2, vram: 16, music: true, confirmOff: false, off: null, offT: 0,
       log: [
         { t: '13:22', msg: 'Screenwriter · draft 2 of Episode 04 started' },
@@ -1489,6 +1491,7 @@ class Component extends DCLogic {
     const t0 = (raw || '').toLowerCase().trim().replace(/^(hey|hi|ok|okay|yo)\s+(viz|vision)[,!.]*\s*/, '');
     if (/\b(what'?s wrong|what is wrong|any (issues|errors|problems)|show (me )?(the )?(issues|errors|problems)|what (failed|broke|went wrong))\b/.test(t0)) { this.openIssues(); return; }
     if (/\b(what needs (me|my)|(show|review|open) (me )?(the |my )?(approvals?|decisions?)|anything to (approve|decide)|what('?s| is) waiting)\b/.test(t0)) { this.openDecide(); return; }
+    if (/^(how are (we|you|things)( all)?( doing| going)?|how'?s (it|everything) going|what'?s up|whats up|status( report| update)?|give me (a |the )?(status|update|rundown)|what did i miss)\b/.test(t0)) { this.startBrief(); return; }
     if (/\b(approved pitches|my pitches|show (me )?(the )?pitches)\b/.test(t0)) { this.openDesk('web', 'pitched'); return; }
     { const dm = t0.match(/\b(?:show|open)\b.*?\b(email|calendar|trading|invest\w*|news|web|job\w*|world|traffic)?\b.*\bdesk\b/);
       if (dm) { const k = (dm[1] || '').replace(/^invest.*/, 'invest').replace(/^job.*/, 'jobs'); this.openDesk(k || this.state.master); return; } }
@@ -1839,12 +1842,15 @@ class Component extends DCLogic {
       r.onresult = (e) => {
         for (let i = e.resultIndex; i < e.results.length; i++) {
           const txt = (e.results[i][0].transcript || '').toLowerCase(), m = txt.match(Component.WAKE_RE);
+          if (txt.trim() && txt.trim() !== this.state.wakeLast) this.setState({ wakeLast: txt.trim().slice(-28), wakeErr: '' });   // shown beside the mic, so you can see what Chrome hears
           if (!m) continue;
           if (!this.state.wakeHeard) this.setState({ wakeHeard: true });      // the core shows it heard you straight away
           if (e.results[i].isFinal) { this.wakeHit(txt.slice(m.index + m[0].length).replace(/^[\s,.!?]+/, '').trim()); return; }
         }
       };
-      r.onerror = (ev) => { if (ev && (ev.error === 'not-allowed' || ev.error === 'service-not-allowed')) { this.setState({ wakeOn: false }); this.say('The microphone is blocked for this page, so the wake word is off. Allow the microphone in Chrome and switch it on again.'); } };
+      r.onerror = (ev) => { const er = ev && ev.error;
+        if (er === 'audio-capture') this.setState({ wakeErr: 'no microphone found' }); else if (er === 'network') this.setState({ wakeErr: 'speech service unreachable' });
+        if (ev && (ev.error === 'not-allowed' || ev.error === 'service-not-allowed')) { this.setState({ wakeOn: false }); this.say('The microphone is blocked for this page, so the wake word is off. Allow the microphone in Chrome and switch it on again.'); } };
       r.onend = () => { if (this.wakeRec === r) { this.wakeRec = null; this.setState({ wakeLive: false, wakeHeard: false }); } };   // Chrome ends it about once a minute; the timer restarts it
       r.start(); this.wakeRec = r; this.setState({ wakeLive: true });
     } catch (e) { this.wakeRec = null; }
@@ -1853,6 +1859,7 @@ class Component extends DCLogic {
     const r = this.wakeRec; this.wakeRec = null;
     if (r) { try { r.onend = null; r.onresult = null; r.abort(); } catch (e) {} }
     if (this.state.wakeLive || this.state.wakeHeard) this.setState({ wakeLive: false, wakeHeard: false });
+    return !!r;
   }
   wakeHit(rest) {
     this.wakeStop();
@@ -1862,7 +1869,7 @@ class Component extends DCLogic {
     this.startVoice(true);
   }
   startVoice(quiet) {
-    this.wakeStop();
+    if (this.wakeStop()) { this.setState({ wakeHeard: true }); setTimeout(() => this.startVoice(quiet), 350); return; }   // Chrome needs a moment to release the microphone
     const V = this.state.liveUp && this.state.live && this.state.live.voice;
     if (V && V.stt && !this.sttFailed) { this.listenLocal(); return; }
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -2814,9 +2821,10 @@ class Component extends DCLogic {
       toggleTilt: () => saveHolo({ tilt: !s.holoTilt }), toggleScan: () => saveHolo({ scan: !s.holoScan }), toggleTint: () => saveHolo({ blue: !s.holoBlue }),
       tiltLabel: 'Tilt: ' + (s.holoTilt ? 'on' : 'off'), scanLabel: 'Scan: ' + (s.holoScan ? 'on' : 'off'), tintLabel: 'Tint: ' + (s.holoBlue ? 'blue' : 'gold'),
       listenRing: s.listening || s.wakeHeard ? 'lring-on' : 'lring', coreImgCls: s.listening || s.wakeHeard ? 'coreimg coreimg-listen' : 'coreimg',
-      wakeTag: s.wakeOn ? (s.wakeLive ? '● HEY VISION' : '○ HEY VISION') : '', wakeColor: s.wakeLive ? '#67C7EB' : '#6E6654',
+      wakeBtnCls: s.wakeOn ? 'qa-on' : 'qa', wakeStroke: s.wakeLive ? '#FBCA03' : s.wakeOn ? '#B97D10' : '#6E6654',
+      wakeTitle: !(window.SpeechRecognition || window.webkitSpeechRecognition) ? 'Wake word needs Chrome' : !s.wakeOn ? 'Hey Vision: off (click to turn on)' : 'Hey Vision: ' + (s.wakeLive ? 'listening' : 'starting') + (s.wakeErr ? ' · ' + s.wakeErr : s.wakeLast ? ' · heard “' + s.wakeLast + '”' : ''),
       wakeLabel: !(window.SpeechRecognition || window.webkitSpeechRecognition) ? 'Wake word: needs Chrome' : 'Wake word: ' + (s.wakeOn ? 'on' : 'off'),
-      wakeHint: s.wakeOn ? 'Say "Hey Vision". While this is on, Chrome sends the microphone audio to Google to recognise it.' : 'Turn on to wake VISION by saying "Hey Vision" (Chrome, dashboard open).',
+      wakeHint: s.wakeOn ? (s.wakeErr ? 'Problem: ' + s.wakeErr + '. ' : s.wakeLast ? 'Last heard: “' + s.wakeLast + '”. ' : '') + 'Say "Hey Vision". While this is on, Chrome sends the microphone audio to Google to recognise it.' : 'Turn on to wake VISION by saying "Hey Vision" (Chrome, dashboard open).',
       toggleWake: () => { const on = !this.state.wakeOn; try { window.localStorage.setItem('vision-wake', on ? 'on' : 'off'); } catch (e) {} this.setState({ wakeOn: on }); if (on) setTimeout(() => this.wakeStart(), 0); else this.wakeStop(); },
       demoOnly: !CON, calTag: bLive ? (LCal ? 'LIVE' : 'WAITING FOR CALENDAR MANAGER') : '[DEMO DATA]',
       standbyOn: s.off === 'standby', confirmOn: s.confirmOff, musicLabel: 'Music: ' + (s.music ? 'on' : 'off'),
