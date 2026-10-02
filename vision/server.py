@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import mimetypes
 import re
 import re
 from contextlib import asynccontextmanager
@@ -15,6 +16,7 @@ from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconn
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
+from . import desk
 from .bus import EventBus, Store
 from .config import ROOT, load_config
 from .masters import build_masters
@@ -318,6 +320,27 @@ def create_app(*, boot_on_start: bool = True, schedules: bool = True, telegram_o
         if mime != "application/pdf":   # Chrome's own PDF viewer won't render a sandboxed response; everything else stays locked down
             headers["Content-Security-Policy"] = "sandbox"
         return Response(data, media_type=mime or "application/octet-stream", headers=headers)
+
+    @app.get("/api/desk/{master_id}")
+    async def desk_view(master_id: str):
+        out = desk.build(app.state.store, master_id)
+        if out is None:
+            raise HTTPException(404, "No such master")
+        return out
+
+    @app.get("/api/files/{path:path}")
+    async def desk_file(path: str):
+        p = desk.resolve_file(path)
+        if p is None:
+            raise HTTPException(404, "No such file")
+        mime = mimetypes.guess_type(p.name)[0] or "application/octet-stream"
+        safe = re.sub(r'[^A-Za-z0-9._ -]', "_", p.name)[:120] or "file"
+        headers = {"Content-Disposition": f'inline; filename="{safe}"', "X-Content-Type-Options": "nosniff", "Cache-Control": "no-store"}
+        if mime != "application/pdf":   # Chrome's PDF viewer won't render a sandboxed response
+            # VISION's own demo pages reveal their sections with a script, so they may run it (still no same-origin access)
+            own_page = path.split("/", 1)[0] == "sites" and mime == "text/html"
+            headers["Content-Security-Policy"] = "sandbox allow-scripts" if own_page else "sandbox"
+        return Response(p.read_bytes(), media_type=mime, headers=headers)
 
     @app.post("/api/approvals/{approval_id}/{decision}")
     async def decide(approval_id: int, decision: str):

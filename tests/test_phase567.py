@@ -552,3 +552,70 @@ def test_email_preview_falls_back_to_snippet(api, monkeypatch):
     a = app.state.store.add_approval("email", "Writer", "Reply", {"kind": "email_reply", "draft": "k"})
     r = c.get(f"/api/approvals/{a['id']}/email").json()
     assert r["partial"] is True and r["email"]["body"] == "snip" and r["attachments"] == []
+
+
+def _desk_env(api, monkeypatch, tmp_path):
+    import vision.desk as desk
+    monkeypatch.setattr(desk, "ROOT", tmp_path)
+    return api
+
+
+def test_desk_web_jobs_reports_and_404(api, monkeypatch, tmp_path):
+    c, app = _desk_env(api, monkeypatch, tmp_path)
+    store = app.state.store
+    site = tmp_path / "data" / "sites" / "acme"
+    (site / "img").mkdir(parents=True)
+    (site / "index.html").write_text("<img src='img/p.webp'>")
+    store.kv_put("leads", "L1", {"id": "L1", "name": "Acme Plumbing", "type_label": "Plumber", "phone": "555-1", "address": "1 Main", "status": "pitched",
+                                 "url": "https://demo-acme.workers.dev", "site": str(site / "index.html")})
+    store.kv_put("leads", "L2", {"id": "L2", "name": "Bob", "type_label": "Cafe", "status": "new"})
+    store.kv_put("pitches", "L1", {"message": "Hi Acme, here is a demo", "url": "https://demo-acme.workers.dev", "phone": "555-1", "at": NOW})
+    d = c.get("/api/desk/web").json()
+    assert [s["id"] for s in d["stages"]] == ["building", "live", "awaiting", "pitched", "parked"]
+    assert {s["id"]: s["count"] for s in d["stages"]}["pitched"] == 1 and {s["id"]: s["count"] for s in d["stages"]}["building"] == 1
+    it = next(i for i in d["items"] if i["stage"] == "pitched")
+    assert it["body"] == "Hi Acme, here is a demo" and ["Phone", "555-1"] in it["rows"]
+    assert it["links"][0]["url"].startswith("https://demo-acme") and it["files"][0]["url"] == "/api/files/sites/acme/index.html"
+
+    pkg = tmp_path / "data" / "applications" / "acme-dev"
+    pkg.mkdir(parents=True)
+    (pkg / "resume.md").write_text("# R")
+    (pkg / "cover_letter.md").write_text("Dear Acme")
+    store.kv_put("jobs", "J1", {"id": "J1", "title": "Dev", "company": "Acme", "score": 88, "source": "adzuna", "url": "https://jobs.example/1",
+                                "status": "awaiting_ok", "folder": str(pkg), "found": NOW})
+    store.kv_put("jobs", "J2", {"id": "J2", "title": "Skip", "company": "X", "status": "skipped"})
+    j = c.get("/api/desk/jobs").json()
+    assert len(j["items"]) == 1 and j["items"][0]["stage"] == "awaiting_ok" and j["items"][0]["body"] == "Dear Acme"
+    assert {f["label"] for f in j["items"][0]["files"]} == {"resume.md", "cover_letter.md"}
+
+    import asyncio
+    asyncio.run(store.record_report("news", "Quiet day", {}))
+    n = c.get("/api/desk/news").json()
+    assert [s["id"] for s in n["stages"]] == ["reports"] and n["items"][0]["title"] == "Quiet day" and n["items"][0]["body"] == ""
+    assert c.get("/api/desk/film").json()["items"] == []
+    assert c.get("/api/desk/nope").status_code == 404
+
+
+def test_desk_files_route(api, monkeypatch, tmp_path):
+    c, app = _desk_env(api, monkeypatch, tmp_path)
+    site = tmp_path / "data" / "sites" / "acme"
+    (site / "img").mkdir(parents=True)
+    (site / "index.html").write_text("<h1>hi</h1>")
+    (site / "img" / "p.webp").write_bytes(b"RIFF")
+    app_dir = tmp_path / "data" / "applications" / "a"
+    app_dir.mkdir(parents=True)
+    (app_dir / "cv.pdf").write_bytes(b"%PDF-")
+    (tmp_path / "data" / "secret.txt").write_text("no")
+    (tmp_path / "data" / "sites" / "link.txt").symlink_to(tmp_path / "data" / "secret.txt")
+    r = c.get("/api/files/sites/acme/index.html")
+    assert r.status_code == 200 and r.headers["content-type"].startswith("text/html")
+    assert r.headers["content-security-policy"] == "sandbox allow-scripts"      # VISION's own demo page: scripts yes, same-origin no
+    assert r.headers["x-content-type-options"] == "nosniff" and r.headers["cache-control"] == "no-store"
+    (app_dir / "note.html").write_text("<b>x</b>")
+    assert c.get("/api/files/applications/a/note.html").headers["content-security-policy"] == "sandbox"   # anything else stays fully locked
+    assert 'inline; filename="index.html"' in r.headers["content-disposition"]
+    assert c.get("/api/files/sites/acme/img/p.webp").status_code == 200
+    p = c.get("/api/files/applications/a/cv.pdf")
+    assert p.status_code == 200 and p.headers["content-type"] == "application/pdf" and "content-security-policy" not in p.headers
+    for bad in ("sites/../secret.txt", "sites/%2e%2e/secret.txt", "secret.txt", "sites/link.txt", "sites/acme", "%2Fetc/passwd", "sites/nope.html"):
+        assert c.get("/api/files/" + bad).status_code == 404, bad
