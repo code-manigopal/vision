@@ -41,7 +41,7 @@ async def _headers(c: httpx.AsyncClient) -> dict:
 
 async def _route(c: httpx.AsyncClient, store, cs: str) -> dict | None:
     cached = store.kv_get("routes", cs)
-    if cached and time.time() - cached.get("at", 0) < 7 * 86400:
+    if cached and time.time() - cached.get("at", 0) < 7 * 86400 and (cached.get("route") is None or "orig" in cached["route"]):
         return cached.get("route")
     route = None
     try:
@@ -50,7 +50,8 @@ async def _route(c: httpx.AsyncClient, store, cs: str) -> dict | None:
         if isinstance(fr, dict):
             o, d = fr.get("origin") or {}, fr.get("destination") or {}
             route = {"airline": (fr.get("airline") or {}).get("name", ""), "from": o.get("iata_code"), "from_city": o.get("municipality"),
-                     "to": d.get("iata_code"), "to_city": d.get("municipality"), "dest": [d.get("latitude"), d.get("longitude")]}
+                     "to": d.get("iata_code"), "to_city": d.get("municipality"), "dest": [d.get("latitude"), d.get("longitude")],
+                     "orig": [o.get("latitude"), o.get("longitude")]}
     except Exception:
         route = None
     store.kv_put("routes", cs, {"route": route, "at": time.time()})
@@ -60,9 +61,10 @@ async def _route(c: httpx.AsyncClient, store, cs: str) -> dict | None:
 class FlightTracker(SubAgent):
     name, tier, note = "Flight Tracker", "API", "OpenSky + adsbdb"
 
-    def __init__(self, home: tuple[float, float] | None, max_flights: int, near_km: int, lookups: int) -> None:
+    def __init__(self, home: tuple[float, float] | None, max_flights: int, near_km: int, lookups: int, near_slots: int = 10) -> None:
         super().__init__()
         self.home, self.max_flights, self.near_km, self.lookups = home, max_flights, near_km, lookups
+        self.near_slots = min(near_slots, max_flights)   # how many of the shown flights are reserved for the ones closest to home
 
     async def run(self, ctx):
         store = ctx["store"]
@@ -70,18 +72,21 @@ class FlightTracker(SubAgent):
             r = await c.get(STATES_URL, headers=await _headers(c))
             r.raise_for_status()
             states = [s for s in (r.json().get("states") or []) if s[5] is not None and s[6] is not None and not s[8] and (s[1] or "").strip()]
-            near = [s for s in states if self.home and km(self.home[0], self.home[1], s[6], s[5]) <= self.near_km]
-            step = max(1, len(states) // max(1, self.max_flights - len(near[: self.max_flights // 2])))
-            picked = near[: self.max_flights // 2] + states[::step]
+            near = sorted((s for s in states if self.home and km(self.home[0], self.home[1], s[6], s[5]) <= self.near_km),
+                          key=lambda s: km(self.home[0], self.home[1], s[6], s[5]))[: self.near_slots]   # nearest first
+            step = max(1, len(states) // max(1, self.max_flights - len(near)))
+            picked = near + states[::step]
             seen, flights, looked = set(), [], 0
             for s in picked:
                 cs = s[1].strip()
                 if cs in seen:
                     continue
                 seen.add(cs)
-                route = store.kv_get("routes", cs)
-                route = route.get("route") if route else None
-                if route is None and looked < self.lookups:
+                cached = store.kv_get("routes", cs)
+                route = cached.get("route") if cached else None
+                fresh = bool(cached) and time.time() - cached.get("at", 0) < 7 * 86400
+                # look up only what isn't known yet: a callsign never seen, a stale entry, or a route cached before origins were kept
+                if (not fresh or (route is not None and "orig" not in route)) and looked < self.lookups:
                     route = await _route(c, store, cs)
                     looked += 1
                 f = {"cs": cs, "lat": s[6], "lon": s[5], "alt": s[7], "spd": s[9], "trk": s[10], "country": s[2]}
@@ -89,6 +94,8 @@ class FlightTracker(SubAgent):
                     f.update({k: route[k] for k in ("airline", "from", "from_city", "to", "to_city")})
                     dest = route.get("dest") or [None, None]
                     f["dest"] = dest if dest[0] is not None else None
+                    orig = route.get("orig") or [None, None]
+                    f["orig"] = orig if orig[0] is not None else None
                     if dest[0] is not None and s[9]:
                         f["eta_min"] = round(km(s[6], s[5], dest[0], dest[1]) / (s[9] * 3.6) * 60)
                 flights.append(f)
@@ -96,9 +103,11 @@ class FlightTracker(SubAgent):
                     break
         n_near = sum(1 for f in flights if self.home and km(self.home[0], self.home[1], f["lat"], f["lon"]) <= self.near_km)
         return AgentResult("done", f"{len(flights)} TRACKED", f"{len(states):,} in the air · showing {len(flights)} · {n_near} near home",
-                           {"flights": flights, "total_airborne": len(states), "at": time.time()})
+                           {"flights": flights, "total_airborne": len(states), "at": time.time(),
+                            "home": list(self.home) if self.home else None, "near_km": self.near_km})
 
 
 def build_agents(options: dict[str, Any], cfg=None) -> dict[str, SubAgent]:
     home = tuple(options["home"]) if options.get("home") else (42.05, -82.6)
-    return {"Flight Tracker": FlightTracker(home, int(options.get("max_flights", 60)), int(options.get("near_km", 400)), int(options.get("route_lookups", 25)))}
+    return {"Flight Tracker": FlightTracker(home, int(options.get("max_flights", 60)), int(options.get("near_km", 400)), int(options.get("route_lookups", 25)),
+                                            int(options.get("near_slots", 10)))}

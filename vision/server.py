@@ -24,7 +24,7 @@ from .ask import AskEngine
 from .orchestrator import Orchestrator
 from .voice import STT, TTS, VoiceUnavailable, WakeWord
 from .channels.telegram import TelegramChannel
-from .services import fyers, kite_mcp, mailcal, oauth, sysmon, traffic_api
+from .services import fyers, kite_mcp, mailcal, oauth, sysmon, traffic_api, weather
 from .services.llm import LLMUnavailable
 from .masters.email import accounts as email_accounts
 
@@ -173,6 +173,14 @@ def create_app(*, boot_on_start: bool = True, schedules: bool = True, telegram_o
         except VoiceUnavailable as e:
             raise HTTPException(503, str(e))
         return Response(wav, media_type="audio/wav")
+
+    @app.get("/api/weather/grid")
+    async def weather_grid():
+        """Current weather at ~100 points for the World Watch globe (Open-Meteo, cached an hour)."""
+        try:
+            return await weather.grid()
+        except Exception as e:
+            raise HTTPException(502, f"Weather grid unavailable: {e}")
 
     @app.get("/api/voices")
     async def voices():

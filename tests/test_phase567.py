@@ -219,7 +219,7 @@ def router(req: httpx.Request) -> httpx.Response:
     if h == "api.adsbdb.com":
         cs = path.rsplit("/", 1)[-1]
         if cs == "ACA056":
-            return httpx.Response(200, json={"response": {"flightroute": {"airline": {"name": "Air Canada"}, "origin": {"iata_code": "YYZ", "municipality": "Toronto"},
+            return httpx.Response(200, json={"response": {"flightroute": {"airline": {"name": "Air Canada"}, "origin": {"iata_code": "YYZ", "municipality": "Toronto", "latitude": 43.68, "longitude": -79.63},
                                                                           "destination": {"iata_code": "DEL", "municipality": "Delhi", "latitude": 28.56, "longitude": 77.1}}}})
         return httpx.Response(200, json={"response": "unknown callsign"})
     if h == "api.adzuna.com":
@@ -232,6 +232,9 @@ def router(req: httpx.Request) -> httpx.Response:
                                                    "absolute_url": "https://gh/9", "content": "<p>Python, SQL, Kubernetes, CI/CD</p>"}]})
     if h == "www.jobbank.gc.ca":
         return httpx.Response(200, text="<html><title>Data Analyst - Job Bank</title><body>Python SQL Leamington</body></html>")
+    if h == "api.open-meteo.com" and "," in req.url.params.get("latitude", ""):          # the globe's weather grid: one row per point
+        n = len(req.url.params["latitude"].split(","))
+        return httpx.Response(200, json=[{"current": {"weather_code": [0, 3, 45, 63, 73, 96, None][i % 7], "is_day": i % 2}} for i in range(n)])
     if h == "geocoding-api.open-meteo.com":
         return httpx.Response(200, json={"results": [{"name": "Leamington", "latitude": 42.05, "longitude": -82.6, "admin1": "Ontario", "country_code": "CA"}]})
     if h == "places.googleapis.com":
@@ -297,6 +300,34 @@ def test_world_watch_flights(tmp_path, web_mock):
     assert ac["airline"] == "Air Canada" and ac["to"] == "DEL" and ac["eta_min"] > 600
     assert "near home" in o.bus.state["reports"]["world"]
     assert all(f["cs"] for f in data["flights"])          # grounded / blank callsigns dropped
+    assert ac["orig"] == [43.68, -79.63] and ac["dest"] == [28.56, 77.1]      # origin kept, so the dashboard can show real progress
+    assert data["home"] == [42.05, -82.6] and data["near_km"] == 400 and data["flights"][0]["cs"] == "ACA056"   # nearest to home first
+    # a callsign already known to have no route is not looked up again; a route cached before origins were kept is refreshed
+    calls = []
+    import vision.masters.world as world
+    real = world._route
+    async def spy(c, store, cs):
+        calls.append(cs)
+        return await real(c, store, cs)
+    world._route = spy
+    try:
+        o.store.kv_put("routes", "ACA056", {"route": {"airline": "Air Canada", "to": "DEL", "dest": [28.56, 77.1]}, "at": time.time()})
+        asyncio.run(o.run_master("world"))
+    finally:
+        world._route = real
+    assert calls == ["ACA056"] and "orig" in o.store.kv_get("routes", "ACA056")["route"]
+
+
+def test_weather_grid_for_the_globe(web_mock):
+    from vision.services import weather
+    weather._grid.update(at=0.0, points=[])
+    g = asyncio.run(weather.grid())
+    assert len(weather.GRID) == 105 and len(g["points"]) == 90           # points with no reading are left out
+    assert [p["kind"] for p in g["points"][:6]] == ["clear", "cloud", "fog", "rain", "snow", "storm"]
+    assert g["points"][0] == {"la": -60, "lo": -168, "kind": "clear", "day": False}
+    stamp = g["at"]
+    assert asyncio.run(weather.grid())["at"] == stamp                    # cached for an hour: no second request
+    weather._grid.update(at=0.0, points=[])
 
 
 def test_job_hunt_pipeline(tmp_path, web_mock, monkeypatch):

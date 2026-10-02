@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+
 import httpx
 
 PROVINCES = {"ON": "Ontario", "QC": "Quebec", "BC": "British Columbia", "AB": "Alberta", "MB": "Manitoba", "SK": "Saskatchewan",
@@ -63,3 +65,39 @@ async def forecast(city: str, timezone: str, lat: float | None = None, lon: floa
                       "lo": round(day["temperature_2m_min"][i]), "rain": (day.get("precipitation_probability_max") or [None] * 99)[i]})
     return {"city": label, "temp": round(cur["temperature_2m"]), "kind": kind, "words": words,
             "humidity": cur.get("relative_humidity_2m"), "wind": cur.get("wind_speed_10m"), "daily": daily}
+
+
+# ---- world grid for the globe: current conditions at ~100 points, one request, cached for an hour ----
+GRID = [(la, lo) for la in range(-60, 61, 20) for lo in range(-168, 169, 24)]
+_grid: dict = {"at": 0.0, "points": []}
+
+
+def globe_kind(code: int | None) -> str | None:
+    """WMO code -> the globe's icon: clear | cloud | fog | rain | snow | storm."""
+    if code is None:
+        return None
+    if code <= 1: return "clear"
+    if code <= 3: return "cloud"
+    if code <= 48: return "fog"
+    if 71 <= code <= 77 or code in (85, 86): return "snow"
+    if code >= 95: return "storm"
+    return "rain"
+
+
+async def grid(max_age: float = 3600) -> dict:
+    if _grid["points"] and time.time() - _grid["at"] < max_age:
+        return _grid
+    async with httpx.AsyncClient(timeout=25) as c:
+        r = await c.get("https://api.open-meteo.com/v1/forecast", params={
+            "latitude": ",".join(str(p[0]) for p in GRID), "longitude": ",".join(str(p[1]) for p in GRID), "current": "weather_code,is_day"})
+        r.raise_for_status()
+        rows = r.json()
+    rows = rows if isinstance(rows, list) else [rows]
+    pts = []
+    for (la, lo), row in zip(GRID, rows):
+        cur = row.get("current") or {}
+        kind = globe_kind(cur.get("weather_code"))
+        if kind:
+            pts.append({"la": la, "lo": lo, "kind": kind, "day": bool(cur.get("is_day"))})
+    _grid.update(at=time.time(), points=pts)
+    return _grid
