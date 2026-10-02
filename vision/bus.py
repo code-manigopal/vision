@@ -136,6 +136,12 @@ class Store:
             "INSERT INTO master_reports(ts, master, summary, data) VALUES (?,?,?,?)",
             (time.time(), master, summary, json.dumps(data, default=str)))
 
+    def last_run(self, master: str, agent: str, errors_only: bool = False) -> dict | None:
+        q = "SELECT * FROM agent_runs WHERE master = ? AND agent = ?" + (" AND error IS NOT NULL AND status = 'error'" if errors_only else "") + " ORDER BY ts DESC LIMIT 1"
+        with self._conn() as c:
+            r = c.execute(q, (master, agent)).fetchone()
+        return dict(r) if r else None
+
     # ---------- small JSON key-value store used by the masters (emails, drafts, jobs, leads...) ----------
     def kv_put(self, ns: str, key: str, value: dict) -> None:
         with self._conn() as c:

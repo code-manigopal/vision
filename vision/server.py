@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
+import re
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
@@ -20,10 +22,36 @@ from .ask import AskEngine
 from .orchestrator import Orchestrator
 from .voice import STT, TTS, VoiceUnavailable, WakeWord
 from .channels.telegram import TelegramChannel
-from .services import fyers, kite_mcp, oauth, sysmon, traffic_api
+from .services import fyers, kite_mcp, mailcal, oauth, sysmon, traffic_api
+from .services.llm import LLMUnavailable
+from .masters.email import accounts as email_accounts
 
 log = logging.getLogger("vision")
 DASH = ROOT / "dashboard"
+
+
+def _short(s: str, n: int = 160) -> str:
+    return re.sub(r"\s+", " ", s or "").strip()[:n]
+
+
+def rule_explanation(master: str, agent: str, error: str, blocked: list[str]) -> str:
+    e, low = _short(error), (error or "").lower()
+    who = f"{agent} in {master}"
+    key = re.search(r"\b(?:add|set|missing)\s+([A-Z][A-Z0-9_]{3,})", error or "")
+    if key or "api key" in low or "not set" in low or ".env" in low:
+        what = f"The setting {key.group(1)}" if key else "A required key or setting"
+        text = f"{who} failed because {what} is missing. Add it to your .env file and restart VISION."
+    elif re.search(r"\b(401|403)\b|unauthori[sz]ed|forbidden|expired|log ?in|sign ?in|token", low):
+        text = f"{who} failed, most likely a sign-in or key problem: it was refused or the login expired. Sign in again or check the key."
+    elif re.search(r"\b429\b|rate.?limit|too many requests", low):
+        text = f"{who} hit a rate limit. Wait a while; it will try again on its next cycle."
+    elif re.search(r"timeout|timed out|connect|dns|name or service|unreachable|network", low):
+        text = f"{who} could not reach its service, so the service or the network is down. It will retry on its next cycle."
+    else:
+        text = f"{who} failed with: {e or 'no error text'}. It will retry on its next cycle."
+    if blocked:
+        text += f" That is holding up {', '.join(blocked)}."
+    return text
 
 
 def create_app(*, boot_on_start: bool = True, schedules: bool = True, telegram_on: bool = True, voice_on: bool = True) -> FastAPI:
@@ -204,6 +232,91 @@ def create_app(*, boot_on_start: bool = True, schedules: bool = True, telegram_o
         a = app.state.store.add_approval(item.get("master", "vision"), item.get("agent", "manual"), item["title"], item.get("payload"))
         app.state.bus.publish({"type": "approval", "approval": a})
         return a
+
+    # ---------- issues (agent errors) ----------
+    def _issues() -> list[dict]:
+        out = []
+        for mid, m in app.state.bus.state["masters"].items():
+            agents = m.get("agents", [])
+            for a in agents:
+                if a.get("status") != "error":
+                    continue
+                run = app.state.store.last_run(mid, a["name"])
+                err = a.get("summary") or ((app.state.store.last_run(mid, a["name"], True) or {}).get("error")) or ""
+                blocked = [b["name"] for b in agents if b.get("label") == "BLOCKED" and (b.get("summary") or "") == f"Waiting on {a['name']}"]
+                out.append({"master": mid, "master_name": m.get("name", mid), "agent": a["name"], "label": a.get("label", "ERROR"),
+                            "error": err, "ts": run["ts"] if run else None, "blocked": blocked})
+        return out
+
+    @app.get("/api/issues")
+    async def issues():
+        return {"issues": _issues()}
+
+    @app.post("/api/issues/explain")
+    async def explain_issue(body: dict):
+        it = next((i for i in _issues() if i["master"] == body.get("master") and i["agent"] == body.get("agent")), None)
+        if not it:
+            raise HTTPException(404, "No such issue")
+        prompt = ("Explain this problem in a personal assistant app to its owner, in 2-3 short plain sentences that will be spoken aloud: "
+                  "what failed, the most likely cause, and what to do. Use only the facts below; do not invent details.\n"
+                  f"Master: {it['master_name']}\nAgent: {it['agent']}\nError: {_short(it['error'], 400)}\n"
+                  f"Agents blocked by it: {', '.join(it['blocked']) or 'none'}")
+        try:
+            text = (await asyncio.wait_for(app.state.orch.llm.complete(prompt, tier="local", max_tokens=200), 20)).strip()
+            if text:
+                return {"text": text, "source": "llm"}
+        except (LLMUnavailable, asyncio.TimeoutError, Exception):
+            pass
+        return {"text": rule_explanation(it["master_name"], it["agent"], it["error"], it["blocked"]), "source": "rule"}
+
+    # ---------- email reply preview ----------
+    def _email_approval(approval_id: int) -> tuple[dict, dict, dict, dict]:
+        row = app.state.store.get_approval(approval_id)
+        p = (row or {}).get("payload") or {}
+        d = app.state.store.kv_get("drafts", p["draft"]) if p.get("kind") == "email_reply" and p.get("draft") else None
+        if not d or not d.get("email"):
+            raise HTTPException(404, "Not an email reply approval")
+        msg = d["email"]
+        accts = {a["id"]: a for a in email_accounts(app.state.cfg.master("email").options)}
+        acct = accts.get(msg.get("account"))
+        if not acct:
+            raise HTTPException(404, "Email account not configured")
+        return row, d, msg, acct
+
+    @app.get("/api/approvals/{approval_id}/email")
+    async def approval_email(approval_id: int):
+        _, d, msg, acct = _email_approval(approval_id)
+        partial, atts = False, []
+        try:
+            body = await mailcal.get_body(acct, msg["id"], limit=200000)
+        except Exception:
+            body, partial = msg.get("snippet", ""), True
+        try:
+            atts = await mailcal.list_attachments(acct, msg)
+        except Exception:
+            pass
+        out = {"email": {"from": msg.get("from"), "from_name": msg.get("from_name"), "to": msg.get("to"), "subject": msg.get("subject"),
+                         "ts": msg.get("ts"), "body": body},
+               "draft": {"to": d.get("to"), "subject": d.get("subject"), "body": d.get("body")}, "attachments": atts}
+        if partial:
+            out["partial"] = True
+        return out
+
+    @app.get("/api/approvals/{approval_id}/attachments/{att_id}")
+    async def approval_attachment(approval_id: int, att_id: str):
+        _, _, msg, acct = _email_approval(approval_id)
+        try:
+            data, mime, name = await mailcal.get_attachment(acct, msg, att_id)
+        except mailcal.AttachmentNotFound:
+            raise HTTPException(404, "No such attachment")
+        except mailcal.AttachmentTooLarge:
+            raise HTTPException(413, "Attachment is over 25 MB")
+        except Exception:
+            raise HTTPException(502, "Could not fetch the attachment")
+        safe = re.sub(r'[^A-Za-z0-9._ -]', "_", name)[:120] or "attachment"
+        return Response(data, media_type=mime or "application/octet-stream", headers={
+            "Content-Disposition": f'inline; filename="{safe}"', "X-Content-Type-Options": "nosniff",
+            "Content-Security-Policy": "sandbox", "Cache-Control": "no-store"})
 
     @app.post("/api/approvals/{approval_id}/{decision}")
     async def decide(approval_id: int, decision: str):

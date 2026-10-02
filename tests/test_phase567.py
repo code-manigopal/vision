@@ -439,3 +439,110 @@ def test_web_designer_stack_and_late_deploy(tmp_path, web_mock, monkeypatch):
         await o._refill                                                   # approving frees a slot and refills at once
     asyncio.run(decide())
     assert o.store.kv_get("leads", "p1")["status"] == "pitched"
+
+
+# ---------------- issues + email preview ----------------
+
+def _b64(b: bytes) -> str:
+    import base64
+    return base64.urlsafe_b64encode(b).decode().rstrip("=")
+
+
+GMSG = {"payload": {"mimeType": "multipart/mixed", "parts": [
+    {"mimeType": "text/plain", "filename": "", "body": {"data": _b64(b"Full body text")}},
+    {"mimeType": "application/pdf", "filename": "inv.pdf", "body": {"attachmentId": "A1", "size": 5}},
+    {"mimeType": "image/png", "filename": "big.png", "body": {"attachmentId": "A2", "size": 30 * 1024 * 1024}}]}}
+
+
+@pytest.fixture
+def api(tmp_path, monkeypatch):
+    import os
+    from fastapi.testclient import TestClient
+    import vision.server as server
+    monkeypatch.setenv("VISION_HOME", os.getcwd())
+    monkeypatch.setattr(server, "load_config", lambda: Config(masters={"email": MasterConfig(mode="live", options=ACCTS)}))
+    real_store = server.Store
+    monkeypatch.setattr(server, "Store", lambda path: real_store(tmp_path / "t.db"))
+
+    def handler(req):
+        u = str(req.url)
+        if u.endswith("/messages/m1/attachments/A1"):
+            return httpx.Response(200, json={"data": _b64(b"%PDF-")})
+        if u.endswith("/messages/m1/attachments/A2"):
+            return httpx.Response(200, json={"data": ""})
+        if "/messages/m1" in u:
+            return httpx.Response(200, json=GMSG)
+        return httpx.Response(404)
+    real_client = mailcal._client
+    monkeypatch.setattr(mailcal, "_client", lambda: httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+
+    async def tok(*a, **k):
+        return "t"
+    monkeypatch.setattr(oauth, "access_token", tok)
+    with TestClient(server.create_app(boot_on_start=False, schedules=False, telegram_on=False, voice_on=False)) as c:
+        yield c, c.app
+
+
+def _fail(app):
+    bus = app.state.bus
+    bus.publish({"type": "agent", "master": "email", "agent": {"name": "Reader", "status": "error", "label": "ERROR", "summary": "401 Unauthorized: token expired"}})
+    bus.publish({"type": "agent", "master": "email", "agent": {"name": "Writer", "status": "idle", "label": "BLOCKED", "summary": "Waiting on Reader"}})
+
+
+def test_issues_list_and_explain(api):
+    c, app = api
+    assert c.get("/api/issues").json() == {"issues": []}
+    _fail(app)
+    it = c.get("/api/issues").json()["issues"]
+    assert len(it) == 1 and it[0]["master"] == "email" and it[0]["agent"] == "Reader" and it[0]["blocked"] == ["Writer"]
+    assert "401" in it[0]["error"]
+    llm = FakeLLM()
+    app.state.orch.llm = llm
+    r = c.post("/api/issues/explain", json={"master": "email", "agent": "Reader"}).json()
+    assert r["source"] == "llm" and "Error: 401" in llm.prompts[0] and "Writer" in llm.prompts[0]
+
+    class Down:
+        async def complete(self, *a, **k):
+            raise LLMUnavailable("off")
+    app.state.orch.llm = Down()
+    r = c.post("/api/issues/explain", json={"master": "email", "agent": "Reader"}).json()
+    assert r["source"] == "rule" and "sign-in" in r["text"]
+    assert c.post("/api/issues/explain", json={"master": "email", "agent": "Writer"}).status_code == 404
+    assert c.post("/api/issues/explain", json={"master": "nope", "agent": "x"}).status_code == 404
+
+
+def test_rule_explanations():
+    from vision.server import rule_explanation
+    assert "TOMTOM_API_KEY" in rule_explanation("Traffic", "Scout", "add TOMTOM_API_KEY to .env", [])
+    assert "rate limit" in rule_explanation("M", "A", "HTTP 429", [])
+    assert "unreachable" not in rule_explanation("M", "A", "ConnectTimeout", []) and "network" in rule_explanation("M", "A", "ConnectTimeout", [])
+    assert "boom" in rule_explanation("M", "A", "boom", ["B"])
+
+
+def test_email_preview_and_attachments(api):
+    c, app = api
+    store = app.state.store
+    msg = {"id": "m1", "account": "p", "provider": "google", "from": "a@x.com", "from_name": "Anna", "to": "me@x.com", "subject": "Hi", "snippet": "snip", "ts": NOW}
+    store.kv_put("drafts", "k", {"to": "a@x.com", "subject": "Re: Hi", "body": "draft", "email": msg, "status": "pending"})
+    a = store.add_approval("email", "Writer", "Reply", {"key": "reply:k", "kind": "email_reply", "draft": "k"})
+    other = store.add_approval("email", "Writer", "Other", {"key": "z"})
+    r = c.get(f"/api/approvals/{a['id']}/email").json()
+    assert r["email"]["body"] == "Full body text" and r["draft"]["body"] == "draft" and "partial" not in r
+    assert [x["id"] for x in r["attachments"]] == ["A1", "A2"] and r["attachments"][0] == {"id": "A1", "name": "inv.pdf", "mime": "application/pdf", "size": 5}
+    att = c.get(f"/api/approvals/{a['id']}/attachments/A1")
+    assert att.content == b"%PDF-" and att.headers["content-type"] == "application/pdf"
+    assert att.headers["content-disposition"] == 'inline; filename="inv.pdf"'
+    assert att.headers["x-content-type-options"] == "nosniff" and att.headers["content-security-policy"] == "sandbox" and att.headers["cache-control"] == "no-store"
+    assert c.get(f"/api/approvals/{a['id']}/attachments/A2").status_code == 413
+    assert c.get(f"/api/approvals/{a['id']}/attachments/NOPE").status_code == 404
+    assert c.get(f"/api/approvals/{other['id']}/email").status_code == 404
+    assert c.get("/api/approvals/999/attachments/A1").status_code == 404
+
+
+def test_email_preview_falls_back_to_snippet(api, monkeypatch):
+    c, app = api
+    msg = {"id": "gone", "account": "p", "provider": "google", "subject": "Hi", "snippet": "snip"}
+    app.state.store.kv_put("drafts", "k", {"to": "a", "subject": "s", "body": "b", "email": msg})
+    a = app.state.store.add_approval("email", "Writer", "Reply", {"kind": "email_reply", "draft": "k"})
+    r = c.get(f"/api/approvals/{a['id']}/email").json()
+    assert r["partial"] is True and r["email"]["body"] == "snip" and r["attachments"] == []

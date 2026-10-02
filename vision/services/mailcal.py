@@ -104,6 +104,66 @@ async def get_body(account: dict, msg_id: str, limit: int = 6000) -> str:
     return body[:limit]
 
 
+MAX_ATTACHMENT = 25 * 1024 * 1024
+
+
+class AttachmentNotFound(Exception):
+    pass
+
+
+class AttachmentTooLarge(Exception):
+    pass
+
+
+def _gmail_parts(payload: dict) -> list[dict]:
+    out = []
+
+    def walk(part):
+        b = part.get("body", {}) or {}
+        if part.get("filename") and b.get("attachmentId"):
+            out.append({"id": b["attachmentId"], "name": part["filename"], "mime": part.get("mimeType") or "application/octet-stream", "size": int(b.get("size") or 0)})
+        for p in part.get("parts", []) or []:
+            walk(p)
+    walk(payload or {})
+    return out
+
+
+async def list_attachments(account: dict, msg: dict) -> list[dict]:
+    """Attachments of a message, listed live: [{id, name, mime, size}]."""
+    h = await _auth(account)
+    async with _client() as c:
+        if account["provider"] == "google":
+            r = await c.get(f"{GMAIL}/messages/{msg['id']}", headers=h, params={"format": "full"})
+            r.raise_for_status()
+            return _gmail_parts(r.json().get("payload", {}))
+        r = await c.get(f"{GRAPH}/messages/{msg['id']}/attachments", headers=h, params={"$select": "id,name,contentType,size"})
+        r.raise_for_status()
+        return [{"id": a["id"], "name": a.get("name") or "attachment", "mime": a.get("contentType") or "application/octet-stream",
+                 "size": int(a.get("size") or 0)} for a in r.json().get("value", [])]
+
+
+async def get_attachment(account: dict, msg: dict, att_id: str) -> tuple[bytes, str, str]:
+    """(bytes, mime, name) of one attachment of this message. Never touches disk."""
+    meta = next((a for a in await list_attachments(account, msg) if a["id"] == att_id), None)
+    if not meta:
+        raise AttachmentNotFound(att_id)
+    if meta["size"] > MAX_ATTACHMENT:
+        raise AttachmentTooLarge(meta["size"])
+    h = await _auth(account)
+    async with _client() as c:
+        if account["provider"] == "google":
+            r = await c.get(f"{GMAIL}/messages/{msg['id']}/attachments/{att_id}", headers=h)
+            r.raise_for_status()
+            data = base64.urlsafe_b64decode(r.json().get("data", "") + "==")
+        else:
+            r = await c.get(f"{GRAPH}/messages/{msg['id']}/attachments/{att_id}/$value", headers=h)
+            r.raise_for_status()
+            data = r.content
+    if len(data) > MAX_ATTACHMENT:
+        raise AttachmentTooLarge(len(data))
+    return data, meta["mime"], meta["name"]
+
+
 async def send(account: dict, *, to: str, subject: str, body: str, reply_to: dict | None = None) -> None:
     """Send a new message, or a reply when reply_to (a normalised email) is given."""
     h = await _auth(account)
