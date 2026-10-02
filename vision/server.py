@@ -314,9 +314,10 @@ def create_app(*, boot_on_start: bool = True, schedules: bool = True, telegram_o
         except Exception:
             raise HTTPException(502, "Could not fetch the attachment")
         safe = re.sub(r'[^A-Za-z0-9._ -]', "_", name)[:120] or "attachment"
-        return Response(data, media_type=mime or "application/octet-stream", headers={
-            "Content-Disposition": f'inline; filename="{safe}"', "X-Content-Type-Options": "nosniff",
-            "Content-Security-Policy": "sandbox", "Cache-Control": "no-store"})
+        headers = {"Content-Disposition": f'inline; filename="{safe}"', "X-Content-Type-Options": "nosniff", "Cache-Control": "no-store"}
+        if mime != "application/pdf":   # Chrome's own PDF viewer won't render a sandboxed response; everything else stays locked down
+            headers["Content-Security-Policy"] = "sandbox"
+        return Response(data, media_type=mime or "application/octet-stream", headers=headers)
 
     @app.post("/api/approvals/{approval_id}/{decision}")
     async def decide(approval_id: int, decision: str):

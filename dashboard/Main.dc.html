@@ -51,6 +51,13 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
 .holo-scroll::-webkit-scrollbar{width:6px}
 .holo-scroll::-webkit-scrollbar-track{background:rgba(var(--h),.08);border-radius:3px}
 .holo-scroll::-webkit-scrollbar-thumb{background:rgba(var(--h),.65);border-radius:3px;box-shadow:0 0 6px rgba(var(--h),.8)}
+.holo-wide{left:0;right:0;margin:0 auto;width:min(820px,calc(100% - 28px))}
+.holo-mail{flex:1;min-height:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.holo-pane{display:flex;flex-direction:column;gap:6px;min-height:0;padding:8px 10px;border:1px solid rgba(var(--h),.28);border-radius:10px;background:rgba(7,8,10,.35)}
+.holo-pk{font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:1px;color:rgb(var(--h))}
+.holo-prev{flex:1;min-height:0;display:flex;flex-direction:column;gap:8px}
+.holo-chip{font-family:'JetBrains Mono',monospace;font-size:11px;color:#FFF4D6;background:rgba(var(--h),.12);border:1px solid rgba(var(--h),.55);border-radius:14px;padding:4px 10px;cursor:pointer;text-decoration:none;white-space:nowrap}
+.holo-chip:hover{background:rgba(var(--h),.28)}
 .holo-cone{position:absolute;left:50%;bottom:92px;top:70px;width:620px;margin-left:-310px;z-index:1;pointer-events:none;background:linear-gradient(to top,rgba(var(--h),.26),rgba(var(--h),.05) 60%,transparent);clip-path:polygon(47% 100%,53% 100%,100% 0,0 0);filter:blur(5px);animation:holobeam 3.2s ease-in-out infinite}
 .blink{animation:vblink 1.4s ease-in-out infinite}
 .tab{border-radius:8px;background:transparent;border:1px solid #3A3222;color:#B97D10;font-family:'Michroma',sans-serif;font-size:11px;letter-spacing:2px;padding:0 18px;height:44px;cursor:pointer}
@@ -659,7 +666,7 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
               <span class="hcn hc1"></span><span class="hcn hc2"></span><span class="hcn hc3"></span><span class="hcn hc4"></span>
               <div class="holo-kick">{{hc.kick}}</div>
               <div class="holo-title">{{hc.title}}</div>
-              <sc-if value="{{hc.center}}" hint-placeholder-val="{{ true }}">
+              <sc-if value="{{hc.showMain}}" hint-placeholder-val="{{ true }}">
                 <div class="holo-scroll">
                   <sc-for list="{{hc.rows}}" as="hr" hint-placeholder-count="4">
                     <div class="holo-row"><span style="color: {{hr.ac}}; flex-shrink: 0">{{hr.a}}</span><span class="holo-num" style="color: {{hr.bc}}">{{hr.b}}</span></div>
@@ -667,6 +674,39 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
                   <sc-if value="{{hc.hasBody}}" hint-placeholder-val="{{ false }}">
                     <div class="holo-body">{{hc.body}}</div>
                   </sc-if>
+                </div>
+              </sc-if>
+              <sc-if value="{{hc.showMail}}" hint-placeholder-val="{{ false }}">
+                <div class="holo-mail">
+                  <div class="holo-pane"><div class="holo-pk">{{hc.mailHead}}</div><div class="holo-scroll"><div class="holo-body">{{hc.mailBody}}</div></div></div>
+                  <div class="holo-pane"><div class="holo-pk">{{hc.draftHead}}</div><div class="holo-scroll"><div class="holo-body">{{hc.draftBody}}</div></div></div>
+                </div>
+              </sc-if>
+              <sc-if value="{{hc.showPrev}}" hint-placeholder-val="{{ false }}">
+                <div class="holo-prev">
+                  <div style="display: flex; align-items: center; gap: 10px">
+                    <span class="holo-pk" style="flex-grow: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{hc.prevName}}</span>
+                    <a class="holo-chip" href="{{hc.prevSrc}}" target="_blank" rel="noopener">Open in tab</a>
+                    <button class="holo-chip" onClick="{{hc.prevClose}}">Close preview</button>
+                  </div>
+                  <sc-if value="{{hc.prevImg}}" hint-placeholder-val="{{ false }}"><img src="{{hc.prevSrc}}" alt="" style="flex: 1; min-height: 0; object-fit: contain; border-radius: 8px"></sc-if>
+                  <sc-if value="{{hc.prevPdf}}" hint-placeholder-val="{{ false }}"><iframe src="{{hc.prevSrc}}" title="Attachment" style="flex: 1; min-height: 0; border: 0; border-radius: 8px; background: #fff"></iframe></sc-if>
+                  <sc-if value="{{hc.prevBox}}" hint-placeholder-val="{{ false }}"><iframe src="{{hc.prevSrc}}" sandbox="{{hc.prevSandbox}}" title="Preview" style="flex: 1; min-height: 0; border: 0; border-radius: 8px; background: #fff"></iframe></sc-if>
+                  <sc-if value="{{hc.prevNone}}" hint-placeholder-val="{{ false }}"><div class="holo-body">This file type can't be shown here. Use "Open in tab" to view or save it.</div></sc-if>
+                </div>
+              </sc-if>
+              <sc-if value="{{hc.hasAtts}}" hint-placeholder-val="{{ false }}">
+                <div style="display: flex; flex-wrap: wrap; gap: 6px">
+                  <sc-for list="{{hc.atts}}" as="at" hint-placeholder-count="2"><button class="holo-chip" onClick="{{at.open}}">{{at.label}}</button></sc-for>
+                </div>
+              </sc-if>
+              <sc-if value="{{hc.hasActs}}" hint-placeholder-val="{{ false }}">
+                <div style="display: flex; gap: 8px; align-items: center">
+                  <button class="qa" onClick="{{hc.approve}}" style="height: 36px; background: #AA0505; border-color: #AA0505; color: #FFF4D6">{{hc.okLabel}}</button>
+                  <button class="qa" onClick="{{hc.reject}}" style="height: 36px">Reject</button>
+                  <div style="flex-grow: 1"></div>
+                  <sc-if value="{{hc.hasDemo}}" hint-placeholder-val="{{ false }}"><button class="holo-chip" onClick="{{hc.demo}}">{{hc.demoLabel}}</button></sc-if>
+                  <sc-if value="{{hc.hasLink}}" hint-placeholder-val="{{ false }}"><a class="holo-chip" href="{{hc.link}}" target="_blank" rel="noopener">{{hc.linkLabel}}</a></sc-if>
                 </div>
               </sc-if>
             </div>
@@ -762,6 +802,7 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
               <sc-if value="{{ai.isApproval}}" hint-placeholder-val="{{ false }}">
                 <button class="qa" onClick="{{ai.approve}}" style="background: #AA0505; border-color: #AA0505; color: #FFF4D6; padding: 0 12px">Approve</button>
                 <button class="qa" onClick="{{ai.reject}}" style="padding: 0 12px">Reject</button>
+                <button class="qa" onClick="{{ai.review}}" style="padding: 0 12px; border-color: #B97D10">Review</button>
               </sc-if>
             </div>
             <div style="height: 1px; background: #6A0C0B"></div>
@@ -954,7 +995,7 @@ class Component extends DCLogic {
   constructor(props) {
     super(props);
     this.state = { mode: 'ambient', master: 'trading', now: new Date(), tick: 0,
-      a: 0, voiceMenu: false, voices: [], voiceName: null, kVoices: [], kVoice: null, wakeOn: false, wakeLive: false, wakeHeard: false, deckI: 0, deckTalk: false, issueText: {}, holoTilt: true, holoScan: true, holoBlue: false, wx: true, page: 0, orbA: 0, orbHov: null, speaking: false, pulse: 0, boot: true, bootT: 0, rotLon: -40, rotLat: 22, drag: null, hov: null, mind: false, openT: 0, sel: 'root', cmd: '', listening: false, flash: '', flashUntil: 0,
+      a: 0, voiceMenu: false, voices: [], voiceName: null, kVoices: [], kVoice: null, wakeOn: false, wakeLive: false, wakeHeard: false, deckI: 0, deckTalk: false, mail: {}, prev: null, issueText: {}, holoTilt: true, holoScan: true, holoBlue: false, wx: true, page: 0, orbA: 0, orbHov: null, speaking: false, pulse: 0, boot: true, bootT: 0, rotLon: -40, rotLat: 22, drag: null, hov: null, mind: false, openT: 0, sel: 'root', cmd: '', listening: false, flash: '', flashUntil: 0,
       cpu: 13, ram: 94, gpu: 2, vram: 16, music: true, confirmOff: false, off: null, offT: 0,
       log: [
         { t: '13:22', msg: 'Screenwriter · draft 2 of Episode 04 started' },
@@ -1020,12 +1061,12 @@ class Component extends DCLogic {
     }, 1000);
     this.connectLive();
     this.onKey = (e) => {
-      if ((e.key === 'ArrowRight' || e.key === 'ArrowLeft' || e.key === ' ') && /^(briefing|issues)$/.test(this.state.mode) && !this.state.mind && !/^(INPUT|TEXTAREA)$/.test((e.target && e.target.tagName) || '')) {
+      if ((e.key === 'ArrowRight' || e.key === 'ArrowLeft' || e.key === ' ') && Component.DECK.test(this.state.mode) && !this.state.mind && !/^(INPUT|TEXTAREA)$/.test((e.target && e.target.tagName) || '')) {
         e.preventDefault(); if (e.key === ' ') this.deckToggle(); else this.deckGo(e.key === 'ArrowRight' ? 1 : -1); return;
       }
       if (e.key !== 'Escape') return;
       const s = this.state;
-      if (s.mode === 'briefing' || s.mode === 'issues') { this.stopSpeech(); this.setState({ deckTalk: false }); }
+      if (Component.DECK.test(s.mode)) { this.stopSpeech(); this.setState({ deckTalk: false, prev: null }); }
       if (s.page === 1) this.scrollToTop();
       else if (s.mind) this.setState({ mind: false });
       else if (s.voiceMenu) this.setState({ voiceMenu: false });
@@ -1438,6 +1479,7 @@ class Component extends DCLogic {
   runCommand(raw) {
     const t0 = (raw || '').toLowerCase().trim().replace(/^(hey|hi|ok|okay|yo)\s+(viz|vision)[,!.]*\s*/, '');
     if (/\b(what'?s wrong|what is wrong|any (issues|errors|problems)|show (me )?(the )?(issues|errors|problems)|what (failed|broke|went wrong))\b/.test(t0)) { this.openIssues(); return; }
+    if (/\b(what needs (me|my)|(show|review|open) (me )?(the |my )?(approvals?|decisions?)|anything to (approve|decide)|what('?s| is) waiting)\b/.test(t0)) { this.openDecide(); return; }
     if (this.state.liveUp && !this.useLocal && t0 && !this.isNavCommand(t0)) { this.askLive(raw); return; }
     this.runLocal(raw);
   }
@@ -1637,7 +1679,7 @@ class Component extends DCLogic {
     const tok = this.deckTok = (this.deckTok || 0) + 1, c = (this.deck || [])[this.deckIdx];
     if (!c) return;
     this.speak(c.say, () => {
-      if (tok !== this.deckTok || !this.state.deckTalk || !/^(briefing|issues)$/.test(this.state.mode)) return;
+      if (tok !== this.deckTok || !this.state.deckTalk || !Component.DECK.test(this.state.mode)) return;
       if (this.deckIdx < this.deck.length - 1) { this.deckIdx += 1; this.setState({ deckI: this.deckIdx }); setTimeout(() => { if (tok === this.deckTok) this.deckSpeak(); }, 500); }
       else this.setState({ deckTalk: false });
     });
@@ -1646,13 +1688,15 @@ class Component extends DCLogic {
     const n = (this.deck || []).length; if (!n) return;
     const i = Math.max(0, Math.min(n - 1, this.deckIdx + d)); if (i === this.deckIdx) return;
     this.deckIdx = i; this.setState({ deckI: i });
-    if (this.state.mode === 'issues') { this.stopSpeech(); this.explainIssue(i, this.state.deckTalk); }
+    if (this.state.mode === 'decide') { this.stopSpeech(); this.setState({ prev: null, deckTalk: false }); }
+    else if (this.state.mode === 'issues') { this.stopSpeech(); this.explainIssue(i, this.state.deckTalk); }
     else if (this.state.deckTalk) setTimeout(() => this.deckSpeak(), 60); else this.stopSpeech();
   }
   deckToggle() {
     if (this.state.deckTalk) { this.setState({ deckTalk: false }); this.stopSpeech(); return; }
     this.setState({ deckTalk: true });
-    if (this.state.mode === 'issues') this.explainIssue(this.deckIdx, true); else setTimeout(() => this.deckSpeak(), 60);
+    if (this.state.mode === 'decide') { const c = (this.deck || [])[this.deckIdx], tok = this.deckTok = (this.deckTok || 0) + 1; if (c) this.speak(c.say, () => { if (tok === this.deckTok) this.setState({ deckTalk: false }); }); }
+    else if (this.state.mode === 'issues') this.explainIssue(this.deckIdx, true); else setTimeout(() => this.deckSpeak(), 60);
   }
   startBrief() {
     this.stopSpeech(); this.deckIdx = 0;
@@ -1664,6 +1708,19 @@ class Component extends DCLogic {
     this.setState({ mode: 'issues', mind: false, page: 0, deckI: 0, deckTalk: true });
     setTimeout(() => { const i = Math.max(0, (this.deck || []).findIndex((c) => c.key === key)); this.deckIdx = i; this.setState({ deckI: i }); this.explainIssue(i, true); }, 80);
   }
+  openDecide(id) {
+    this.stopSpeech();
+    this.setState({ mode: 'decide', mind: false, page: 0, deckI: 0, deckTalk: false, prev: null });
+    setTimeout(() => { const i = Math.max(0, (this.deck || []).findIndex((c) => c.key === 'ap:' + id)); this.deckIdx = i; this.setState({ deckI: i }); }, 80);
+  }
+  async loadMail(id) {
+    // the original email and its attachment list for a drafted reply, fetched when its card comes up
+    this.mailReq = this.mailReq || {}; if (this.mailReq[id]) return; this.mailReq[id] = true;
+    let j = null;
+    try { const r = await fetch('/api/approvals/' + id + '/email'); j = r.ok ? await r.json() : null; } catch (e) {}
+    this.setState({ mail: Object.assign({}, this.state.mail, { [id]: j || { failed: true } }) });
+  }
+  decide(id, decision) { this.stopSpeech(); this.setState({ prev: null, deckTalk: false }); fetch('/api/approvals/' + id + '/' + decision, { method: 'POST' }).catch(() => {}); }
   async explainIssue(i, speak) {
     const c = (this.deck || [])[i]; if (!c) return;
     let text = (this.state.issueText || {})[c.key];
@@ -1677,6 +1734,7 @@ class Component extends DCLogic {
     }
     if (speak && this.state.mode === 'issues' && this.deckIdx === i) { const tok = this.deckTok = (this.deckTok || 0) + 1; this.speak(text || c.say, () => { if (tok === this.deckTok) this.setState({ deckTalk: false }); }); }
   }
+  static DECK = /^(briefing|issues|decide)$/;
   static WAKE_RE = /\b(hey|hi|hay|ok|okay)[\s,]*(vision|visions|fission|revision|division|vizhen)\b/;
   async loadKokoroVoices() {
     // Kokoro runs on the Mac: its voices replace the browser's list in the voice menu
@@ -1824,7 +1882,7 @@ class Component extends DCLogic {
       label, cls: s.mode === id ? 'tab-on' : 'tab',
       pick: () => this.setState({ mode: id })
     }));
-    const modeLabel = (modeDefs.find((m) => m[0] === s.mode) || ['x', s.mode === 'issues' ? 'ISSUES' : 'ASK'])[1] + ' MODE';
+    const modeLabel = (modeDefs.find((m) => m[0] === s.mode) || ['x', s.mode === 'issues' ? 'ISSUES' : s.mode === 'decide' ? 'DECISION' : 'ASK'])[1] + ' MODE';
 
     const data = {
       film: { name: 'FILM STUDIO', dot: 'd-work', agents: [
@@ -2395,6 +2453,49 @@ class Component extends DCLogic {
             body: (why ? why + '\n\n' : '') + 'Error: ' + (a.summary || 'no details reported'), say: why || a.name + ' in ' + mn.toLowerCase() + ' failed. ' + (a.summary || '') });
         }); });
       if (!deck.length) deck.push({ key: 'ok', kick: 'ISSUES', title: 'All clear', rows: [], body: CON ? 'No agent is reporting an error right now.' : 'Connect to VISION to see agent errors.', say: 'No agent is reporting an error right now.' });
+    } else if (s.mode === 'decide') {
+      const AP = (CON && s.live.approvals) || [], fmtT = (x) => { const t = new Date(x); return isNaN(t) ? String(x || '') : days[t.getDay()] + ' ' + t.getDate() + ' ' + mons[t.getMonth()] + ' · ' + pad(t.getHours()) + ':' + pad(t.getMinutes()); };
+      const R = (a, b, bc) => ({ a, b: String(b == null ? '—' : b), ac: '#C9C0AC', bc: bc || '#EDE6D6' });
+      AP.forEach((a) => {
+        const p = a.payload || {}, mn = data[a.master] ? data[a.master].name : String(a.master).toUpperCase();
+        const title = a.title.replace(/[\s·]*(demo\s+)?https?:\/\/\S+/g, '');
+        const c = { key: 'ap:' + a.id, kick: 'DECISION · ' + mn, title, rows: [], body: '', hasActs: true, okLabel: 'Approve',
+          approve: () => this.decide(a.id, 'approved'), reject: () => this.decide(a.id, 'rejected'), say: title + '.' };
+        const pv = s.prev && s.prev.key === c.key ? s.prev : null;
+        if (p.kind === 'email_reply') {
+          const M = s.mail[a.id];
+          if (!M) { c.body = 'Fetching the original email…'; }
+          else if (M.failed) { c.body = 'Could not load the original email. The draft is still safe to approve or reject from the panel.'; }
+          else {
+            c.mail = true; c.okLabel = 'Approve and send';
+            c.mailHead = 'ORIGINAL · ' + (M.email.from_name || M.email.from || '') + (M.email.ts ? ' · ' + fmtT(M.email.ts * 1000) : '') + (M.partial ? ' · PREVIEW ONLY' : '');
+            c.mailBody = (M.email.subject ? M.email.subject + '\n\n' : '') + (M.email.body || '');
+            c.draftHead = 'DRAFT REPLY · to ' + (M.draft.to || ''); c.draftBody = (M.draft.subject ? M.draft.subject + '\n\n' : '') + (M.draft.body || '');
+            c.atts = (M.attachments || []).map((t) => ({ label: t.name + (t.size ? ' · ' + (t.size > 1048576 ? (t.size / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(t.size / 1024)) + ' KB') : ''),
+              open: () => this.setState({ prev: { key: c.key, name: t.name, src: '/api/approvals/' + a.id + '/attachments/' + encodeURIComponent(t.id),
+                type: /^image\//.test(t.mime) ? 'img' : t.mime === 'application/pdf' ? 'pdf' : /^text\/(plain|csv)/.test(t.mime) ? 'box' : 'none', sandbox: '' } }) }));
+            c.say = 'Reply to ' + (M.email.from_name || M.email.from) + ' about ' + (M.email.subject || 'their email') + '. The draft says: ' + (M.draft.body || '');
+          }
+        } else if (p.kind === 'proposal') {
+          c.rows = [R('Phone', p.phone || 'not listed'), R('Demo', (p.url || '').replace(/^https?:\/\//, ''), '#67C7EB')]; c.body = p.message || '';
+          c.demo = p.url ? () => this.setState({ prev: pv ? null : { key: c.key, name: 'Demo site · ' + p.url, src: p.url, type: 'box', sandbox: 'allow-scripts' } }) : null; c.demoLabel = pv ? 'Back to the pitch' : 'Preview demo';
+          c.link = p.url; c.linkLabel = 'Open demo'; c.say = title + '. The pitch says: ' + (p.message || '');
+        } else if (p.kind === 'trade') {
+          const left = p.created ? Math.round(30 - (Date.now() / 1000 - p.created) / 60) : null;
+          c.rows = [R('Instrument', String(p.instrument || '').replace('_', '/')), R('Order', (p.units > 0 ? 'Buy ' : 'Sell ') + Math.abs(p.units || 0).toLocaleString('en-CA') + ' units', p.units > 0 ? '#67C7EB' : '#FF8A73'),
+            R('Price', p.price), R('Stop', p.stop), R('Target', p.tp), R('Rating', p.rating), R('Expires', left == null ? '—' : left > 0 ? 'in ' + left + ' min' : 'expired', left != null && left <= 5 ? '#FF8A73' : '#EDE6D6')];
+          c.body = p.reason || ''; c.okLabel = 'Approve trade'; c.say = title.replace(/[@~·]/g, ', ') + '. ' + (p.reason || '');
+        } else if (p.kind === 'meeting_accept') {
+          const em = p.email || {};
+          c.rows = [R('With', (p.attendees || []).join(', ')), R('Starts', fmtT(p.start)), R('Ends', fmtT(p.end)), R('Calendar', p.account)];
+          c.body = em.subject ? 'From their email: ' + em.subject + '\n\n' + (em.snippet || '') : ''; c.okLabel = 'Accept and book'; c.say = title + '.';
+        } else if (p.kind === 'job_package') {
+          c.rows = [R('Package', p.folder || 'not saved')]; c.link = p.url; c.linkLabel = 'Open posting'; c.body = 'The tailored résumé and cover letter are in the package folder. Approving marks it ready for you to submit; VISION never applies for you.';
+        }
+        if (pv) Object.assign(c, { prevOpen: true, prevName: pv.name, prevSrc: pv.src, prevType: pv.type, prevSandbox: pv.sandbox });
+        deck.push(c);
+      });
+      if (!deck.length) deck.push({ key: 'none', kick: 'DECISIONS', title: 'Nothing waiting', rows: [], body: CON ? 'No approval is waiting for you right now.' : 'Connect to VISION to see approvals.', say: 'Nothing is waiting for you right now.' });
     } else {
       const summary = replyText.replace(' [demo data]', '');
       deck = [
@@ -2410,9 +2511,13 @@ class Component extends DCLogic {
     const deckCards = deck.map((c, k) => {
       const dd = k - di, ad = Math.abs(dd), sg = dd < 0 ? -1 : 1;
       const tf = ad === 0 ? 'translateX(0px) translateZ(0px) rotateY(0deg)' + (s.holoTilt ? ' rotateX(7deg)' : '')
-        : ad === 1 ? 'translateX(' + sg * 285 + 'px) translateZ(-230px) rotateY(' + -sg * 42 + 'deg)' : 'translateX(' + sg * 430 + 'px) translateZ(-400px) rotateY(' + -sg * 54 + 'deg)';
-      return Object.assign({}, c, { tf, op: ad === 0 ? '1' : ad === 1 ? '0.42' : ad === 2 ? '0.14' : '0', z: String(10 - Math.min(ad, 9)), pe: ad > 2 ? 'none' : 'auto', center: ad === 0, hasBody: !!c.body,
-        cls: 'holo' + (s.holoScan ? ' holo-scan' : '') + (ad === 0 ? ' holo-on' : ''), pick: () => this.deckGo(k - di) });
+        : ad === 1 ? 'translateX(' + sg * (s.mode === 'decide' ? 410 : 285) + 'px) translateZ(-230px) rotateY(' + -sg * 42 + 'deg)' : 'translateX(' + sg * (s.mode === 'decide' ? 600 : 430) + 'px) translateZ(-400px) rotateY(' + -sg * 54 + 'deg)';
+      const cen = ad === 0, pO = cen && !!c.prevOpen;
+      if (cen && s.mode === 'decide' && c.key.startsWith('ap:') && CON) { const ap = (s.live.approvals || []).find((x) => 'ap:' + x.id === c.key); if (ap && (ap.payload || {}).kind === 'email_reply' && !s.mail[ap.id]) setTimeout(() => this.loadMail(ap.id), 0); }
+      return Object.assign({}, c, { showMain: cen && !pO && !c.mail, showMail: cen && !pO && !!c.mail, showPrev: pO, prevImg: pO && c.prevType === 'img', prevPdf: pO && c.prevType === 'pdf', prevBox: pO && c.prevType === 'box', prevNone: pO && c.prevType === 'none',
+        prevClose: () => this.setState({ prev: null }), hasAtts: cen && !pO && !!(c.atts && c.atts.length), atts: c.atts || [], hasActs: cen && !!c.hasActs, hasDemo: cen && !!c.demo, hasLink: cen && !!c.link,
+        demo: c.demo || (() => {}), approve: c.approve || (() => {}), reject: c.reject || (() => {}), tf, op: ad === 0 ? '1' : ad === 1 ? '0.42' : ad === 2 ? '0.14' : '0', z: String(10 - Math.min(ad, 9)), pe: ad > 2 ? 'none' : 'auto', center: ad === 0, hasBody: !!c.body,
+        cls: 'holo' + (s.mode === 'decide' ? ' holo-wide' : '') + (s.holoScan ? ' holo-scan' : '') + (ad === 0 ? ' holo-on' : ''), pick: () => this.deckGo(k - di) });
     });
     this.deck = deck; this.deckIdx = di;
     const saveHolo = (p) => { const n = Object.assign({ tilt: s.holoTilt, scan: s.holoScan, blue: s.holoBlue }, p); try { window.localStorage.setItem('vision-holo', JSON.stringify(n)); } catch (e) {} this.setState({ holoTilt: n.tilt, holoScan: n.scan, holoBlue: n.blue }); };
@@ -2597,7 +2702,7 @@ class Component extends DCLogic {
       gStages: cols.map((c) => ({ title: c.title, left: c.left, width: c.width, top: c.top })), gCards: cards, gEdges, gFlow, gLoop, gHasLoop: flow.loop, gLoopX, gLoopY, gDebate, gHeads, gNotes, modeLabel: s.mind ? 'MIND OPEN' : modeLabel, masters, agents, selName: sel.name, gauges, gaugeTag, log: s.log, statusMsg,
       calOn: s.mode === 'calendar' && !s.mind, calDays, calSelTitle, calSelWx, calSelEvents,
       openCal: () => this.setState({ mode: 'calendar', mind: false, calSel: null }), closeCal: () => this.setState({ mode: 'ambient' }),
-      coreOn: !s.mind && s.mode !== 'briefing' && s.mode !== 'issues' && s.mode !== 'world' && s.mode !== 'calendar' && s.mode !== 'ask', worldOn: s.mode === 'world' && !s.mind,
+      coreOn: !s.mind && !Component.DECK.test(s.mode) && s.mode !== 'world' && s.mode !== 'calendar' && s.mode !== 'ask', worldOn: s.mode === 'world' && !s.mind,
       wDay, wNight, wRoute, wFlights, wCount, wxCloudD, wxCloudN, wxCloudCore, wxRain, wxStorm, wxBolt, wxSun,
       toggleWx: () => this.setState({ wx: !this.state.wx }), wxBtn: bLive ? 'Weather: n/a' : s.wx ? 'Weather: on' : 'Weather: off', hovOn: !!hov, hov: hov || {}, orbitPath,
       openWorld: () => this.setState({ mode: 'world', mind: false }),
@@ -2652,14 +2757,14 @@ class Component extends DCLogic {
           .concat((LV2.approvals || []).map((a) => { const u = (a.title.match(/https?:\/\/\S+/) || [''])[0]; return ({ url: u, hasUrl: !!u,
             text: a.master + ' · ' + (u ? a.title.replace(u, '').replace(/[\s·]*(demo)?[\s·]*$/, '') : a.title), isLink: false, isApproval: true,
             approve: () => fetch('/api/approvals/' + a.id + '/approved', { method: 'POST' }).catch(() => {}),
-            reject: () => fetch('/api/approvals/' + a.id + '/rejected', { method: 'POST' }).catch(() => {}) }); }));
+            reject: () => fetch('/api/approvals/' + a.id + '/rejected', { method: 'POST' }).catch(() => {}), review: () => this.openDecide(a.id) }); }));
         return { liveActions: true, demoActions: false, actionItems: items.slice(0, 3), noActions: items.length === 0 };
       })(),
       tgStatus, tgSent, voiceBars, voiceOpacity, voiceGlowW, voiceGlowO, voiceScaleOuter, voiceScaleInner, statusColor,
       bootOn: ov.on, bootCls: ov.cls, bootPhase: ov.phase, bootPct: ov.pct, bootCount: ov.count, bootCols: ov.cols, bootLog: ov.log, replyText, approvalCount,
-      deckOn: (s.mode === 'briefing' || s.mode === 'issues') && !s.mind, deckCards, holoRGB: s.holoBlue ? '103,199,235' : '251,202,3',
-      deckTitle: s.mode === 'issues' ? 'VISION ISSUES' : 'VISION BRIEF', deckMeta: (di + 1) + ' / ' + deck.length + ' · ' + (s.mode === 'issues' ? (CON ? 'LIVE' : 'NOT CONNECTED') : briefTag),
-      deckTalkLabel: s.deckTalk ? 'Pause' : s.mode === 'issues' ? 'Explain' : 'Read aloud', deckToggle: () => this.deckToggle(), deckPrev: () => this.deckGo(-1), deckNext: () => this.deckGo(1),
+      deckOn: Component.DECK.test(s.mode) && !s.mind, deckCards, holoRGB: s.holoBlue ? '103,199,235' : '251,202,3',
+      deckTitle: s.mode === 'issues' ? 'VISION ISSUES' : s.mode === 'decide' ? 'YOUR DECISIONS' : 'VISION BRIEF', deckMeta: (di + 1) + ' / ' + deck.length + ' · ' + (s.mode === 'briefing' ? briefTag : CON ? 'LIVE' : 'NOT CONNECTED'),
+      deckTalkLabel: s.deckTalk ? (s.mode === 'briefing' ? 'Pause' : 'Stop') : s.mode === 'issues' ? 'Explain' : 'Read aloud', deckToggle: () => this.deckToggle(), deckPrev: () => this.deckGo(-1), deckNext: () => this.deckGo(1),
       toggleTilt: () => saveHolo({ tilt: !s.holoTilt }), toggleScan: () => saveHolo({ scan: !s.holoScan }), toggleTint: () => saveHolo({ blue: !s.holoBlue }),
       tiltLabel: 'Tilt: ' + (s.holoTilt ? 'on' : 'off'), scanLabel: 'Scan: ' + (s.holoScan ? 'on' : 'off'), tintLabel: 'Tint: ' + (s.holoBlue ? 'blue' : 'gold'),
       listenRing: s.listening || s.wakeHeard ? 'lring-on' : 'lring', coreImgCls: s.listening || s.wakeHeard ? 'coreimg coreimg-listen' : 'coreimg',

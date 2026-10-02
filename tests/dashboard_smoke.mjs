@@ -16,14 +16,18 @@ const live = {
     report_data: { invest: { ports: [{ name: 'Total (CAD)', value: -227, pct: -1.32, sym: 'C$', total: true }], mkts: [{ name: 'NIFTY 50', pct: -0.88 }, { name: 'Bitcoin (24h)', pct: null }] },
       news: { headlines: [{ tag: 'GLOBAL', text: 'A headline', source: 'CNBC' }], weather: { city: 'Leamington', temp: 20, words: 'cloudy', kind: 'cloud', daily: [{ kind: 'cloud', hi: 21 }] } },
       calendar: { events: [{ title: 'Standup', start: new Date().toISOString(), all_day: false }] }, world: { flights: [], total_airborne: 0 } },
-    notices: { kite: { text: 'Zerodha login needed', url: 'http://x' } }, approvals: [{ id: 1, master: 'web', title: 'Pitch to X · demo https://demo-x.workers.dev' }],
+    notices: { kite: { text: 'Zerodha login needed', url: 'http://x' } }, approvals: [{ id: 1, master: 'web', title: 'Pitch to X · demo https://demo-x.workers.dev', payload: { kind: 'proposal', message: 'Hi X team', url: 'https://demo-x.workers.dev', phone: '519 555 0100' } },
+      { id: 2, master: 'email', title: 'Reply to Anna: Meeting', payload: { kind: 'email_reply', draft: 'p:1' } },
+      { id: 3, master: 'trading', title: 'Sell 352 EUR/USD @ ~1.12864', payload: { kind: 'trade', instrument: 'EUR_USD', units: -352, price: 1.12864, stop: 1.13258, tp: 1.12339, rating: 'Underweight', reason: 'Momentum is fading.', created: Date.now() / 1000 - 600 } },
+      { id: 4, master: 'calendar', title: 'Meeting with Anna: Thu', payload: { kind: 'meeting_accept', start: '2026-10-08T14:00:00', end: '2026-10-08T14:30:00', attendees: ['anna@x.com'], account: 'personal', email: { subject: 'Meet?', snippet: 'Can we meet' } } },
+      { id: 5, master: 'jobs', title: 'Application package: Analyst @ Acme (fit 82)', payload: { kind: 'job_package', url: 'https://jobs/1', folder: 'data/applications/acme' } }],
     boot: { active: false, done: 66, total: 66 }, telegram: { connected: true }, voice: {}, system: [{ id: 'cpu', label: 'CPU', pct: 10, hot: 80, detail: '' }] } };
 const SAMPLES = ['Episode 04', '28 flights', '1,840', 'Team standup', 'DEMO DATA', 'steps · avg', 'reminder 15 min', 'OANDA mismatch', '22 and cloudy', '7:00'];
 let fails = 0; const seen = new Set();
 const fail = (...a) => { fails++; console.log(...a); };
 const mk = (st) => { const c = new Component({}); Object.assign(c.state, { log: [], boot: false }, st); c.scrollToTop = () => {}; return c; };
 for (const [name, L] of [['preview', null], ['connected-empty', live.empty], ['connected-full', live.full]])
-  for (const mode of ['ambient', 'briefing', 'issues', 'calendar', 'world', 'ask']) for (const master of ['trading', 'traffic', 'film']) {
+  for (const mode of ['ambient', 'briefing', 'issues', 'decide', 'calendar', 'world', 'ask']) for (const master of ['trading', 'traffic', 'film']) {
     const c = mk({ mode, master, liveUp: !!L, live: L, askSrc: 'offline', askSteps: [['VISION', 'A', 'b', '']], askChips: ['X'], askQ: 'q', askSay: 's', askAt: Date.now() - 5000, askFollow: [] });
     let v; try { v = c.renderVals(); } catch (e) { fail('CRASH', name, mode, master, String(e).slice(0, 200)); continue; }
     if (L) for (const key of Object.keys(v)) { const txt = JSON.stringify(v[key], (k, x) => typeof x === 'function' ? undefined : x) || '';
@@ -61,6 +65,31 @@ hear('hey vision', false); if (!w.state.wakeHeard || w.renderVals().listenRing !
 hear('hey vision brief me', true); if (ran[0] !== 'brief me' || w.wakeRec) fail('command in the same breath was not run', JSON.stringify(ran));
 w.wakeStart(); const sr2 = FakeSR.last; w.startVoice = () => { listened++; }; hear('Hey, Vision.', true);
 if (listened !== 1 || !sr2.aborted) fail('bare wake phrase should open the mic and stop the wake listener', listened);
+// decision deck: every approval is a card; the email card shows the original, the draft and its attachments
+const posts = [];
+globalThis.fetch = async (url, opt) => { if (opt && opt.method === 'POST') { posts.push(url); return { ok: true, json: async () => ({}) }; }
+  return { ok: true, json: async () => ({ email: { from_name: 'Anna Lee', from: 'anna@x.com', subject: 'Meeting next week', ts: 1790000000, body: 'Could we meet Thursday?' }, draft: { to: 'anna@x.com', subject: 'Re: Meeting next week', body: 'Thursday works.' },
+    attachments: [{ id: 'a1', name: 'agenda.pdf', mime: 'application/pdf', size: 204800 }, { id: 'a2', name: 'notes.docx', mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', size: 9000 }] }) }; };
+const dq = mk({ liveUp: true, live: live.full }); dq.speak = () => {};
+dq.renderVals(); dq.openDecide(2); dq.renderVals(); await wait(150); let dv = dq.renderVals(); await wait(30); dv = dq.renderVals();
+let dc = dv.deckCards.find((x) => x.center);
+if (dq.state.mode !== 'decide' || dv.deckCards.length !== 5 || !dc || !dc.showMail) fail('email decision card did not load the original', dq.state.mode, dv.deckCards.length, dc && dc.title);
+else {
+  if (!/Anna Lee/.test(dc.mailHead) || !/Thursday\?/.test(dc.mailBody) || !/Thursday works/.test(dc.draftBody)) fail('email card content wrong');
+  if (dc.atts.length !== 2 || !/agenda\.pdf · 200 KB/.test(dc.atts[0].label)) fail('attachments not listed', JSON.stringify(dc.atts.map((x) => x.label)));
+  dc.atts[0].open(); dc = dq.renderVals().deckCards.find((x) => x.center);
+  if (!dc.showPrev || !dc.prevPdf || dc.prevSrc !== '/api/approvals/2/attachments/a1' || dc.showMail) fail('pdf attachment preview wrong');
+  dc.prevClose(); dq.renderVals().deckCards.find((x) => x.center).atts[1].open(); dc = dq.renderVals().deckCards.find((x) => x.center);
+  if (!dc.prevNone) fail('a Word file should offer open-in-tab, not a preview'); dc.prevClose();
+}
+dq.deckGo(-1); dc = dq.renderVals().deckCards.find((x) => x.center);
+if (!/Pitch to X$/.test(dc.title) || !dc.hasDemo || dc.link !== 'https://demo-x.workers.dev' || !/Hi X team/.test(dc.body)) fail('pitch card wrong', dc.title);
+dc.demo(); dc = dq.renderVals().deckCards.find((x) => x.center); if (!dc.prevBox || dc.prevSandbox !== 'allow-scripts') fail('demo preview wrong');
+dq.deckGo(2); dc = dq.renderVals().deckCards.find((x) => x.center);
+if (!/Sell 352 units/.test(JSON.stringify(dc.rows)) || !/in 20 min/.test(JSON.stringify(dc.rows)) || dc.okLabel !== 'Approve trade') fail('trade card wrong', JSON.stringify(dc.rows));
+dc.reject(); if (posts[posts.length - 1] !== '/api/approvals/3/rejected') fail('reject did not post', posts.join());
+const nd = mk({ liveUp: true, live: live.empty, mode: 'decide' }).renderVals().deckCards;
+if (nd.length !== 1 || nd[0].title !== 'Nothing waiting' || nd[0].hasActs) fail('empty decision deck wrong');
 console.log('spoken:', said.map((x) => x.slice(0, 70)));
 console.log(fails ? fails + ' problem(s)' : 'dashboard logic OK: no crashes, no sample values while connected, deck works');
 process.exit(fails ? 1 : 0);

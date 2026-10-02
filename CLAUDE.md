@@ -115,6 +115,9 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   carousel (centre card full, neighbours dimmed and title-only), ← → to step, space to pause. The briefing narrates one
   card at a time (`startBrief` / `deckSpeak`); clicking a red agent or asking "what's wrong" opens issue cards and VISION
   explains via `/api/issues/explain`. Tilt, scan lines and tint are switches in the voice menu (`vision-holo`).
+  Mode `decide` is the decision deck: one wide card per approval (Review button, or "show my decisions"); an email reply
+  shows the original beside the draft with attachment chips (`/api/approvals/{id}/email`, previewed in the card), a pitch
+  previews its demo site, a trade shows its numbers, reasoning and time left. Decisions never auto-advance.
   `node tests/dashboard_smoke.mjs` runs the dashboard logic without a browser.
 - "Hey Vision": a browser wake listener (`wakeStart` / `wakeHit`, Chrome speech recognition, switch in the voice menu,
   `vision-wake`, off by default; audio goes to Google while on). It pauses while VISION listens or speaks. Listening mode

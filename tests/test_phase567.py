@@ -451,7 +451,8 @@ def _b64(b: bytes) -> str:
 GMSG = {"payload": {"mimeType": "multipart/mixed", "parts": [
     {"mimeType": "text/plain", "filename": "", "body": {"data": _b64(b"Full body text")}},
     {"mimeType": "application/pdf", "filename": "inv.pdf", "body": {"attachmentId": "A1", "size": 5}},
-    {"mimeType": "image/png", "filename": "big.png", "body": {"attachmentId": "A2", "size": 30 * 1024 * 1024}}]}}
+    {"mimeType": "image/png", "filename": "big.png", "body": {"attachmentId": "A2", "size": 30 * 1024 * 1024}},
+    {"mimeType": "text/html", "filename": "page.html", "body": {"attachmentId": "A3", "size": 9}}]}}
 
 
 @pytest.fixture
@@ -468,6 +469,8 @@ def api(tmp_path, monkeypatch):
         u = str(req.url)
         if u.endswith("/messages/m1/attachments/A1"):
             return httpx.Response(200, json={"data": _b64(b"%PDF-")})
+        if u.endswith("/messages/m1/attachments/A3"):
+            return httpx.Response(200, json={"data": _b64(b"<b>hi</b>")})
         if u.endswith("/messages/m1/attachments/A2"):
             return httpx.Response(200, json={"data": ""})
         if "/messages/m1" in u:
@@ -528,11 +531,14 @@ def test_email_preview_and_attachments(api):
     other = store.add_approval("email", "Writer", "Other", {"key": "z"})
     r = c.get(f"/api/approvals/{a['id']}/email").json()
     assert r["email"]["body"] == "Full body text" and r["draft"]["body"] == "draft" and "partial" not in r
-    assert [x["id"] for x in r["attachments"]] == ["A1", "A2"] and r["attachments"][0] == {"id": "A1", "name": "inv.pdf", "mime": "application/pdf", "size": 5}
+    assert [x["id"] for x in r["attachments"]] == ["A1", "A2", "A3"] and r["attachments"][0] == {"id": "A1", "name": "inv.pdf", "mime": "application/pdf", "size": 5}
     att = c.get(f"/api/approvals/{a['id']}/attachments/A1")
     assert att.content == b"%PDF-" and att.headers["content-type"] == "application/pdf"
     assert att.headers["content-disposition"] == 'inline; filename="inv.pdf"'
-    assert att.headers["x-content-type-options"] == "nosniff" and att.headers["content-security-policy"] == "sandbox" and att.headers["cache-control"] == "no-store"
+    assert att.headers["x-content-type-options"] == "nosniff" and att.headers["cache-control"] == "no-store"
+    assert "content-security-policy" not in att.headers          # Chrome's PDF viewer won't render a sandboxed response
+    page = c.get(f"/api/approvals/{a['id']}/attachments/A3")     # anything that could run script stays sandboxed
+    assert page.headers["content-type"].startswith("text/html") and page.headers["content-security-policy"] == "sandbox"
     assert c.get(f"/api/approvals/{a['id']}/attachments/A2").status_code == 413
     assert c.get(f"/api/approvals/{a['id']}/attachments/NOPE").status_code == 404
     assert c.get(f"/api/approvals/{other['id']}/email").status_code == 404
