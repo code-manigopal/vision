@@ -29,7 +29,11 @@ from ..agents import AgentResult, SubAgent, request_approval
 from ..config import ROOT, secret
 from ..services import weather
 from ..services.llm import LLMUnavailable
+from .site_copy import brief_prompt, write_copy
+from .site_images import pick_images
+from .site_qa import check_site, fixable_by_rebuild, summarize
 from .site_template import STYLE_BY_TYPE, STYLES, city_of, render_site
+from .sitekit import RECIPES, recipes_for
 
 PLACES = "https://places.googleapis.com/v1/places:searchNearby"
 FIELDS = "places.id,places.displayName,places.formattedAddress,places.websiteUri,places.nationalPhoneNumber,places.primaryType,places.primaryTypeDisplayName,places.rating,places.userRatingCount,places.location"
@@ -150,6 +154,35 @@ def clean_brief(raw: Any, lead: dict) -> dict:
     b["mood"] = [m for m in raw.get("mood") or [] if m in MOODS][:3]
     kw = [str(k)[:40] for k in raw.get("keywords") or [] if isinstance(k, str) and k.strip()][:5]
     return {**b, "keywords": kw or b["keywords"]}
+
+
+def unique_headings(copy: dict) -> dict:
+    """No two headings on a page may read the same: a repeated section title is dropped (the layout's own wording is
+    used instead) and a repeated step, service or question is removed."""
+    seen, out = set(), dict(copy)
+    key = lambda t: re.sub(r"\W+", " ", str(t or "")).strip().lower()
+    for k in ("headline", "about_title", "services_title", "gallery_title", "reviews_title", "visit_title", "cta_title"):
+        if key(out.get(k)) in seen:
+            out.pop(k, None)
+        elif key(out.get(k)):
+            seen.add(key(out[k]))
+    for k, field in (("services", "name"), ("steps", "title"), ("faq", "q")):
+        kept = []
+        for item in out.get(k) or []:
+            if isinstance(item, dict) and key(item.get(field)) and key(item[field]) not in seen:
+                seen.add(key(item[field]))
+                kept.append(item)
+        if k in out:
+            out[k] = kept
+    return out
+
+
+def choose_style(lead: dict, wanted: str | None, used: set) -> str:
+    """A recipe that suits this kind of business and isn't already used by another demo in play.
+    The model's pick wins when it fits and is free; otherwise the best-fitting free one."""
+    fits = recipes_for(lead["type"])
+    order = ([wanted] if wanted in fits else []) + [r for r in fits if r != wanted]
+    return next((r for r in order if r not in used), order[0])
 
 
 # other kinds of local business the finder moves on to (Places API type names)
@@ -287,6 +320,8 @@ class CompetitorAnalyst(SubAgent):
 
     async def run(self, ctx):
         llm, notes, briefs = ctx.get("llm"), {}, {}
+        mine = {l["id"] for l in todo(ctx)}
+        used = {l["style"] for l in ctx["store"].kv_list("leads", limit=1000) if l.get("status") in ACTIVE and l.get("style") and l.get("id") not in mine}
         for l in todo(ctx):
             rivals = [c for c in ctx.get("competitors", []) if c["type"] == l["type"] and c["website"]][:3]
             texts = []
@@ -302,36 +337,18 @@ class CompetitorAnalyst(SubAgent):
                     notes[l["id"]] = await llm.complete("From these competitor websites, list 5 short things a great site for this kind of business should have:\n" + "\n".join(texts), tier="cloud", max_tokens=300)
                 except LLMUnavailable:
                     pass
-            raw = None
+            raw, fits = None, recipes_for(l["type"])
             if llm:
                 try:
-                    raw = await llm.json(f"Design brief for a one-page website, as JSON {{style, mood, keywords}}.\nstyle: one of {sorted(STYLES)} "
-                                         "(luxe = refined serif, salons and spas; sunny = bright and playful; trade = clean and bold, trades and clinics; editorial = classic serif, food and barbers).\n"
-                                         f"mood: 1-3 of {sorted(MOODS)}.\nkeywords: 4 short stock-photo searches showing this kind of business (no brand or place names).\n"
-                                         + json.dumps({"name": l["name"], "type": l["type_label"], "summary": (l.get("info") or {}).get("summary", ""),
-                                                       "reviews": [r["text"] if isinstance(r, dict) else r for r in (l.get("info") or {}).get("reviews", [])][:3]}), tier="cloud", max_tokens=250)
+                    raw = await llm.json(brief_prompt(l, fits, {r: f"{RECIPES[r]['label']} ({RECIPES[r].get('mode', 'light')})" for r in fits}), tier="cloud", max_tokens=250)
                 except LLMUnavailable:
                     pass
-            briefs[l["id"]] = clean_brief(raw, l)
+            brief = clean_brief(raw, l)
+            brief["style"] = choose_style(l, brief["style"], used)   # distinct from every other demo in play
+            used.add(brief["style"])
+            briefs[l["id"]] = brief
         ctx["competitor_notes"], ctx["briefs"] = notes, briefs
         return AgentResult("done", f"{len(notes)} ANALYSED", f"Competitor notes for {len(notes)} leads · {len(briefs)} design briefs")
-
-
-async def search_images(c: httpx.AsyncClient, q: str, n: int = 4) -> list[dict]:
-    """Wide photos at least 1200 px across for a search, from the first source that has any: Pexels, Pixabay, Openverse."""
-    out, pexels, pixabay = [], secret("PEXELS_API_KEY"), secret("PIXABAY_API_KEY")
-    if pexels:
-        r = await c.get("https://api.pexels.com/v1/search", headers={"Authorization": pexels}, params={"query": q, "per_page": n * 2, "orientation": "landscape"})
-        out = [{"url": p["src"].get("large2x") or p["src"]["original"], "credit": f"Photo by {p.get('photographer') or 'unknown'} (Pexels)", "source": p.get("url", "")}
-               for p in (r.json().get("photos", []) if r.status_code == 200 else []) if p.get("width", 0) >= 1200]
-    if not out and pixabay:
-        r = await c.get("https://pixabay.com/api/", params={"key": pixabay, "q": q, "image_type": "photo", "orientation": "horizontal", "min_width": 1200, "safesearch": "true", "per_page": max(3, n * 2)})
-        out = [{"url": p["largeImageURL"], "credit": f"Photo by {p.get('user') or 'unknown'} (Pixabay)", "source": p.get("pageURL", "")} for p in (r.json().get("hits", []) if r.status_code == 200 else [])]
-    if not out:
-        r = await c.get("https://api.openverse.org/v1/images/", params={"q": q, "license_type": "commercial,modification", "page_size": n * 2, "aspect_ratio": "wide", "size": "large"})
-        out = [{"url": i["url"], "credit": f"{i.get('title') or 'Photo'} by {i.get('creator') or 'unknown'} ({(i.get('license') or '').upper()} {i.get('license_version') or ''})",
-                "source": i.get("foreign_landing_url") or i.get("url")} for i in (r.json().get("results", []) if r.status_code == 200 else []) if (i.get("width") or 1200) >= 1200]
-    return out[:n]
 
 
 async def save_image(c: httpx.AsyncClient, url: str, dest: Path) -> bool:
@@ -353,23 +370,22 @@ class ImagesDownloader(SubAgent):
     name, tier, note, blocking = "Images Downloader", "API", "Pexels · Pixabay · Openverse, credited", False
 
     async def run(self, ctx):
-        imgs, want = {}, int(ctx["options"].get("images_per_site", 6))
+        imgs, want, thin = {}, int(ctx["options"].get("images_per_site", 6)), []
         async with httpx.AsyncClient(timeout=30) as c:
             for l in todo(ctx):
-                kws = (ctx.get("briefs", {}).get(l["id"]) or default_brief(l))["keywords"]
-                found = [await search_images(c, q) for q in kws[:5]]
-                picked, seen = [], set()
-                for rank in range(4):                       # one per keyword first, so the page shows variety
-                    for res in found:
-                        if rank < len(res) and res[rank]["url"] not in seen and len(picked) < want:
-                            seen.add(res[rank]["url"])
-                            picked.append(res[rank])
+                # only photos whose description matches the trade; fewer photos rather than unrelated ones
+                picked = await pick_images(c, l, ctx.get("briefs", {}).get(l["id"]) or default_brief(l), want)
+                if len(picked) < 3:
+                    thin.append(l["name"])
                 for n, i in enumerate(picked, 1):
                     if await save_image(c, i["url"], ROOT / "data" / "sites" / slug(l["name"]) / "img" / f"{n}.webp"):
                         i["file"] = f"img/{n}.webp"
                 imgs[l["id"]] = picked
         ctx["images"] = imgs
-        return AgentResult("done", f"{sum(len(v) for v in imgs.values())} IMAGES", "Stock photos picked and saved, credits recorded")
+        note = "Relevant stock photos picked and saved, credits recorded" + (f" · few good photos for: {', '.join(thin)}" if thin else "")
+        if thin and not (secret("PEXELS_API_KEY") or secret("PIXABAY_API_KEY")):
+            note += " (add PEXELS_API_KEY or PIXABAY_API_KEY to .env for more choice)"
+        return AgentResult("done", f"{sum(len(v) for v in imgs.values())} IMAGES", note)
 
 
 class ColorThemeDecider(SubAgent):
@@ -387,33 +403,36 @@ class WebsiteBuilder(SubAgent):
     name, tier, note = "Website Builder", "CLOUD", "copy + styled template"
 
     async def run(self, ctx):
-        llm, store, built = ctx.get("llm"), ctx["store"], 0
+        llm, store, built, failed = ctx.get("llm"), ctx["store"], 0, []
         for l in ctx.get("leads", []):
-            if l.get("site"):
+            if l.get("site") or l.get("status") == "qa_failed":
                 continue
-            info = l.get("info") or {}
-            copy = {"tagline": f"Trusted {l['type_label'].lower()} in {city_of(l) or 'your area'}",
-                    "about": info.get("summary") or f"{l['name']} is a local {l['type_label'].lower()} serving the community.",
-                    "services": [{"name": l["type_label"], "text": "Ask us about our services."}]}
-            if llm:
-                try:
-                    made = await llm.json("Write website copy as JSON {headline (3-7 words, not the business name), tagline (one sentence), about_title (2-5 words), about (60 words), "
-                                          "services:[{name,text}] (4 to 6 items, text under 20 words)} for this local business. "
-                                          "Only use facts given; keep claims modest.\n" + json.dumps({"name": l["name"], "type": l["type_label"], "address": l["address"],
-                                          "rating": l.get("rating"), "reviews": [r["text"] if isinstance(r, dict) else r for r in info.get("reviews", [])][:3], "rival_tips": ctx.get("competitor_notes", {}).get(l["id"], "")}),
-                                          tier="cloud", max_tokens=900)
-                    if isinstance(made, dict) and made.get("services"):
-                        copy = {**copy, **made}
-                except LLMUnavailable:
-                    pass
-            page = render_site(l, copy, ctx.get("themes", {}).get(l["id"]) or dict(zip(("primary", "accent", "bg", "text"), PALETTES["plumber"])), ctx.get("images", {}).get(l["id"], []),
-                               (ctx.get("briefs", {}).get(l["id"]) or default_brief(l))["style"])
+            copy = unique_headings(await write_copy(llm, l, ctx.get("competitor_notes", {}).get(l["id"], "")))
+            theme = ctx.get("themes", {}).get(l["id"]) or dict(zip(("primary", "accent", "bg", "text"), PALETTES["plumber"]))
+            images = ctx.get("images", {}).get(l["id"], [])
+            first = (ctx.get("briefs", {}).get(l["id"]) or default_brief(l))["style"]
             d = ROOT / "data" / "sites" / slug(l["name"])
             d.mkdir(parents=True, exist_ok=True)
-            (d / "index.html").write_text(page)
-            l.update(site=str(d / "index.html"), status="built")
+            # quality gate: a page that fails for a layout reason is rebuilt in the next style that suits the business
+            for style in [first] + [r for r in recipes_for(l["type"]) if r != first][:3]:
+                page = render_site(l, copy, theme, images, style)
+                qa = check_site(page, site_dir=d, lead=l, copy=copy)   # colours are judged from the page's own roles, not the raw palette
+                if qa["ok"] or not fixable_by_rebuild(qa):
+                    break
+            l.update(style=style, qa={"ok": qa["ok"], "score": qa["score"], "issues": [f"{x['severity']}: {x['message']}" for x in qa["issues"]][:8]})
+            if qa["ok"]:
+                (d / "index.html").write_text(page)
+                l.update(site=str(d / "index.html"), status="built")
+                built += 1
+            else:   # never deployed or pitched; kept as a draft so the problem can be looked at, and its place in the stack is freed
+                (d / "draft.html").write_text(page)
+                l.update(status="qa_failed", draft=str(d / "draft.html"))
+                failed.append(l["name"])
+                if ctx.get("bus"):
+                    ctx["bus"].say(f"Web Designer · {l['name']} held back: {summarize(qa)}")
             store.kv_put("leads", l["id"], {k: v for k, v in l.items() if k not in ("_key", "_ts")})
-            built += 1
+        if failed:
+            return AgentResult("done", f"{built} BUILT", f"Built {built} demo sites · {len(failed)} held back by the quality check: {', '.join(failed)}")
         return AgentResult("done", f"{built} BUILT", f"Built {built} demo sites")
 
 

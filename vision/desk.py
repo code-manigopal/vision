@@ -117,8 +117,9 @@ def _each(rows, fn) -> list[dict]:
 
 # ---------- masters ----------
 def web(store):
-    stages = [("building", "Building"), ("live", "Live"), ("awaiting", "Awaiting you"), ("pitched", "Pitched"), ("parked", "Parked")]
-    of = {"new": "building", "researched": "building", "built": "building", "deployed": "live", "pitch_ready": "awaiting", "pitched": "pitched", "parked": "parked"}
+    stages = [("building", "Building"), ("live", "Live"), ("awaiting", "Awaiting you"), ("pitched", "Pitched"), ("held", "Held back"), ("parked", "Parked")]
+    of = {"new": "building", "researched": "building", "built": "building", "deployed": "live", "pitch_ready": "awaiting", "pitched": "pitched", "parked": "parked",
+          "qa_failed": "held"}   # failed the quality check: never deployed, kept as a draft
     pitches = {p["_key"]: p for p in _kv(store, "pitches", 1000)}
     pending = {a["payload"].get("lead"): a for a in _approvals(store, "web") if a["status"] == "pending"}
 
@@ -129,11 +130,15 @@ def web(store):
         k = l.get("_key") or l.get("id")
         pitch = pitches.get(k) or {}
         body = pitch.get("message") or (pending.get(k) or {}).get("payload", {}).get("message") or ""
+        qa = l.get("qa") or {}
+        if st == "held":
+            body = "Held back by the quality check:\n" + "\n".join("• " + str(x) for x in qa.get("issues") or [])
         phone = l.get("phone") or pitch.get("phone")
         rows = _rows(("Type", l.get("type_label") or l.get("type")), ("Phone", phone), ("Address", l.get("address")),
-                     ("Rating", l.get("rating")), ("Status", l.get("status")))
+                     ("Rating", l.get("rating")), ("Status", l.get("status")), ("Style", l.get("style")),
+                     ("Quality", f"{qa['score']} / 100" if qa.get("score") is not None else None))
         return _item(k, st, l.get("name") or k, l.get("type_label") or "", pitch.get("at") or l.get("_ts"), rows, body,
-                     _links(("Live demo", l.get("url") or pitch.get("url"))), [f for f in [file_ref(l.get("site"), "Demo page")] if f])
+                     _links(("Live demo", l.get("url") or pitch.get("url"))), [f for f in [file_ref(l.get("site"), "Demo page"), file_ref(l.get("draft"), "Draft page")] if f])
     return stages, _each(_kv(store, "leads", 1000), one)
 
 

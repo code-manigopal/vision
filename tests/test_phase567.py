@@ -602,7 +602,7 @@ def test_desk_web_jobs_reports_and_404(api, monkeypatch, tmp_path):
     store.kv_put("leads", "L2", {"id": "L2", "name": "Bob", "type_label": "Cafe", "status": "new"})
     store.kv_put("pitches", "L1", {"message": "Hi Acme, here is a demo", "url": "https://demo-acme.workers.dev", "phone": "555-1", "at": NOW})
     d = c.get("/api/desk/web").json()
-    assert [s["id"] for s in d["stages"]] == ["building", "live", "awaiting", "pitched", "parked"]
+    assert [s["id"] for s in d["stages"]] == ["building", "live", "awaiting", "pitched", "held", "parked"]
     assert {s["id"]: s["count"] for s in d["stages"]}["pitched"] == 1 and {s["id"]: s["count"] for s in d["stages"]}["building"] == 1
     it = next(i for i in d["items"] if i["stage"] == "pitched")
     assert it["body"] == "Hi Acme, here is a demo" and ["Phone", "555-1"] in it["rows"]
@@ -650,3 +650,53 @@ def test_desk_files_route(api, monkeypatch, tmp_path):
     assert p.status_code == 200 and p.headers["content-type"] == "application/pdf" and "content-security-policy" not in p.headers
     for bad in ("sites/../secret.txt", "sites/%2e%2e/secret.txt", "secret.txt", "sites/link.txt", "sites/acme", "%2Fetc/passwd", "sites/nope.html"):
         assert c.get("/api/files/" + bad).status_code == 404, bad
+
+
+def test_web_designer_style_choice_copy_guard_and_quality_gate(tmp_path, web_mock, monkeypatch):
+    import vision.masters.web as web
+    from vision.masters.sitekit import recipes_for
+    # a style that suits the business; the model's pick wins when it fits and is free; no two demos in play share one
+    lead = {"id": "x", "type": "plumber"}
+    fits = recipes_for("plumber")
+    assert web.choose_style(lead, fits[2], set()) == fits[2]
+    assert web.choose_style(lead, fits[0], {fits[0]}) == fits[1]
+    assert web.choose_style(lead, "chalkboard", set()) == fits[0]            # a menu-board look is not offered to a plumber
+    assert web.choose_style(lead, None, set(fits)) == fits[0]                # everything taken: best fit anyway
+    # no two headings alike: a repeated title is dropped, a repeated step or service removed
+    c = web.unique_headings({"headline": "Pipes fixed properly", "about_title": "About us", "visit_title": "about us", "services_title": "What we do",
+                             "services": [{"name": "Leak repair", "text": "a"}, {"name": "leak repair", "text": "b"}, {"name": "What we do", "text": "c"}],
+                             "steps": [{"title": "Call or message", "text": "a"}, {"title": "About us", "text": "b"}]})
+    assert "visit_title" not in c and [s["name"] for s in c["services"]] == ["Leak repair"] and [s["title"] for s in c["steps"]] == ["Call or message"]
+    # the gate: a page that fails for a reason no layout can fix is held back as a draft, never deployed or pitched
+    for k in ("GOOGLE_MAPS_API_KEY", "CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"):
+        monkeypatch.setenv(k, "x")
+    monkeypatch.setattr(web, "ROOT", tmp_path)
+    real, tried = web.check_site, []
+    DELETED.clear()
+    def strict(html, **kw):
+        tried.append(1)
+        r = real(html, **kw)
+        r["issues"].append({"id": "placeholder-text", "severity": "fail", "message": "The page contains leftover text.", "where": "x"})
+        return {**r, "ok": False}
+    monkeypatch.setattr(web, "check_site", strict)
+    o = orch_with(tmp_path, {"web": MasterConfig(mode="live", options={"business_types": ["plumber"], "price": "CAD 500"})})
+    asyncio.run(o.run_master("web"))
+    lead = o.store.kv_get("leads", "p1")
+    assert lead["status"] == "qa_failed" and "site" not in lead and "url" not in lead and lead["qa"]["ok"] is False and len(tried) == 1
+    assert (tmp_path / "data" / "sites" / "jesse-s-plumbing" / "draft.html").exists() and not DELETED
+    assert not [a for a in o.store.pending_approvals() if a["payload"]["kind"] == "proposal"] and "held back" in o.bus.state["masters"]["web"]["agents"][5]["summary"]
+    # a layout fault is retried in other styles that suit the business before giving up
+    tried.clear()
+    def layout_fault(html, **kw):
+        tried.append(1)
+        return {"ok": False, "score": 60, "issues": [{"id": "fixed-width", "severity": "fail", "message": "Too wide for a phone.", "where": "x"}]}
+    monkeypatch.setattr(web, "check_site", layout_fault)
+    o2 = orch_with(tmp_path / "b", {"web": MasterConfig(mode="live", options={"business_types": ["plumber"], "price": "CAD 500"})})
+    asyncio.run(o2.run_master("web"))
+    assert len(tried) == 4 and o2.store.kv_get("leads", "p1")["status"] == "qa_failed"
+    # the desk shows it under Held back with the reasons and the draft
+    from vision import desk
+    monkeypatch.setattr(desk, "ROOT", tmp_path)
+    d = desk.build(o.store, "web")
+    held = [i for i in d["items"] if i["stage"] == "held"]
+    assert len(held) == 1 and "leftover text" in held[0]["body"] and held[0]["files"][0]["label"] == "Draft page"

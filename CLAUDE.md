@@ -153,8 +153,22 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
 - Web Designer stays inside Google Places' free allowance: at most `builds_per_day` (5) new leads a day; every no-website business a search returns goes into a pool
   (kv `candidates`) that refills the stack with no API call; a (type, radius) search isn't repeated for 30 days
   (kv `web_searched`); and calls stop at `places_monthly_budget` (800) a month with a dashboard notice.
-- Web Designer design: the model only writes JSON (design brief, copy); layout comes from `masters/site_template.py`
-  (4 styles: luxe, sunny, trade, editorial), colours from `masters/palettes.json` (ColorHunt) via `pick_theme`.
+- Web Designer design: the model only writes JSON (design brief, copy); layout comes from `masters/sitekit/` — a section
+  library (3 navs, 8 heroes, 5 services, 4 galleries, 3 reviews, steps, FAQ, call band) combined into 14 curated styles
+  ("recipes": foreman, forge, clinic, artisan, gazette, atelier, sprout, noir, mainstreet, swiss, bloom, chalkboard, harbour,
+  parlour; 4 dark), each with its own type pairing and shape language. `recipes_for(type)` lists the ones that suit a business;
+  `choose_style` gives every demo in play a different one. Colours: `masters/palettes.json` (ColorHunt) via `pick_theme`,
+  expanded by sitekit into light or dark roles that pass AA contrast. `site_template.py` is only a shim.
+- Web Designer copy (`masters/site_copy.py`): wording and section titles by business category; unsupported claims are removed
+  (years, awards, licensed/insured, guarantees, 24/7, prices, counts, staff names) unless the business's own Google data says so;
+  the service area comes from the address. No model, or junk twice → plain copy from the lead's facts.
+- Web Designer photos (`masters/site_images.py`): trade-specific searches; a photo is used only if its description matches the
+  trade, and gets a role (hero, about, gallery). Fewer photos rather than unrelated ones.
+- Web Designer quality gate (`masters/site_qa.py`): every page is checked before it can be deployed (structure, leftovers, tel
+  link, disclaimer, images, contrast, phone-width overflow, content visible without scripts). A layout fault is retried in up
+  to three other styles; a page that still fails is kept as `draft.html` with status `qa_failed` (desk stage "Held back"),
+  never deployed or pitched. `scripts/site_contact_sheet.py` renders every style for sample businesses into
+  `data/sites/_contact/index.html`.
 - Trading: practice account default; live needs OANDA_ENV=live AND options.live_trading: true;
   approval TTL 30 min; refuse if price moved > 0.5 ATR; units capped.
 - Weather Agent belongs to News Desk; World Watch is flights only (the globe's weather icons are a plain data endpoint, not an agent).
