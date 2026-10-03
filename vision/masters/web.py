@@ -33,6 +33,7 @@ from .site_copy import brief_prompt, write_copy
 from .site_images import pick_images
 from .site_qa import check_site, fixable_by_rebuild, summarize
 from .site_template import STYLE_BY_TYPE, STYLES, city_of, render_site
+from .site_style import choose, palette_moods
 from .sitekit import styles_for
 
 PLACES = "https://places.googleapis.com/v1/places:searchNearby"
@@ -178,11 +179,9 @@ def unique_headings(copy: dict) -> dict:
 
 
 def choose_style(lead: dict, wanted: str | None, used: set) -> str:
-    """A recipe that suits this kind of business and isn't already used by another demo in play.
-    The model's pick wins when it fits and is free; otherwise the best-fitting free one."""
-    fits = styles_for(lead["type"])
-    order = ([wanted] if wanted in fits else []) + [r for r in fits if r != wanted]
-    return next((r for r in order if r not in used), order[0])
+    """The style that best matches what is known about this business (reviews, summary, name), among those that suit
+    its kind and aren't already used by another demo in play. The model's pick counts as one signal. See site_style.py."""
+    return choose(lead, wanted, used)["style"]
 
 
 # other kinds of local business the finder moves on to (Places API type names)
@@ -344,7 +343,8 @@ class CompetitorAnalyst(SubAgent):
                 except LLMUnavailable:
                     pass
             brief = clean_brief(raw, l)
-            brief["style"] = choose_style(l, brief["style"], used)   # distinct from every other demo in play
+            picked = choose(l, (raw or {}).get("style") if isinstance(raw, dict) else None, used)   # reasoned from the business itself; distinct per demo
+            brief.update(style=picked["style"], why=picked["why"], ranked=picked["ranked"])
             used.add(brief["style"])
             briefs[l["id"]] = brief
         ctx["competitor_notes"], ctx["briefs"] = notes, briefs
@@ -393,8 +393,9 @@ class ColorThemeDecider(SubAgent):
 
     async def run(self, ctx):
         over = ctx["options"].get("palette_themes") or {}
-        mood = lambda l: (ctx.get("briefs", {}).get(l["id"]) or {}).get("mood")
-        themes = {l["id"]: pick_theme(l, over.get(l["type"]) or mood(l)) for l in todo(ctx)}
+        brief = lambda l: ctx.get("briefs", {}).get(l["id"]) or {}
+        # the colours follow the look: the chosen style's palette moods first, then the model's
+        themes = {l["id"]: pick_theme(l, over.get(l["type"]) or palette_moods(brief(l).get("style"), brief(l).get("mood"))) for l in todo(ctx)}
         ctx["themes"] = themes
         return AgentResult("done", "PICKED", f"{len(themes)} palettes")
 
@@ -410,16 +411,18 @@ class WebsiteBuilder(SubAgent):
             copy = unique_headings(await write_copy(llm, l, ctx.get("competitor_notes", {}).get(l["id"], "")))
             theme = ctx.get("themes", {}).get(l["id"]) or dict(zip(("primary", "accent", "bg", "text"), PALETTES["plumber"]))
             images = ctx.get("images", {}).get(l["id"], [])
-            first = (ctx.get("briefs", {}).get(l["id"]) or default_brief(l))["style"]
+            brief = ctx.get("briefs", {}).get(l["id"]) or default_brief(l)
+            first, order = brief["style"], brief.get("ranked") or styles_for(l["type"])
             d = ROOT / "data" / "sites" / slug(l["name"])
             d.mkdir(parents=True, exist_ok=True)
             # quality gate: a page that fails for a layout reason is rebuilt in the next style that suits the business
-            for style in [first] + [r for r in styles_for(l["type"]) if r != first][:3]:
+            for style in [first] + [r for r in order if r != first][:3]:
                 page = render_site(l, copy, theme, images, style)
                 qa = check_site(page, site_dir=d, lead=l, copy=copy)   # colours are judged from the page's own roles, not the raw palette
                 if qa["ok"] or not fixable_by_rebuild(qa):
                     break
-            l.update(style=style, qa={"ok": qa["ok"], "score": qa["score"], "issues": [f"{x['severity']}: {x['message']}" for x in qa["issues"]][:8]})
+            why = brief.get("why") or f"{first}: the usual fit for this kind of business"
+            l.update(style=style, style_why=why if style == first else f"{why}. Rebuilt as {style} after the layout check", qa={"ok": qa["ok"], "score": qa["score"], "issues": [f"{x['severity']}: {x['message']}" for x in qa["issues"]][:8]})
             if qa["ok"]:
                 (d / "index.html").write_text(page)
                 l.update(site=str(d / "index.html"), status="built")

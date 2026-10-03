@@ -25,9 +25,9 @@ STYLES = {**RECIPES, CLASSIC: {"label": "Classic (the original layout)", "mode":
 
 
 def styles_for(lead_type) -> list:
-    """Every style that suits this kind of business, best first: the recipes, with the classic page as second choice."""
-    names = recipes_for(lead_type)
-    return names[:1] + [CLASSIC] + names[1:]
+    """Every style in the running for this kind of business: the recipes that suit it, and the classic page.
+    Which one a business gets is decided in site_style.py, from what is known about that business."""
+    return recipes_for(lead_type) + [CLASSIC]
 # default look per Google Places type (the first recipe that suits it)
 STYLE_BY_TYPE = {t: recipes_for(t)[0] for t in CATEGORY_OF}
 

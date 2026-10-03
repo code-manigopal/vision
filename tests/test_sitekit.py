@@ -239,7 +239,7 @@ def test_classic_is_the_original_page_kept_as_a_fifteenth_style():
     assert CLASSIC in STYLES and CLASSIC not in RECIPES and len(RECIPES) + 1 == 15
     for kind in ("roofing_contractor", "cafe", "nail_salon", "who_knows"):
         names = styles_for(kind)
-        assert names[1] == CLASSIC and names[0] == recipes_for(kind)[0] and len(set(names)) == len(names) and all(n in STYLES for n in names)
+        assert names[-1] == CLASSIC and names[:-1] == recipes_for(kind) and all(n in STYLES for n in names)   # in the running, not a default
     lead = {"id": "x", "name": "Acme <Roofing>", "type": "roofing_contractor", "type_label": "Roofing contractor", "phone": "(519) 555-0100",
             "address": "1 Main St, Leamington, ON N8H, Canada", "rating": 4.8, "info": {"reviews": [{"text": "Great work!!", "rating": 5}], "hours": ["Monday: 8 AM–5 PM"]}}
     copy = {"headline": "Roofs done properly", "tagline": "Repairs and new roofs.", "about_title": "About us", "about": "A local roofer.",

@@ -161,7 +161,12 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   expanded by sitekit into light or dark roles that pass AA contrast. `site_template.py` is only a shim.
   A fifteenth style, `classic` (`sitekit/classic.py`), is the original one-layout page Mani liked (luxe, sunny, trade or
   editorial by business type), kept with two fixes: content shows without scripts, and the gallery heading fits the business.
-  `styles_for(type)` = the recipes with `classic` as second choice.
+  `styles_for(type)` = the recipes that suit the business plus `classic`.
+- Web Designer style choice (`masters/site_style.py`): reasoned, not random. Each suitable style is scored against the business's
+  own reviews, Google summary and name (traits: warm, refined, bold, practical, playful, calm, modern, traditional, formal, dark);
+  a style is marked down for what it says that the business shows no sign of; the model's pick is one signal; a style used by
+  another demo in play is passed over. With nothing to go on, the usual fit for the type wins. The palette follows the style
+  (`palette_moods`). The reason is saved as `style_why` and shown on the desk card.
 - Web Designer copy (`masters/site_copy.py`): wording and section titles by business category; unsupported claims are removed
   (years, awards, licensed/insured, guarantees, 24/7, prices, counts, staff names) unless the business's own Google data says so;
   the service area comes from the address. No model, or junk twice → plain copy from the lead's facts.

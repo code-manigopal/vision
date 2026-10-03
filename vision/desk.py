@@ -135,7 +135,7 @@ def web(store):
             body = "Held back by the quality check:\n" + "\n".join("• " + str(x) for x in qa.get("issues") or [])
         phone = l.get("phone") or pitch.get("phone")
         rows = _rows(("Type", l.get("type_label") or l.get("type")), ("Phone", phone), ("Address", l.get("address")),
-                     ("Rating", l.get("rating")), ("Status", l.get("status")), ("Style", l.get("style")),
+                     ("Rating", l.get("rating")), ("Status", l.get("status")), ("Style", l.get("style")), ("Why this style", l.get("style_why")),
                      ("Quality", f"{qa['score']} / 100" if qa.get("score") is not None else None))
         return _item(k, st, l.get("name") or k, l.get("type_label") or "", pitch.get("at") or l.get("_ts"), rows, body,
                      _links(("Live demo", l.get("url") or pitch.get("url"))), [f for f in [file_ref(l.get("site"), "Demo page"), file_ref(l.get("draft"), "Draft page")] if f])
