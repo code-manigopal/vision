@@ -33,7 +33,7 @@ from .site_copy import brief_prompt, write_copy
 from .site_images import pick_images
 from .site_qa import check_site, fixable_by_rebuild, summarize
 from .site_template import STYLE_BY_TYPE, STYLES, city_of, render_site
-from .sitekit import RECIPES, recipes_for
+from .sitekit import styles_for
 
 PLACES = "https://places.googleapis.com/v1/places:searchNearby"
 FIELDS = "places.id,places.displayName,places.formattedAddress,places.websiteUri,places.nationalPhoneNumber,places.primaryType,places.primaryTypeDisplayName,places.rating,places.userRatingCount,places.location"
@@ -180,7 +180,7 @@ def unique_headings(copy: dict) -> dict:
 def choose_style(lead: dict, wanted: str | None, used: set) -> str:
     """A recipe that suits this kind of business and isn't already used by another demo in play.
     The model's pick wins when it fits and is free; otherwise the best-fitting free one."""
-    fits = recipes_for(lead["type"])
+    fits = styles_for(lead["type"])
     order = ([wanted] if wanted in fits else []) + [r for r in fits if r != wanted]
     return next((r for r in order if r not in used), order[0])
 
@@ -337,10 +337,10 @@ class CompetitorAnalyst(SubAgent):
                     notes[l["id"]] = await llm.complete("From these competitor websites, list 5 short things a great site for this kind of business should have:\n" + "\n".join(texts), tier="cloud", max_tokens=300)
                 except LLMUnavailable:
                     pass
-            raw, fits = None, recipes_for(l["type"])
+            raw, fits = None, styles_for(l["type"])
             if llm:
                 try:
-                    raw = await llm.json(brief_prompt(l, fits, {r: f"{RECIPES[r]['label']} ({RECIPES[r].get('mode', 'light')})" for r in fits}), tier="cloud", max_tokens=250)
+                    raw = await llm.json(brief_prompt(l, fits, {r: f"{STYLES[r]['label']} ({STYLES[r].get('mode', 'light')})" for r in fits}), tier="cloud", max_tokens=250)
                 except LLMUnavailable:
                     pass
             brief = clean_brief(raw, l)
@@ -414,7 +414,7 @@ class WebsiteBuilder(SubAgent):
             d = ROOT / "data" / "sites" / slug(l["name"])
             d.mkdir(parents=True, exist_ok=True)
             # quality gate: a page that fails for a layout reason is rebuilt in the next style that suits the business
-            for style in [first] + [r for r in recipes_for(l["type"]) if r != first][:3]:
+            for style in [first] + [r for r in styles_for(l["type"]) if r != first][:3]:
                 page = render_site(l, copy, theme, images, style)
                 qa = check_site(page, site_dir=d, lead=l, copy=copy)   # colours are judged from the page's own roles, not the raw palette
                 if qa["ok"] or not fixable_by_rebuild(qa):

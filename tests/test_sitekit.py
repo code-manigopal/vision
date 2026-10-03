@@ -79,7 +79,7 @@ def test_everything_supplied_is_escaped(name):
 
 
 def test_legacy_styles_unknown_styles_and_shim():
-    assert set(RECIPES) | {"luxe", "sunny", "trade", "editorial"} == set(STYLES) == set(site_template.STYLES)
+    assert set(RECIPES) | {"classic", "luxe", "sunny", "trade", "editorial"} == set(STYLES) == set(site_template.STYLES)
     assert site_template.render_site is render_site and site_template.city_of(lead()) == "Leamington"
     for old, new in (("luxe", "atelier"), ("sunny", "sprout"), ("trade", "foreman"), ("editorial", "gazette")):
         assert f"sitekit {new}" in render_site(lead(), MINIMAL, THEME, images(), old)
@@ -231,3 +231,25 @@ def test_page_is_lean_and_safe_without_script():
         assert not re.search(r"<img(?![^>]*\balt=)", page) and 'lang="en"' in page
     long = lead(name="Bartholomew Featherstonehaugh-Cholmondeley Plumbing & Heating Services Incorporated")
     assert "overflow-wrap:anywhere" in render_site(long, MINIMAL, THEME, [], "swiss")
+
+
+def test_classic_is_the_original_page_kept_as_a_fifteenth_style():
+    from vision.masters.site_qa import check_site
+    from vision.masters.sitekit import CLASSIC, styles_for
+    assert CLASSIC in STYLES and CLASSIC not in RECIPES and len(RECIPES) + 1 == 15
+    for kind in ("roofing_contractor", "cafe", "nail_salon", "who_knows"):
+        names = styles_for(kind)
+        assert names[1] == CLASSIC and names[0] == recipes_for(kind)[0] and len(set(names)) == len(names) and all(n in STYLES for n in names)
+    lead = {"id": "x", "name": "Acme <Roofing>", "type": "roofing_contractor", "type_label": "Roofing contractor", "phone": "(519) 555-0100",
+            "address": "1 Main St, Leamington, ON N8H, Canada", "rating": 4.8, "info": {"reviews": [{"text": "Great work!!", "rating": 5}], "hours": ["Monday: 8 AM–5 PM"]}}
+    copy = {"headline": "Roofs done properly", "tagline": "Repairs and new roofs.", "about_title": "About us", "about": "A local roofer.",
+            "services": [{"name": "Roof repair", "text": "We fix leaks."}]}
+    theme = {"primary": "#0B4F8A", "accent": "#F2A541", "bg": "#F7F9FC", "text": "#14212B"}
+    imgs = [{"url": f"https://img.example/{n}.jpg", "credit": f"Photo by P{n} (Pexels)", "source": "", "alt": f"roof {n}"} for n in range(4)]
+    page = render_site(lead, copy, theme, imgs, CLASSIC)
+    assert "Acme &lt;Roofing&gt;" in page and "tel:5195550100" in page and "Demo site prepared for" in page and "Photo by P1 (Pexels)" in page
+    assert "A look inside" not in page and 'alt="roof 2"' in page          # the heading fits a trade; photos carry their descriptions
+    assert ".js .rise{opacity:0" in page and "classList.add('js')" in page   # content stays visible if the script never runs
+    qa = check_site(page, lead=lead, copy=copy)
+    assert qa["ok"], [i for i in qa["issues"] if i["severity"] == "fail"]
+    assert render_site(lead, copy, theme, [], CLASSIC)                       # still renders with no photos

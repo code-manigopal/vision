@@ -17,7 +17,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from vision.masters.sitekit import RECIPES, recipes_for, render_site  # noqa: E402
+from vision.masters.sitekit import CLASSIC, RECIPES, STYLES, recipes_for, render_site  # noqa: E402
 
 OUT = ROOT / "data" / "sites" / "_contact"
 HOURS = ["Monday: 8:00 AM – 5:00 PM", "Tuesday: 8:00 AM – 5:00 PM", "Wednesday: 8:00 AM – 5:00 PM", "Thursday: 8:00 AM – 6:00 PM",
@@ -135,7 +135,7 @@ figure{margin:0}figcaption{font-size:.8rem;color:#9aa3ad;margin-top:.35rem}figca
 def main() -> int:
     OUT.mkdir(parents=True, exist_ok=True)
     esc, body, toc, total = html.escape, "", "", 0
-    for name, r in RECIPES.items():
+    for name, r in [*RECIPES.items(), (CLASSIC, STYLES[CLASSIC])]:   # the original page sits last, as the fifteenth style
         cells = {"d": "", "m": ""}
         for key, s in SAMPLES.items():
             page = render_site(s["lead"], s["copy"], s["theme"], photos(s["photos"], s["count"]), name)
@@ -146,10 +146,10 @@ def main() -> int:
                 cells[size] += (f'<figure><a class="shot {size}" href="{file}" target="_blank" rel="noopener"><iframe src="{file}" loading="lazy" tabindex="-1" '
                                 f'title="{esc(name)} {esc(key)} {"desktop" if size == "d" else "phone"}"></iframe></a>'
                                 f'<figcaption><a href="{file}" target="_blank" rel="noopener">{esc(key)}</a> · {"1280" if size == "d" else "375"}px</figcaption></figure>')
-        variants = " · ".join(f"{k}: {v}" for k, v, _ in r["sections"] if k in ("services", "about", "gallery", "reviews", "visit"))
+        variants = " · ".join(f"{k}: {v}" for k, v, _ in r.get("sections", []) if k in ("services", "about", "gallery", "reviews", "visit"))
         toc += f'<a href="#{name}">{esc(name)}</a>'
         body += (f'<section id="{name}"><h2>{esc(name)} <small>{esc(r["label"])}</small> <span class="tag">{r["mode"]}</span></h2>'
-                 f'<p class="meta">for {esc(", ".join(r["for"]))} · nav: {r["nav"]} · hero: {r["hero"]} · {esc(variants)} · {esc(r["type"]["pair"])}</p>'
+                 f'<p class="meta">for {esc(", ".join(r["for"]))} · ' + (f'nav: {r["nav"]} · hero: {r["hero"]} · {esc(variants)} · {esc(r["type"]["pair"])}' if "nav" in r else "the original one-layout page: luxe, sunny, trade or editorial by business type") + '</p>'
                  f'<div class="row">{cells["d"]}</div><div class="row" style="margin-top:1.1rem">{cells["m"]}</div></section>')
     intro = (f"{len(RECIPES)} recipes × {len(SAMPLES)} fictional businesses (roofer: full copy · cafe: typical copy · nails: minimal copy, three photos · "
              "plain: no photos). Click a preview for the full page. Best recipes per type: "

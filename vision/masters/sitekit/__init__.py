@@ -9,16 +9,25 @@ from __future__ import annotations
 
 import json
 
-from . import color
+from . import classic, color
 from .categories import CATEGORIES, CATEGORY_OF, ORDER, WORDS, category_of, recipes_for
 from .css import sheet
 from .recipes import DEFAULT, LEGACY, RECIPES, SPACING, recipe
 from .sections import ALLOCATION, HEROES, NAVS, SECTIONS, Page, city_of, e
 
-__all__ = ["RECIPES", "CATEGORY_OF", "CATEGORIES", "STYLES", "STYLE_BY_TYPE", "recipes_for", "render_site", "category_of", "city_of", "signature"]
+__all__ = ["RECIPES", "CATEGORY_OF", "CATEGORIES", "STYLES", "STYLE_BY_TYPE", "CLASSIC", "styles_for", "recipes_for", "render_site", "category_of", "city_of", "signature"]
 
-# every name render_site accepts: the recipes plus the four legacy styles
-STYLES = {**RECIPES, **{old: RECIPES[new] for old, new in LEGACY.items()}}
+# the original one-layout page, kept as a fifteenth style next to the recipes (rendered by classic.py)
+CLASSIC = "classic"
+# every name render_site accepts: the recipes, the classic page, and the four legacy names
+STYLES = {**RECIPES, CLASSIC: {"label": "Classic (the original layout)", "mode": "light", "for": list(CATEGORIES)},
+          **{old: RECIPES[new] for old, new in LEGACY.items()}}
+
+
+def styles_for(lead_type) -> list:
+    """Every style that suits this kind of business, best first: the recipes, with the classic page as second choice."""
+    names = recipes_for(lead_type)
+    return names[:1] + [CLASSIC] + names[1:]
 # default look per Google Places type (the first recipe that suits it)
 STYLE_BY_TYPE = {t: recipes_for(t)[0] for t in CATEGORY_OF}
 
@@ -76,6 +85,8 @@ def _settle(order: list, parts: dict) -> list:
 
 
 def render_site(lead: dict, copy: dict, theme: dict, images: list, style: str = DEFAULT) -> str:
+    if style == CLASSIC:
+        return classic.render(lead, copy or {}, theme if isinstance(theme, dict) else {}, images)
     name, r = recipe(style)
     cat = category_of(lead.get("type"))
     order = _order(r, cat)

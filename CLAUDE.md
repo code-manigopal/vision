@@ -159,6 +159,9 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   parlour; 4 dark), each with its own type pairing and shape language. `recipes_for(type)` lists the ones that suit a business;
   `choose_style` gives every demo in play a different one. Colours: `masters/palettes.json` (ColorHunt) via `pick_theme`,
   expanded by sitekit into light or dark roles that pass AA contrast. `site_template.py` is only a shim.
+  A fifteenth style, `classic` (`sitekit/classic.py`), is the original one-layout page Mani liked (luxe, sunny, trade or
+  editorial by business type), kept with two fixes: content shows without scripts, and the gallery heading fits the business.
+  `styles_for(type)` = the recipes with `classic` as second choice.
 - Web Designer copy (`masters/site_copy.py`): wording and section titles by business category; unsupported claims are removed
   (years, awards, licensed/insured, guarantees, 24/7, prices, counts, staff names) unless the business's own Google data says so;
   the service area comes from the address. No model, or junk twice → plain copy from the lead's facts.

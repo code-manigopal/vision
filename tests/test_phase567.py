@@ -654,10 +654,11 @@ def test_desk_files_route(api, monkeypatch, tmp_path):
 
 def test_web_designer_style_choice_copy_guard_and_quality_gate(tmp_path, web_mock, monkeypatch):
     import vision.masters.web as web
-    from vision.masters.sitekit import recipes_for
+    from vision.masters.sitekit import styles_for
     # a style that suits the business; the model's pick wins when it fits and is free; no two demos in play share one
     lead = {"id": "x", "type": "plumber"}
-    fits = recipes_for("plumber")
+    fits = styles_for("plumber")
+    assert fits[1] == "classic"                                              # the original page is the second choice for every business
     assert web.choose_style(lead, fits[2], set()) == fits[2]
     assert web.choose_style(lead, fits[0], {fits[0]}) == fits[1]
     assert web.choose_style(lead, "chalkboard", set()) == fits[0]            # a menu-board look is not offered to a plumber
