@@ -11,7 +11,7 @@ vision:
 
 llm:                       # Ask engine + every agent that writes or judges
   local_base_url: http://localhost:1234/v1   # LM Studio > Developer > Start server
-  local_model: "granite-4.1-8b"                            # the model id LM Studio shows (a 7-8B instruct model with tool use)
+  local_model: "deepseek/deepseek-r1-0528-qwen3-8b"                            # the model id LM Studio shows (a 7-8B instruct model with tool use)
   cloud_provider: anthropic
   cloud_model: ""                            # e.g. a current Claude model id; needs ANTHROPIC_API_KEY in .env
 
@@ -84,9 +84,9 @@ masters:
     options:
       radius_km: 10          # starting search radius; doubles by itself (up to max_radius_km: 50) when leads run short
       business_types: [plumber, beauty_salon, hair_care, restaurant, cafe, car_repair, bakery]   # tried first; then any other local business (any_type: false to stop that)
-      builds_per_day: 5            # new sites built per day at most
+      builds_per_day: 2            # new sites built per day at most
       places_monthly_budget: 800   # Google Places calls allowed per month (searches and detail lookups counted separately)
-      stack: 5               # demos kept in play; approving or rejecting a pitch builds the next one
+      stack: 2               # demos kept in play; approving or rejecting a pitch builds the next one
       price: "CAD 500"
       # images_per_site: 6
       # palette_themes: { hair_care: [vintage, gold], cafe: [coffee, cream] }   # ColorHunt themes per type; see vision/masters/skills/color-palettes.md
