@@ -48,12 +48,16 @@ class LLMConfig(BaseModel):
 class Config(BaseModel):
     vision: VisionConfig = Field(default_factory=VisionConfig)
     llm: LLMConfig = Field(default_factory=LLMConfig)
+    only_masters: list[str] = Field(default_factory=list)   # the master switch: when it names masters, every other one is off
     masters: dict[str, MasterConfig] = Field(default_factory=dict)
     voice: dict[str, Any] = Field(default_factory=dict)
     telegram: dict[str, Any] = Field(default_factory=dict)
 
     def master(self, master_id: str) -> MasterConfig:
-        return self.masters.get(master_id, MasterConfig())
+        mc = self.masters.get(master_id, MasterConfig())
+        if self.only_masters and master_id not in self.only_masters:
+            return mc.model_copy(update={"enabled": False})
+        return mc
 
     def cycle_minutes(self, master_id: str) -> int:
         return self.master(master_id).cycle_minutes or self.vision.cycle_minutes

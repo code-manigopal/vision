@@ -322,3 +322,12 @@ def test_catalog_matches_the_crew():
     assert [[s.title, [a.name for a in s.agents]] for s in d.crew] == spec["agents"][0]["crew_stages"]
     cfg = Config(masters={"youtube": {"mode": "live"}})
     assert isinstance(next(m for m in build_masters(cfg) if m.id == "youtube").agents[0], Director)
+
+
+def test_only_masters_switches_the_others_off():
+    from vision.masters import build_masters
+    cfg = Config(only_masters=["youtube"], masters={"youtube": {"mode": "live"}, "news": {"enabled": True}})
+    assert {m.id for m in build_masters(cfg) if m.enabled} == {"youtube"}
+    assert cfg.masters["news"].enabled and not cfg.master("news").enabled          # the master's own setting is left as it was
+    cfg = Config(only_masters=[], masters={"news": {"enabled": False}})
+    assert not cfg.master("news").enabled and cfg.master("traffic").enabled

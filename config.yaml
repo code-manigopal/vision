@@ -16,6 +16,13 @@ llm:                       # Ask engine + every agent that writes or judges
   cloud_model: ""                            # e.g. a current Claude model id; needs ANTHROPIC_API_KEY in .env
   writer_model: "openai/gpt-oss-120b"        # story writing (YouTube Manager) on Groq; needs GROQ_API_KEY in .env, else cloud, else local
 
+# The master switch. List the masters to run and every other one is switched off (shown "ON HOLD", never run):
+#   only_masters: [youtube]            just YouTube Manager
+#   only_masters: [youtube, news]      those two
+#   only_masters: []                   no override: each master's own `enabled:` below decides
+# ids: email, calendar, trading, invest, news, web, jobs, world, traffic, youtube. Restart VISION after a change.
+only_masters: [youtube]
+
 # mode: stub = demo agents until that master is built · live = real agents
 # trust: OBSERVE | SUGGEST | ACT | HOLD
 masters:
