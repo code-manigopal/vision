@@ -14,6 +14,7 @@ llm:                       # Ask engine + every agent that writes or judges
   local_model: "deepseek/deepseek-r1-0528-qwen3-8b"                            # the model id LM Studio shows (a 7-8B instruct model with tool use)
   cloud_provider: anthropic
   cloud_model: ""                            # e.g. a current Claude model id; needs ANTHROPIC_API_KEY in .env
+  writer_model: "openai/gpt-oss-120b"        # story writing (YouTube Manager) on Groq; needs GROQ_API_KEY in .env, else cloud, else local
 
 # mode: stub = demo agents until that master is built · live = real agents
 # trust: OBSERVE | SUGGEST | ACT | HOLD
@@ -123,7 +124,25 @@ masters:
     cycle_minutes: 10
     options:
       watch_cities: ["Leamington, ON", "Windsor, ON"]
-  film:     { enabled: false, trust: HOLD,    mode: stub }   # on hold
+  youtube:
+    enabled: true
+    trust: ACT             # makes Shorts and uploads them as unlisted; you make them public (or delete them) on YouTube
+    mode: live
+    cycle_minutes: 360
+    options:
+      channels:            # one Director (with its own crew) per channel; the director's name must match catalog.json
+        - id: confessions
+          name: Confessions Everywhere
+          director: Confessions Everywhere Director
+          shorts_per_day: 1
+          subreddits: [confession, offmychest, TrueOffMyChest]   # needs REDDIT_CLIENT_ID / REDDIT_CLIENT_SECRET; or drop .txt files in inbox/confessions/confessions/
+          drive_folder: "Confessions Inbox"   # a folder in the Drive of the Google account you sign in with (the channel's); its Docs and .txt files are copied to the inbox
+          seconds: [60, 120]
+          voice: en-US-GuyNeural         # edge-tts voice; without edge-tts the local voice below is used
+          outro: "Subscribe to our channel for more interesting stories."
+          logo: ""                       # path to the channel logo (png); blank = the channel name as the watermark
+          privacy: unlisted              # how a new Short is uploaded; sign in once at /auth/youtube/login?account=youtube-confessions
+          generator: {}                  # AI footage for beats with no stock match, e.g. { provider: name, kind: image, key_env: NAME_API_KEY } (see vision/services/genmedia.py)
 
 voice:                     # local voice (install requirements-voice.txt); browser = use the browser's voice
   tts: kokoro              # kokoro | piper | macos | browser

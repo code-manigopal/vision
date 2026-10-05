@@ -39,7 +39,7 @@ def make(tmp_path, monkeypatch, token="T", chat="42"):
         else:
             monkeypatch.setenv(k, v)
     monkeypatch.delenv("TOMTOM_API_KEY", raising=False)
-    cfg = Config(masters={"film": MasterConfig(enabled=False), "traffic": MasterConfig(mode="live", options={"watch_cities": ["Leamington"]})})
+    cfg = Config(masters={"youtube": MasterConfig(enabled=False), "traffic": MasterConfig(mode="live", options={"watch_cities": ["Leamington"]})})
     bus, store = EventBus(), Store(tmp_path / "t.db")
     orch = Orchestrator(cfg, build_masters(cfg), bus, store)
     fake = FakeTelegram()
@@ -70,7 +70,7 @@ def test_strangers_ignored_owner_answered(tmp_path, monkeypatch):
     assert fake.sent() == []
     asyncio.run(tg.handle_update({"update_id": 2, "message": {"chat": {"id": 42}, "text": "what's up"}}))
     text = fake.sent()[0]["text"]
-    assert "Email Manager" in text and "Traffic Desk" in text and "Film" not in text
+    assert "Email Manager" in text and "Traffic Desk" in text and "YouTube" not in text
 
 
 def test_morning_brief_is_masters_only(tmp_path, monkeypatch):

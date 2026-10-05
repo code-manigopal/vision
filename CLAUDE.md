@@ -42,14 +42,15 @@ vision/
   config.py        config.yaml (settings) + .env (secrets) -> Config; secret(name)
   bus.py           EventBus (live state + WebSocket fan-out) and Store (SQLite: agent_runs,
                    master_reports, approvals, kv JSON store used by masters)
-  agents.py        SubAgent / StubAgent / Stage / Master; request_approval(ctx, ...)
+  agents.py        SubAgent / StubAgent / Stage / Master; Director (a sub-agent with its own crew); request_approval(ctx, ...)
   orchestrator.py  boot roll call, per-master schedules, 06:00/18:00 briefs, reminders (minutely),
                    approval actions (watches approval_decided -> APPROVAL_HANDLERS[kind])
   server.py        FastAPI: dashboard, /ws, /api/*, OAuth + Fyers login callbacks
   ask.py           AskEngine: LLM tool-calling over master data; session memory 30 min
   voice/           TTS (kokoro | piper | macos), STT (mlx-whisper), WakeWord (openWakeWord)
   channels/telegram.py   briefs, alerts, reminders, notices, /commands, approve/reject buttons
-  services/        llm.py (LM Studio OpenAI-compatible + Anthropic), oauth.py (Google/Microsoft),
+  services/        llm.py (LM Studio OpenAI-compatible + Anthropic + a hosted "writer" tier on Groq), oauth.py (Google/Microsoft),
+                   reddit.py (official API, read-only), gdrive.py (Drive folder, read-only), stock_video.py (Pexels/Pixabay footage), genmedia.py (AI footage provider slot),
                    mailcal.py (Gmail/GCal/Graph), traffic_api.py (TomTom), news.py (Google News RSS),
                    weather.py (Open-Meteo), markets.py (Yahoo chart, CoinGecko, Bank of Canada FX),
                    fyers.py, kite_mcp.py (Zerodha via hosted Kite MCP, persistent session), wealthsimple.py (CSV),
@@ -68,7 +69,7 @@ tests/             test_core, test_telegram, test_phase34, test_phase567
    `AgentResult.summary` (+ `data`) becomes the master report. Briefs use master reports only.
    Reporters: email=Summarizer, calendar=Scheduler, trading=Portfolio Manager, invest=Daily P&L Reporter,
    news=News Summarizer, web=Proposal Drafter, jobs=Application Tracker, world=Flight Tracker,
-   traffic=Incident Scout, film=Analytics Monitor.
+   traffic=Incident Scout, youtube=Confessions Everywhere Director (its crew reports to it through Analytics Manager).
 2. **Errors skip the chain**: a failing agent turns red, alerts the master log (Telegram once/30 min),
    and blocks later stages — unless the agent sets `blocking = False` (sync/data agents do).
 3. **Side effects need approval** (the YOU gate): sending email, booking meetings, job packages,
@@ -92,7 +93,7 @@ Tests: mock HTTP with `httpx.MockTransport`; use `FakeLLM` from tests/test_phase
 · `GET /api/issues` · `POST /api/issues/explain {master, agent}` → `{text, source}` · `GET /api/approvals/{id}/email` (full body + attachments) · `GET /api/approvals/{id}/attachments/{att}` (streamed, never stored)
 · `GET /api/desk/{master}` (read-only pipeline: stages + items + artifacts) · `GET /api/files/{path}` (only `data/sites`, `data/applications`)
 · `POST /api/tts {text, voice?}` → wav · `GET /api/voices` (Kokoro's English voices) · `POST /api/stt` (raw audio body) → `{text}` · `GET /api/traffic?city=` · `GET /api/weather/grid` (globe weather, ~100 points, cached 1 h)
-· `/auth/{google|microsoft}/login?account=` + `/callback` · `/auth/fyers/login` + `/callback` · `WS /ws`
+· `/auth/{google|microsoft|youtube}/login?account=` + `/callback` · `/auth/fyers/login` + `/callback` · `WS /ws`
 
 WebSocket events: `snapshot, agent, master_report(+data), boot, log, notice, notice_clear, approval,
 approval_decided, telegram, brief, reminder, wake, system, power`.
@@ -180,8 +181,28 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
 - Trading: practice account default; live needs OANDA_ENV=live AND options.live_trading: true;
   approval TTL 30 min; refuse if price moved > 0.5 ATR; units capped.
 - Weather Agent belongs to News Desk; World Watch is flights only (the globe's weather icons are a plain data endpoint, not an agent).
-  World Watch shows `near_slots` (10) flights nearest home first, the rest spread worldwide; a route lookup is spent only on callsigns not yet known. Film Studio is on hold (stub, disabled).
+  World Watch shows `near_slots` (10) flights nearest home first, the rest spread worldwide; a route lookup is spent only on callsigns not yet known.
 - Traffic Desk is read-only (no approval gate).
+- YouTube Manager (`masters/youtube.py`, took the Film Studio slot) has three levels: master → one Director per channel
+  (`options.channels`) → that channel's crew. `Director` (agents.py) runs its crew like a master runs sub-agents; crew
+  agent events carry `director`. Crew for Confessions Everywhere: Story Scout → Story Writer → Screenplay Writer →
+  Keyword Generator + Voice Artist → Footage Collector → Footage Generator → Editor → Uploader → Analytics Manager.
+  **Mani's choice: no approval before upload.** The Uploader posts every Short as unlisted (`privacy`) and raises a notice
+  with the YouTube Studio link; public or delete is done by hand on YouTube. Analytics Manager checks each uploaded Short
+  (status, views, likes, comments), clears the notice once it is public or deleted, and its report feeds the briefs.
+  Sign-in per channel: `/auth/youtube/login?account=youtube-<channel id>` (oauth provider `youtube`, same Google app).
+  Stories come from `inbox/confessions/<channel id>/*.txt` (first line may be the source URL); the Scout first copies new
+  Docs and .txt files from the channel's Google Drive folder (`drive_folder`, `services/gdrive.py`, read-only, same sign-in
+  as YouTube, fetched ids in kv `yt_drive`) into that inbox. Reddit's official API is wired in but asleep: Reddit now makes
+  new accounts register for API access before an app can be created, and a monetised channel may be refused;
+  **Quora is out** (no API). A story is screened by rule and by the model (no clear yes = not used), retold in the third
+  person with no names or places, and split into beats by code, not by the model. The real narration length sets the
+  timeline (edge-tts with word timings; local voice as fallback). One clip or photo per beat, ranked by its own description.
+  `masters/shorts_edit.py` renders 1080x1920 with ffmpeg + Pillow (Homebrew ffmpeg has no subtitle filter, so captions are
+  drawn as images); every segment must share one pixel format and colour range or the overlays reset mid-video.
+  Output: `data/shorts/<channel>/<date-slug>/final.mp4`; log in kv `yt_videos` (source URL, script, screenplay, keywords,
+  credits), seen stories in kv `yt_seen`. Footage Generator is a provider slot (`services/genmedia.py`, `generator:` per
+  channel), off until a provider is named. Writing uses `llm.writer_model` on Groq (reasoning models need large max_tokens).
 
 ## Status
 | Master | Mode | Needs from Mani |
@@ -194,7 +215,7 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
 | Web Designer | live | GOOGLE_MAPS_API_KEY, CLOUDFLARE_API_TOKEN + ACCOUNT_ID, optional PEXELS_API_KEY / PIXABAY_API_KEY |
 | World Watch | live | optional OPENSKY creds |
 | Trading Desk | live | OANDA practice token + account |
-| Film Studio | stub, off | on hold (future: GPU worker on Windows PC) |
+| YouTube Manager | live (upload mocked only, never run against YouTube) | GROQ_API_KEY, PEXELS_API_KEY (the .env line has no usable value), REDDIT_CLIENT_ID/SECRET or .txt stories in inbox/confessions/confessions; GOOGLE_CLIENT_ID/SECRET with YouTube Data API v3 and Google Drive API enabled and redirect `http://127.0.0.1:8765/auth/youtube/callback`, then the YouTube sign-in |
 | Telegram | live | TELEGRAM_BOT_TOKEN, then /start → TELEGRAM_CHAT_ID |
 | Ask engine | live | LM Studio server + llm.local_model (optional ANTHROPIC_API_KEY + llm.cloud_model) |
 
@@ -207,6 +228,8 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
 4. Dashboard: show live job matches / leads / trading calls in their views (data already in
    `report_data`); approvals panel already live.
 5. Nightly backup of `data/` and `vault/`; a 05:30 health check (LM Studio, tokens, Telegram).
-6. Film Studio as a GPU worker on the Windows PC (later; on hold).
+6. YouTube Manager: first real upload (watch for YouTube holding API uploads private on an unaudited project; the report
+   then says "held private by YouTube"). Then the dashboard (still shows Film Studio on hold; rename `film` → `youtube`, show the
+   Director with its crew from catalog `crew` / `crew_stages`, a desk for the channel).
 
 Canvas design of the dashboard: https://claude.ai/artifact/46JvfVBsfsbd5f8FSqaYVf

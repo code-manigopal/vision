@@ -17,7 +17,8 @@ from ..config import Config
 CATALOG = json.loads((Path(__file__).parent / "catalog.json").read_text())
 LIVE_MODULES = {"traffic": "vision.masters.traffic", "news": "vision.masters.news", "invest": "vision.masters.invest",
                 "email": "vision.masters.email", "calendar": "vision.masters.calendar", "jobs": "vision.masters.jobs",
-                "web": "vision.masters.web", "world": "vision.masters.world", "trading": "vision.masters.trading"}
+                "web": "vision.masters.web", "world": "vision.masters.world", "trading": "vision.masters.trading",
+                "youtube": "vision.masters.youtube"}
 
 
 def approval_handlers() -> dict:

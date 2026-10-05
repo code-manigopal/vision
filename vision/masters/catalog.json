@@ -9,7 +9,7 @@
   "jobs",
   "world",
   "traffic",
-  "film"
+  "youtube"
  ],
  "masters": {
   "email": {
@@ -21,14 +21,14 @@
      "status": "done",
      "label": "24 READ",
      "tier": "API",
-     "note": "all inboxes \u00b7 last 24h"
+     "note": "all inboxes · last 24h"
     },
     {
      "name": "Categorizer",
      "status": "done",
      "label": "SORTED",
      "tier": "LOCAL",
-     "note": "action \u00b7 work \u00b7 finance \u00b7 promo"
+     "note": "action · work · finance · promo"
     },
     {
      "name": "Summarizer",
@@ -95,7 +95,7 @@
     }
    ],
    "reporter": "Summarizer",
-   "demo_report": "24 new \u00b7 3 need you \u00b7 2 drafts",
+   "demo_report": "24 new · 3 need you · 2 drafts",
    "loop": false
   },
   "calendar": {
@@ -175,7 +175,7 @@
     }
    ],
    "reporter": "Scheduler",
-   "demo_report": "1 meeting today \u00b7 1 proposed from email",
+   "demo_report": "1 meeting today · 1 proposed from email",
    "loop": false
   },
   "trading": {
@@ -383,7 +383,7 @@
      "status": "done",
      "label": "DONE",
      "tier": "QUICK",
-     "note": "INR/USD \u2192 CAD"
+     "note": "INR/USD → CAD"
     },
     {
      "name": "Allocation Analyst",
@@ -418,7 +418,7 @@
      "status": "done",
      "label": "CLOSED",
      "tier": "API",
-     "note": "NIFTY\u00b7BANKNIFTY\u00b7IT\u00b7NYSE\u00b7NDQ"
+     "note": "NIFTY·BANKNIFTY·IT·NYSE·NDQ"
     },
     {
      "name": "Bitcoin Tracker",
@@ -432,7 +432,7 @@
      "status": "done",
      "label": "SENT 7:00",
      "tier": "QUICK",
-     "note": "yesterday P&L \u2192 VISION"
+     "note": "yesterday P&L → VISION"
     }
    ],
    "stages": [
@@ -479,7 +479,7 @@
     }
    ],
    "reporter": "Daily P&L Reporter",
-   "demo_report": "+C$43 yesterday \u00b7 CSV due",
+   "demo_report": "+C$43 yesterday · CSV due",
    "loop": false
   },
   "news": {
@@ -519,14 +519,14 @@
      "status": "work",
      "label": "LIVE",
      "tier": "API",
-     "note": "Open-Meteo \u00b7 Leamington"
+     "note": "Open-Meteo · Leamington"
     },
     {
      "name": "News Summarizer",
      "status": "idle",
      "label": "QUEUED",
      "tier": "DEEP",
-     "note": "top 4 \u2192 VISION"
+     "note": "top 4 → VISION"
     }
    ],
    "stages": [
@@ -678,7 +678,7 @@
      "status": "done",
      "label": "12 FOUND",
      "tier": "API",
-     "note": "Job Bank \u00b7 Adzuna \u00b7 career pages"
+     "note": "Job Bank · Adzuna · career pages"
     },
     {
      "name": "Resume Tailor",
@@ -760,7 +760,7 @@
     }
    ],
    "reporter": "Application Tracker",
-   "demo_report": "12 postings \u00b7 resume tailoring",
+   "demo_report": "12 postings · resume tailoring",
    "loop": true
   },
   "world": {
@@ -772,7 +772,7 @@
      "status": "work",
      "label": "TRACKING",
      "tier": "API",
-     "note": "OpenSky \u00b7 live ADS-B"
+     "note": "OpenSky · live ADS-B"
     }
    ],
    "stages": [
@@ -841,118 +841,139 @@
    "demo_report": "Watching Leamington, Windsor",
    "loop": true
   },
-  "film": {
-   "id": "film",
-   "name": "FILM STUDIO",
+  "youtube": {
+   "id": "youtube",
+   "name": "YOUTUBE MANAGER",
    "agents": [
     {
-     "name": "Content Generator",
-     "status": "done",
-     "label": "DONE",
-     "tier": "QUICK",
-     "note": "last: 5 topic ideas"
-    },
-    {
-     "name": "Screenwriter",
+     "name": "Confessions Everywhere Director",
      "status": "work",
-     "label": "WRITING",
+     "label": "DIRECTING",
      "tier": "DEEP",
-     "note": "last: Ep 04 draft 2"
-    },
-    {
-     "name": "Director",
-     "status": "idle",
-     "label": "QUEUED",
-     "tier": "DEEP",
-     "note": "last: shot list sc 1"
-    },
-    {
-     "name": "Video Generator",
-     "status": "idle",
-     "label": "QUEUED",
-     "tier": "GPU",
-     "note": "last: Ep 03 render"
-    },
-    {
-     "name": "Editor",
-     "status": "idle",
-     "label": "QUEUED",
-     "tier": "QUICK",
-     "note": "last: Ep 03 cut v2"
-    },
-    {
-     "name": "YouTube Publisher",
-     "status": "wait",
-     "label": "APPROVE",
-     "tier": "QUICK",
-     "note": "last: Ep 03 queued"
-    },
-    {
-     "name": "Analytics Monitor",
-     "status": "work",
-     "label": "WATCHING",
-     "tier": "QUICK",
-     "note": "last: CTR check"
+     "note": "runs Confessions Everywhere",
+     "crew": [
+      {
+       "name": "Story Scout",
+       "tier": "API",
+       "note": "finds one confession worth telling"
+      },
+      {
+       "name": "Story Writer",
+       "tier": "CLOUD",
+       "note": "retells it with a hook"
+      },
+      {
+       "name": "Screenplay Writer",
+       "tier": "QUICK",
+       "note": "splits the story into timed beats"
+      },
+      {
+       "name": "Keyword Generator",
+       "tier": "CLOUD",
+       "note": "one footage search per beat"
+      },
+      {
+       "name": "Voice Artist",
+       "tier": "API",
+       "note": "narrates each beat"
+      },
+      {
+       "name": "Footage Collector",
+       "tier": "API",
+       "note": "free stock clips and photos"
+      },
+      {
+       "name": "Footage Generator",
+       "tier": "CLOUD",
+       "note": "AI footage for gaps (off)"
+      },
+      {
+       "name": "Editor",
+       "tier": "LOCAL",
+       "note": "cuts, captions, watermark"
+      },
+      {
+       "name": "Uploader",
+       "tier": "API",
+       "note": "uploads as unlisted, sends you the link"
+      },
+      {
+       "name": "Analytics Manager",
+       "tier": "API",
+       "note": "follows each Short, reports the channel"
+      }
+     ],
+     "crew_stages": [
+      [
+       "SOURCE",
+       [
+        "Story Scout"
+       ]
+      ],
+      [
+       "STORY",
+       [
+        "Story Writer"
+       ]
+      ],
+      [
+       "SCREENPLAY",
+       [
+        "Screenplay Writer"
+       ]
+      ],
+      [
+       "PREP",
+       [
+        "Keyword Generator",
+        "Voice Artist"
+       ]
+      ],
+      [
+       "FOOTAGE",
+       [
+        "Footage Collector"
+       ]
+      ],
+      [
+       "GENERATE",
+       [
+        "Footage Generator"
+       ]
+      ],
+      [
+       "EDIT",
+       [
+        "Editor"
+       ]
+      ],
+      [
+       "UPLOAD",
+       [
+        "Uploader"
+       ]
+      ],
+      [
+       "REPORT",
+       [
+        "Analytics Manager"
+       ]
+      ]
+     ],
+     "crew_reporter": "Analytics Manager"
     }
    ],
    "stages": [
     {
-     "title": "IDEATION",
+     "title": "CHANNELS",
      "agents": [
-      "Content Generator"
+      "Confessions Everywhere Director"
      ],
-     "parallel": false
-    },
-    {
-     "title": "WRITING",
-     "agents": [
-      "Screenwriter"
-     ],
-     "parallel": false
-    },
-    {
-     "title": "DIRECTION",
-     "agents": [
-      "Director"
-     ],
-     "parallel": false
-    },
-    {
-     "title": "PRODUCTION",
-     "agents": [
-      "Video Generator"
-     ],
-     "parallel": false
-    },
-    {
-     "title": "POST",
-     "agents": [
-      "Editor"
-     ],
-     "parallel": false
-    },
-    {
-     "title": "APPROVAL",
-     "agents": [],
-     "approval": true
-    },
-    {
-     "title": "PUBLISH",
-     "agents": [
-      "YouTube Publisher"
-     ],
-     "parallel": false
-    },
-    {
-     "title": "MONITOR",
-     "agents": [
-      "Analytics Monitor"
-     ],
-     "parallel": false
+     "parallel": true
     }
    ],
-   "reporter": "Analytics Monitor",
-   "demo_report": "On hold",
+   "reporter": "Confessions Everywhere Director",
+   "demo_report": "Confessions Everywhere: 1 unlisted for your review",
    "loop": true
   }
  }

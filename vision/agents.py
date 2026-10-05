@@ -149,3 +149,66 @@ class Master:
         if on_agent:
             await on_agent(self, a, res)
         return res
+
+
+class Director(SubAgent):
+    """A sub-agent with a crew of its own (master -> director -> crew).
+
+    It runs its crew stage by stage the way a master runs its sub-agents: a failing crew member turns red and
+    blocks the stages after it. Only the crew's reporter reports to the director, and the director's result is
+    all the master sees.
+    """
+
+    tier = "DEEP"
+
+    def __init__(self, name: str, crew: list[Stage], reporter: str, **kw: Any) -> None:
+        super().__init__(name=name, **kw)
+        self.crew, self.reporter = crew, reporter
+        if reporter not in [a.name for a in self.members]:
+            raise ValueError(f"{name}: reporter {reporter!r} is not one of its crew")
+
+    @property
+    def members(self) -> list[SubAgent]:
+        return [a for s in self.crew for a in s.agents]
+
+    def member_state(self, a: SubAgent, status: str, label: str, summary: str = "") -> dict:
+        return {"name": a.name, "status": status, "label": label, "summary": summary, "tier": a.tier,
+                "reporter": False, "director": self.name}
+
+    async def run(self, ctx: dict[str, Any]) -> AgentResult:
+        bus, store, mid = ctx["bus"], ctx["store"], ctx["master"]
+        sub: dict[str, Any] = {**ctx, "results": {}, "director": self.name}
+        blocked_by: str | None = None
+        for stage in self.crew:
+            if stage.approval:
+                continue
+            if blocked_by:
+                for a in stage.agents:
+                    bus.publish({"type": "agent", "master": mid, "agent": self.member_state(a, "idle", "BLOCKED", f"Waiting on {blocked_by}")})
+                    await store.record_run(mid, a.name, "idle", "BLOCKED", "", f"blocked by {blocked_by}", 0)
+                continue
+            for a in stage.agents:
+                bus.publish({"type": "agent", "master": mid, "agent": self.member_state(a, "work", "RUNNING")})
+            results = await asyncio.gather(*(self._run_member(a, sub) for a in stage.agents))
+            for a, res in zip(stage.agents, results):
+                sub["results"][a.name] = res
+                if res.status == "error" and not blocked_by and a.blocking:
+                    blocked_by = a.name
+        if blocked_by:
+            return AgentResult("error", "BLOCKED", f"{self.name}: {sub['results'][blocked_by].summary}")
+        return sub["results"][self.reporter]
+
+    async def _run_member(self, a: SubAgent, ctx: dict) -> AgentResult:
+        bus, store, mid = ctx["bus"], ctx["store"], ctx["master"]
+        t0 = time.perf_counter()
+        try:
+            res = await a.run(ctx)
+            err = None
+        except Exception as e:
+            res = AgentResult("error", "ERROR", f"{a.name} failed: {e}")
+            err = str(e)
+            bus.say(f"⚠ {self.name} · {a.name} failed: {e}")
+        ms = int((time.perf_counter() - t0) * 1000)
+        bus.publish({"type": "agent", "master": mid, "agent": self.member_state(a, res.status, res.label, res.summary)})
+        await store.record_run(mid, a.name, res.status, res.label, res.summary, err, ms)
+        return res

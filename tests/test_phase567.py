@@ -623,7 +623,7 @@ def test_desk_web_jobs_reports_and_404(api, monkeypatch, tmp_path):
     asyncio.run(store.record_report("news", "Quiet day", {}))
     n = c.get("/api/desk/news").json()
     assert [s["id"] for s in n["stages"]] == ["reports"] and n["items"][0]["title"] == "Quiet day" and n["items"][0]["body"] == ""
-    assert c.get("/api/desk/film").json()["items"] == []
+    assert c.get("/api/desk/youtube").json()["items"] == []
     assert c.get("/api/desk/nope").status_code == 404
 
 

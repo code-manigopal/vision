@@ -139,7 +139,7 @@ def create_app(*, boot_on_start: bool = True, schedules: bool = True, telegram_o
         if provider not in oauth.PROVIDERS:
             raise HTTPException(404)
         if not oauth.configured(provider):
-            keys = "GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET" if provider == "google" else "MS_CLIENT_ID / MS_CLIENT_SECRET"
+            keys = "GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET" if provider in ("google", "youtube") else "MS_CLIENT_ID / MS_CLIENT_SECRET"
             return HTMLResponse(_page(f"{provider.title()} isn't set up", f"Add {keys} to .env, then restart VISION."), 400)
         return RedirectResponse(oauth.login_url(provider, account, app.state.cfg.vision.port))
 

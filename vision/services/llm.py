@@ -2,6 +2,8 @@
 
 - local: LM Studio's OpenAI-compatible server (config.yaml -> llm.local_base_url / local_model).
 - cloud: Anthropic Messages API (ANTHROPIC_API_KEY in .env; config llm.cloud_model).
+- writer: an OpenAI-compatible hosted model for long-form writing (GROQ_API_KEY in .env; config llm.writer_model).
+  Falls back to cloud, then local.
 
 Every caller asks for a tier ("local" for high-volume work, "cloud" for deep reasoning) and gets
 automatic fallback: cloud -> local if no key, local -> cloud if LM Studio is down. If neither is
@@ -51,9 +53,14 @@ class LLM:
     def cloud_available(self) -> bool:
         return bool(secret("ANTHROPIC_API_KEY") and self.cfg.llm.cloud_model)
 
+    def writer_available(self) -> bool:
+        return bool(secret("GROQ_API_KEY") and self.cfg.llm.writer_model)
+
     async def pick(self, tier: str) -> str:
-        order = ["cloud", "local"] if tier == "cloud" else ["local", "cloud"]
+        order = ["writer", "cloud", "local"] if tier == "writer" else ["cloud", "local"] if tier == "cloud" else ["local", "cloud"]
         for t in order:
+            if t == "writer" and self.writer_available():
+                return "writer"
             if t == "cloud" and self.cloud_available():
                 return "cloud"
             if t == "local" and await self.local_available():
@@ -77,15 +84,19 @@ class LLM:
         which = await self.pick(tier)
         if which == "local":
             return await self._openai(messages, system, tools, max_tokens, temperature)
+        if which == "writer":
+            return await self._openai(messages, system, tools, max_tokens, temperature, base=self.cfg.llm.writer_base_url,
+                                      model=self.cfg.llm.writer_model, key=secret("GROQ_API_KEY"))
         return await self._anthropic(messages, system, tools, max_tokens, temperature)
 
-    async def _openai(self, messages, system, tools, max_tokens, temperature) -> dict:
-        body: dict[str, Any] = {"model": self.cfg.llm.local_model or "local-model", "max_tokens": max_tokens, "temperature": temperature,
+    async def _openai(self, messages, system, tools, max_tokens, temperature, *, base: str | None = None, model: str | None = None, key: str | None = None) -> dict:
+        body: dict[str, Any] = {"model": model or self.cfg.llm.local_model or "local-model", "max_tokens": max_tokens, "temperature": temperature,
                                 "messages": ([{"role": "system", "content": system}] if system else []) + _to_openai(messages)}
         if tools:
             body["tools"] = [{"type": "function", "function": t} for t in tools]
         async with self._client() as c:
-            r = await c.post(self.cfg.llm.local_base_url.rstrip("/") + "/chat/completions", json=body)
+            r = await c.post((base or self.cfg.llm.local_base_url).rstrip("/") + "/chat/completions", json=body,
+                             headers={"Authorization": f"Bearer {key}"} if key else None)
         r.raise_for_status()
         msg = r.json()["choices"][0]["message"]
         calls = [{"id": tc.get("id") or f"call_{i}", "name": tc["function"]["name"],

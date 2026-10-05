@@ -64,7 +64,7 @@ class EventBus:
             agents = m["agents"]
             a = e["agent"]
             for i, cur in enumerate(agents):
-                if cur["name"] == a["name"]:
+                if cur["name"] == a["name"] and cur.get("director") == a.get("director"):
                     agents[i] = {**cur, **a}
                     break
             else:

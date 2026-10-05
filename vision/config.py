@@ -41,6 +41,8 @@ class LLMConfig(BaseModel):
     local_model: str = ""
     cloud_provider: str = "anthropic"
     cloud_model: str = ""
+    writer_base_url: str = "https://api.groq.com/openai/v1"
+    writer_model: str = ""
 
 
 class Config(BaseModel):

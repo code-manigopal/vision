@@ -68,14 +68,14 @@ def test_reporter_must_exist():
 def test_boot_rolls_call_for_every_agent(store, monkeypatch):
     monkeypatch.delenv("TOMTOM_API_KEY", raising=False)
     cfg = Config(masters={"traffic": MasterConfig(mode="live", options={"watch_cities": ["Leamington"]}),
-                          "film": MasterConfig(enabled=False)})
+                          "youtube": MasterConfig(enabled=False)})
     bus = EventBus()
     orch = Orchestrator(cfg, build_masters(cfg), bus, store)
     orch.seed_state()
     asyncio.run(orch.boot())
     total = sum(len(s["agents"]) for s in CATALOG["masters"].values())
     assert bus.state["boot"] == {"active": False, "done": total, "total": total}
-    assert set(bus.state["reports"]) == set(CATALOG["order"]) - {"film"}
+    assert set(bus.state["reports"]) == set(CATALOG["order"]) - {"youtube"}
     # traffic is live with no key -> geocoder errors, the rest are blocked, VISION is told
     assert bus.state["reports"]["traffic"].startswith("Blocked")
     assert "brief" not in bus.state
