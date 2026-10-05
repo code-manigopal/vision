@@ -40,7 +40,7 @@ UPLOAD = "https://www.googleapis.com/upload/youtube/v3/videos"
 VIDEOS = "https://www.googleapis.com/youtube/v3/videos"
 CHANNEL = {"id": "confessions", "name": "Confessions Everywhere", "director": "Confessions Everywhere Director",
            "shorts_per_day": 1, "subreddits": ["confession", "offmychest", "TrueOffMyChest"], "seconds": [60, 120],
-           "voice": "en-US-GuyNeural", "outro": "Subscribe to our channel for more interesting stories.",
+           "voice_engine": "edge", "voice": "en-US-GuyNeural", "voice_speed": 0.95, "pause": 0.32, "outro": "Subscribe to our channel for more interesting stories.",
            "outro_query": "city lights at night", "logo": "", "caption_font": "", "generator": {},
            "privacy": "unlisted", "category": "24", "synthetic_flag": True, "uploads_per_run": 2, "drive_folder": ""}
 UNSAFE = re.compile(r"\b(suicid\w*|kill(?:ed|ing)? (?:myself|himself|herself|him|her|them)|self[- ]harm\w*|rap(?:e|ed|es|ing|ist)|molest\w*|"
@@ -64,34 +64,56 @@ def word_range(ch: dict) -> tuple[int, int]:
 
 
 def screenplay(story: str, outro: str, max_words: int = 16) -> list[dict]:
-    """Split a story into beats short enough for one picture each, with the time each should take; outro last."""
-    parts: list[str] = []
+    """Split a story into beats short enough for one picture each, with the time each should take; outro last.
+    `end` marks the beat that closes a sentence: the voice speaks sentence by sentence, never fragment by fragment."""
+    parts: list[list] = []                                          # [text, closes a sentence]
     for sent in re.split(r"(?<=[.!?…])[\"'”’)\]]*\s+", " ".join(story.split())):
         if words(sent) <= max_words:
-            parts.append(sent)
+            parts.append([sent, True])
             continue
         cur = ""
         for piece in re.split(r"(?<=[,;:—–])\s+", sent):       # a long sentence breaks at its own pauses
             if cur and words(cur) + words(piece) > max_words:
-                parts.append(cur)
+                parts.append([cur, False])
                 cur = piece
             else:
                 cur = (cur + " " + piece).strip()
-        parts.append(cur)
+        parts.append([cur, True])
     for i in range(len(parts) - 1, -1, -1):                        # still too long with no pause to break at: halve it
-        ws = parts[i].split()
+        ws = parts[i][0].split()
         if len(ws) > max_words + 6:
-            parts[i:i + 1] = [" ".join(ws[:len(ws) // 2]), " ".join(ws[len(ws) // 2:])]
-    beats: list[str] = []
-    for p in (p.strip() for p in parts if p.strip()):
-        if beats and words(beats[-1]) < 5 and words(beats[-1]) + words(p) <= max_words:
-            beats[-1] += " " + p                                  # a two-word beat is too short to show
+            parts[i:i + 1] = [[" ".join(ws[:len(ws) // 2]), False], [" ".join(ws[len(ws) // 2:]), parts[i][1]]]
+    beats: list[list] = []
+    for text, end in ([t.strip(), e] for t, e in parts if t.strip()):
+        if beats and words(beats[-1][0]) < 5 and words(beats[-1][0]) + words(text) <= max_words:
+            beats[-1] = [beats[-1][0] + " " + text, end]            # a two-word beat is too short to show
         else:
-            beats.append(p)
-    out = [{"i": i, "text": t, "target_s": round(words(t) / WPS + GAP, 1), "kind": "story"} for i, t in enumerate(beats)]
+            beats.append([text, end])
+    if beats:
+        beats[-1][1] = True
+    out = [{"i": i, "text": t, "target_s": round(words(t) / WPS + GAP, 1), "kind": "story", "end": e} for i, (t, e) in enumerate(beats)]
     if outro:
-        out.append({"i": len(out), "text": outro, "target_s": round(words(outro) / WPS + GAP, 1), "kind": "outro"})
+        out.append({"i": len(out), "text": outro, "target_s": round(words(outro) / WPS + GAP, 1), "kind": "outro", "end": True})
     return out
+
+
+def split_times(texts: list[str], total: float, marks: list | None) -> tuple[list[float], list]:
+    """Where one spoken sentence divides between its beats: (seconds per beat, word timings per beat).
+    With the voice's word timings the cut falls between two words; without them it follows the length of the text."""
+    counts = [len(t.split()) for t in texts]
+    if marks and len(marks) == sum(counts):
+        cuts, at = [0.0], 0
+        for n in counts[:-1]:
+            at += n
+            cuts.append((marks[at - 1][2] + marks[at][1]) / 2)
+        cuts.append(total)
+        per, at = [], 0
+        for k, n in enumerate(counts):
+            per.append([[w, a - cuts[k], z - cuts[k]] for w, a, z in marks[at:at + n]])
+            at += n
+        return [cuts[k + 1] - cuts[k] for k in range(len(texts))], per
+    chars = [len(t) + 1 for t in texts]
+    return [total * c / sum(chars) for c in chars], [None] * len(texts)
 
 
 def fallback_query(text: str) -> str:
@@ -302,14 +324,17 @@ class KeywordGenerator(Crew):
 
 
 class VoiceArtist(Crew):
-    name, tier, note = "Voice Artist", "API", "narrates each beat and measures it"
+    """Narrates sentence by sentence (a whole sentence keeps its intonation), then divides each sentence's audio
+    between its beats. Engine per channel: edge (online, word timings) or kokoro (VISION's local voices)."""
+    name, tier, note = "Voice Artist", "API", "narrates each sentence and measures it"
 
     async def _edge(self, text: str, stem: Path) -> tuple[Path, list | None]:
         import edge_tts
+        kw = {"rate": f"{round((float(self.ch['voice_speed']) - 1) * 100):+d}%"}
         try:
-            com = edge_tts.Communicate(text, self.ch["voice"], boundary="WordBoundary")
+            com = edge_tts.Communicate(text, self.ch["voice"], boundary="WordBoundary", **kw)
         except TypeError:                         # older edge-tts: word timings are the default
-            com = edge_tts.Communicate(text, self.ch["voice"])
+            com = edge_tts.Communicate(text, self.ch["voice"], **kw)
         marks, raw = [], stem.with_suffix(".mp3")
         with open(raw, "wb") as f:
             async for ch in com.stream():
@@ -319,20 +344,24 @@ class VoiceArtist(Crew):
                     marks.append([ch["text"], ch["offset"] / 1e7, (ch["offset"] + ch["duration"]) / 1e7])
         return raw, marks or None
 
+    def _kokoro(self, ctx: dict, text: str, stem: Path) -> tuple[Path, list | None]:
+        import soundfile
+        from kokoro_onnx import Kokoro
+        if self._model is None:
+            vc = ctx["cfg"].voice
+            self._model = Kokoro(str(ROOT / vc.get("kokoro_model", "models/kokoro-v1.0.onnx")), str(ROOT / vc.get("kokoro_voices", "models/voices-v1.0.bin")))
+        voice = self.ch["voice"]
+        samples, rate = self._model.create(text, voice=voice, speed=float(self.ch["voice_speed"]), lang="en-gb" if voice.startswith("b") else "en-us")
+        raw = stem.with_suffix(".src.wav")
+        soundfile.write(raw, samples, rate)
+        return raw, None
+
     async def _synth(self, ctx: dict, text: str, stem: Path) -> tuple[Path, list | None]:
         if self.opts.get("synth"):
             return await self.opts["synth"](text, stem)
-        try:
-            return await self._edge(text, stem)
-        except ImportError:
-            pass
-        from ..voice import TTS                   # VISION's own local voice, no word timings
-        tts = TTS(ctx["cfg"].voice)
-        if not tts.available():
-            raise RuntimeError("no voice: .venv/bin/pip install edge-tts (or set up the local voice)")
-        raw = stem.with_suffix(".src.wav")
-        raw.write_bytes(await tts.synth(text))
-        return raw, None
+        if self.ch["voice_engine"] == "kokoro":
+            return await asyncio.to_thread(self._kokoro, ctx, text, stem)
+        return await self._edge(text, stem)
 
     async def run(self, ctx: dict) -> AgentResult:
         job = ctx.get("job")
@@ -340,16 +369,31 @@ class VoiceArtist(Crew):
             return self.idle()
         folder = Path(job["dir"]) / "audio"
         folder.mkdir(exist_ok=True)
-        for b in job["beats"]:
-            raw, marks = await self._synth(ctx, b["text"], folder / f"beat{b['i']:02d}")
-            wav = folder / f"beat{b['i']:02d}.wav"
-            await asyncio.to_thread(shorts_edit.run, ["ffmpeg", "-y", "-v", "error", "-i", str(raw), "-af", f"apad=pad_dur={GAP}",
-                                                      "-ar", "44100", "-ac", "1", "-c:a", "pcm_s16le", str(wav)])
-            b["audio"], b["dur"] = str(wav), await asyncio.to_thread(shorts_edit.probe, wav)
-            b["speech"], b["words"] = b["dur"] - GAP, marks
+        self._model = None
+        group: list[dict] = []
+        try:
+            for b in job["beats"]:
+                group.append(b)
+                if not b.get("end", True):
+                    continue
+                stem = folder / f"line{group[0]['i']:02d}"
+                raw, marks = await self._synth(ctx, " ".join(x["text"] for x in group), stem)
+                wav = stem.with_suffix(".wav")
+                pause = float(self.ch["pause"])
+                await asyncio.to_thread(shorts_edit.run, ["ffmpeg", "-y", "-v", "error", "-i", str(raw), "-af", f"apad=pad_dur={pause}",
+                                                          "-ar", "44100", "-ac", "1", "-c:a", "pcm_s16le", str(wav)])
+                total = await asyncio.to_thread(shorts_edit.probe, wav)
+                durs, per = split_times([x["text"] for x in group], total - pause, marks)
+                durs[-1] += pause                                   # the pause after the sentence stays on its last beat
+                for x, d, m in zip(group, durs, per):
+                    x["audio"], x["dur"], x["words"] = str(wav), d, m
+                    x["speech"] = d - (pause if x is group[-1] else 0)
+                group = []
+        finally:
+            self._model = None                                      # the local voice model is large: let it go after the run
         total = sum(b["dur"] for b in job["beats"])
         job["seconds"] = round(total, 1)
-        return AgentResult("done", "RECORDED", f"{round(total)} s of narration over {len(job['beats'])} beats")
+        return AgentResult("done", "RECORDED", f"{round(total)} s of narration over {len(job['beats'])} beats ({self.ch['voice']})")
 
 
 class FootageCollector(Crew):

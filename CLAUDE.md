@@ -127,6 +127,10 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
 - World view: holographic globe (gold wireframe, grid, scan lines; land as dots, bright by day). Aircraft are plane icons
   turned to their real heading with a short trail, coral within `near_km` of home; the hover card shows real progress only
   when the route's origin is known. Weather icons come from `/api/weather/grid` (Open-Meteo); the preview uses a made-up grid.
+- YouTube Manager on the dashboard: the agent list shows the Director, then its crew marked `›` (4th value of an agent
+  row = the crew's director; live agents carry `director`); the agent graph runs crew stages left to right and ends on the
+  Director as reporter. `Component.HOLD` names a master kept on hold (none now). Desk: `desk.youtube` lists every Short by
+  status (waiting, unlisted, public, deleted) with script, stats and links.
 - "Hey Vision": a browser wake listener (`wakeStart` / `wakeHit`, Chrome speech recognition, switch in the voice menu,
   `vision-wake`, off by default; audio goes to Google while on). It pauses while VISION listens or speaks. Listening mode
   shows on the core: blue ring, blue emblem glow, "Listening…". The backend `wake` event (openWakeWord) triggers the same path.
@@ -196,8 +200,9 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   as YouTube, fetched ids in kv `yt_drive`) into that inbox. Reddit's official API is wired in but asleep: Reddit now makes
   new accounts register for API access before an app can be created, and a monetised channel may be refused;
   **Quora is out** (no API). A story is screened by rule and by the model (no clear yes = not used), retold in the third
-  person with no names or places, and split into beats by code, not by the model. The real narration length sets the
-  timeline (edge-tts with word timings; local voice as fallback). One clip or photo per beat, ranked by its own description.
+  person with no names or places, and split into beats by code, not by the model. The voice speaks whole sentences
+  (fragment-by-fragment sounded like reading) and each sentence's audio is divided between its beats; the real audio sets
+  the timeline. Engine per channel: `voice_engine: edge` (word timings) or `kokoro` (local), with `voice`, `voice_speed`, `pause`. One clip or photo per beat, ranked by its own description.
   `masters/shorts_edit.py` renders 1080x1920 with ffmpeg + Pillow (Homebrew ffmpeg has no subtitle filter, so captions are
   drawn as images); every segment must share one pixel format and colour range or the overlays reset mid-video.
   Output: `data/shorts/<channel>/<date-slug>/final.mp4`; log in kv `yt_videos` (source URL, script, screenplay, keywords,
@@ -228,8 +233,8 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
 4. Dashboard: show live job matches / leads / trading calls in their views (data already in
    `report_data`); approvals panel already live.
 5. Nightly backup of `data/` and `vault/`; a 05:30 health check (LM Studio, tokens, Telegram).
-6. YouTube Manager: first real upload (watch for YouTube holding API uploads private on an unaudited project; the report
-   then says "held private by YouTube"). Then the dashboard (still shows Film Studio on hold; rename `film` → `youtube`, show the
-   Director with its crew from catalog `crew` / `crew_stages`, a desk for the channel).
+6. YouTube Manager: first real upload done 2026-10-05 (Drive → Short → unlisted, counted as a Short). Open: Mani's pick of
+   narration voice (samples in `data/shorts/_voices/`), collecting confessions from comments on the channel's own videos,
+   crew progress in vision.log.
 
 Canvas design of the dashboard: https://claude.ai/artifact/46JvfVBsfsbd5f8FSqaYVf

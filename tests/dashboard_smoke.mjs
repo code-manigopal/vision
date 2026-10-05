@@ -27,7 +27,7 @@ let fails = 0; const seen = new Set();
 const fail = (...a) => { fails++; console.log(...a); };
 const mk = (st) => { const c = new Component({}); Object.assign(c.state, { log: [], boot: false }, st); c.scrollToTop = () => {}; return c; };
 for (const [name, L] of [['preview', null], ['connected-empty', live.empty], ['connected-full', live.full]])
-  for (const mode of ['ambient', 'briefing', 'issues', 'decide', 'desk', 'calendar', 'world', 'ask']) for (const master of ['trading', 'traffic', 'film']) {
+  for (const mode of ['ambient', 'briefing', 'issues', 'decide', 'desk', 'calendar', 'world', 'ask']) for (const master of ['trading', 'traffic', 'youtube']) {
     const c = mk({ mode, master, liveUp: !!L, live: L, askSrc: 'offline', askSteps: [['VISION', 'A', 'b', '']], askChips: ['X'], askQ: 'q', askSay: 's', askAt: Date.now() - 5000, askFollow: [] });
     let v; try { v = c.renderVals(); } catch (e) { fail('CRASH', name, mode, master, String(e).slice(0, 200)); continue; }
     if (L) for (const key of Object.keys(v)) { const txt = JSON.stringify(v[key], (k, x) => typeof x === 'function' ? undefined : x) || '';

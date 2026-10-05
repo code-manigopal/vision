@@ -1329,7 +1329,8 @@ class Component extends DCLogic {
   // Preview: rule-based intent parser. Real build: the local LLM router (LM Studio, tool calling)
   // returns the same {kind, ...entities} list, and the same plan UI runs on the real agent results.
   static REPORTERS = { email: 'Summarizer', calendar: 'Scheduler', trading: 'Portfolio Manager', invest: 'Daily P&L Reporter',
-    news: 'News Summarizer', web: 'Proposal Drafter', jobs: 'Application Tracker', world: 'Flight Tracker', traffic: 'Incident Scout', film: 'Analytics Monitor' };
+    news: 'News Summarizer', web: 'Proposal Drafter', jobs: 'Application Tracker', world: 'Flight Tracker', traffic: 'Incident Scout', youtube: 'Confessions Everywhere Director' };
+  static HOLD = null;   // a master kept on hold (greyed out, skipped at boot); none right now
   titleCase(x) { return x.trim().replace(/\s+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()); }
   parseDay(q) {
     if (/\btomorrow\b/.test(q)) return { off: 1, label: 'tomorrow' };
@@ -1571,7 +1572,7 @@ class Component extends DCLogic {
       this.say('Mind closed.');
     } else if (this.pickMaster(t) || t.includes('agent') || t.includes('pipeline') || t.includes('slave')) {
       const mk = this.pickMaster(t);
-      const names = { film: 'Film Studio', trading: 'Trading Desk', jobs: 'Job Hunt', web: 'Web Designer', invest: 'Investments', news: 'News Desk', world: 'World Watch', email: 'Email Manager', calendar: 'Calendar Manager', traffic: 'Traffic Desk' };
+      const names = { youtube: 'YouTube Manager', trading: 'Trading Desk', jobs: 'Job Hunt', web: 'Web Designer', invest: 'Investments', news: 'News Desk', world: 'World Watch', email: 'Email Manager', calendar: 'Calendar Manager', traffic: 'Traffic Desk' };
       if (mk) this.setState({ master: mk });
       this.say('Showing ' + names[mk || this.state.master] + ' agents.');
       setTimeout(() => this.scrollToGraph(), 60);
@@ -1582,7 +1583,7 @@ class Component extends DCLogic {
     }
   }
   pickMaster(t) {
-    if (t.includes('film') || t.includes('video') || t.includes('movie') || t.includes('youtube')) return 'film';
+    if (t.includes('film') || t.includes('video') || t.includes('movie') || t.includes('youtube') || t.includes('shorts') || t.includes('confession')) return 'youtube';
     if (t.includes('trad') || t.includes('forex') || t.includes('oanda')) return 'trading';
     if (t.includes('job') || t.includes('resume') || t.includes('career')) return 'jobs';
     if (t.includes('web') || t.includes('site') || t.includes('design')) return 'web';
@@ -1929,9 +1930,11 @@ class Component extends DCLogic {
     const modeLabel = (modeDefs.find((m) => m[0] === s.mode) || ['x', s.mode === 'issues' ? 'ISSUES' : s.mode === 'decide' ? 'DECISION' : s.mode === 'desk' ? 'DESK' : 'ASK'])[1] + ' MODE';
 
     const data = {
-      film: { name: 'FILM STUDIO', dot: 'd-work', agents: [
-        ['Content Generator','done','DONE'],['Screenwriter','work','WRITING'],['Director','idle','QUEUED'],
-        ['Video Generator','idle','QUEUED'],['Editor','idle','QUEUED'],['YouTube Publisher','wait','APPROVE'],['Analytics Monitor','work','WATCHING']] },
+      youtube: { name: 'YOUTUBE MANAGER', dot: 'd-work', agents: [   // a Director per channel, then its crew (4th value = the crew's director)
+        ['Confessions Everywhere Director','work','DIRECTING'],
+        ['Story Scout','done','FOUND','d'],['Story Writer','done','WRITTEN','d'],['Screenplay Writer','done','TIMED','d'],
+        ['Keyword Generator','done','DONE','d'],['Voice Artist','work','RECORDING','d'],['Footage Collector','work','COLLECTING','d'],
+        ['Footage Generator','off','OFF','d'],['Editor','idle','QUEUED','d'],['Uploader','idle','QUEUED','d'],['Analytics Manager','idle','QUEUED','d']] },
       trading: { name: 'TRADING DESK', dot: 'd-wait', agents: [
         ['Market Analyst','work','ANALYZING'],['Sentiment Analyst','done','DONE'],['News Analyst','off','OFF'],['Macro Analyst','done','DONE'],
         ['Bull Researcher','work','DEBATING'],['Bear Researcher','work','DEBATING'],['Research Manager','idle','QUEUED'],['Trader','idle','QUEUED'],
@@ -1966,27 +1969,27 @@ class Component extends DCLogic {
     const LV = s.live;
     if (LV && LV.masters) Object.keys(LV.masters).forEach((m) => {
       const la = LV.masters[m].agents;
-      if (data[m] && la && la.length) data[m].agents = la.map((a) => [a.name, a.status, a.label]);
+      if (data[m] && la && la.length) data[m].agents = la.map((a) => [a.name, a.status, a.label, a.director]);
     });
     // Connected: real data or an honest "waiting", never the sample values (those are for the unconnected preview).
     const CON = !!(s.liveUp && s.live);
     const liveSum = {};
     if (CON) {
       const LM = LV.masters || {};
-      Object.keys(data).forEach((m) => { if (m !== 'film' && !((LM[m] || {}).agents || []).length) data[m].agents = data[m].agents.map((a) => [a[0], 'idle', 'WAITING']); });
+      Object.keys(data).forEach((m) => { if (m !== Component.HOLD && !((LM[m] || {}).agents || []).length) data[m].agents = data[m].agents.map((a) => [a[0], 'idle', 'WAITING', a[3]]); });
       ((LM[s.master] || {}).agents || []).forEach((a) => { liveSum[a.name] = a.summary || ''; });
     }
-    const masters = ['email','calendar','trading','invest','news','web','jobs','world','traffic','film'].map((id) => ({
-      name: data[id].name.charAt(0) + data[id].name.slice(1).toLowerCase().replace(/ (\w)/, (m) => m.toUpperCase()),
+    const masters = ['email','calendar','trading','invest','news','web','jobs','world','traffic','youtube'].map((id) => ({
+      name: data[id].name.charAt(0) + data[id].name.slice(1).toLowerCase().replace(/ (\w)/, (m) => m.toUpperCase()).replace('Youtube', 'YouTube'),
       dot: data[id].dot,
       count: data[id].agents.length,
-      trust: ({ traffic: 'OBSERVE', calendar: 'SUGGEST', email: 'SUGGEST', trading: 'OBSERVE', invest: 'OBSERVE', news: 'OBSERVE', web: 'SUGGEST', jobs: 'ACT', world: 'OBSERVE', film: 'HOLD' })[id],
-      trustColor: ({ traffic: '#67C7EB', calendar: '#FBCA03', email: '#FBCA03', trading: '#67C7EB', invest: '#67C7EB', news: '#67C7EB', web: '#FBCA03', jobs: '#67C7EB', world: '#67C7EB', film: '#6E6654' })[id],
+      trust: ({ traffic: 'OBSERVE', calendar: 'SUGGEST', email: 'SUGGEST', trading: 'OBSERVE', invest: 'OBSERVE', news: 'OBSERVE', web: 'SUGGEST', jobs: 'ACT', world: 'OBSERVE', youtube: 'ACT' })[id],
+      trustColor: ({ traffic: '#67C7EB', calendar: '#FBCA03', email: '#FBCA03', trading: '#67C7EB', invest: '#67C7EB', news: '#67C7EB', web: '#FBCA03', jobs: '#67C7EB', world: '#67C7EB', youtube: '#67C7EB' })[id],
       cls: s.master === id ? 'mst-on' : 'mst',
       pick: () => { if (this.state.mode === 'desk') this.openDesk(id); else this.setState({ master: id }); }
     }));
     const sel = data[s.master];
-    const allAg = sel.agents.map((a, i) => ({ n: pad(i + 1), name: a[0] + (a[0] === Component.REPORTERS[s.master] ? '  ▲' : ''), dot: 'd-' + (a[1] === 'off' ? 'idle' : a[1]), status: a[2], cursor: a[1] === 'error' ? 'pointer' : 'default', pick: a[1] === 'error' ? () => this.openIssues(s.master + '/' + a[0]) : () => {} }));
+    const allAg = sel.agents.map((a, i) => ({ n: pad(i + 1), name: (a[3] ? '› ' : '') + a[0] + (a[0] === Component.REPORTERS[s.master] ? '  ▲' : ''), dot: 'd-' + (a[1] === 'off' ? 'idle' : a[1]), status: a[2], cursor: a[1] === 'error' ? 'pointer' : 'default', pick: a[1] === 'error' ? () => this.openIssues(s.master + '/' + a[0]) : () => {} }));
     const PG = 10, pgN = Math.ceil(allAg.length / PG);
     if (s.agHold == null) this.agPg = Math.floor(s.tick / 5) % pgN;
     const agPgI = Math.min(this.agPg || 0, pgN - 1);
@@ -2004,7 +2007,7 @@ class Component extends DCLogic {
     const kOn = !!(CON && s.live.voice && s.live.voice.tts && s.kVoices.length && !this.ttsFailed);
     const gaugeTag = liveSys ? 'LIVE' : CON ? 'WAITING' : '[DEMO DATA]';
     const msgs = [
-      'Film Studio is scripting Episode 04.',
+      'YouTube Manager has one Short waiting for your review.',
       'Trading Desk is watching an OANDA mismatch.',
       'Job Hunt tailored 1 resume today. 2 approvals waiting.',
       'Web Designer found 8 businesses in a 10 km radius.',
@@ -2013,13 +2016,13 @@ class Component extends DCLogic {
       'All masters online. RAM is running high.'
     ];
     // ---- Orbit markers: one per master, hover = glass status card ----
-    const orbOrder = ['email','calendar','trading','invest','news','web','jobs','world','traffic','film'];
+    const orbOrder = ['email','calendar','trading','invest','news','web','jobs','world','traffic','youtube'];
     const SC = 430 / 440;
     const orbMarks = orbOrder.map((m, k) => {
       const an = (-90 + k * 360 / orbOrder.length) * Math.PI / 180 + s.orbA;
       const ag = data[m].agents, waitN = ag.filter((x) => x[1] === 'wait').length;
       return { label: data[m].name + ' status', left: ((220 + 190 * Math.cos(an)) * SC).toFixed(1) + 'px', top: ((220 + 190 * Math.sin(an)) * SC).toFixed(1) + 'px',
-        cls: s.orbHov === m ? 'om-on' : m === 'film' ? 'om-hold' : waitN ? 'om-wait' : 'om',
+        cls: s.orbHov === m ? 'om-on' : m === Component.HOLD ? 'om-hold' : waitN ? 'om-wait' : 'om',
         enter: () => this.setState({ orbHov: m }), leave: () => this.setState({ orbHov: null }),
         pick: () => this.setState({ master: m }), x: (220 + 190 * Math.cos(an)) * SC, y: (220 + 190 * Math.sin(an)) * SC };
     });
@@ -2027,7 +2030,7 @@ class Component extends DCLogic {
     if (s.orbHov && data[s.orbHov]) {
       const m = s.orbHov, ag = data[m].agents, mk = orbMarks.at(orbOrder.indexOf(m));
       const workN = ag.filter((x) => x[1] === 'work').length, waitN = ag.filter((x) => x[1] === 'wait').length, doneN = ag.filter((x) => x[1] === 'done').length;
-      const hold = m === 'film';
+      const hold = m === Component.HOLD;
       const h = 92 + ag.length * 22;
       const gx = mk.x < 215 ? mk.x + 22 : mk.x - 22 - 260;
       const gy = Math.max(-40, Math.min(430 - h + 40, mk.y - h / 2));
@@ -2056,7 +2059,7 @@ class Component extends DCLogic {
     const f = (n) => n.toFixed(1);
     // ---- VISION Mind: knowledge graph (Obsidian-style) ----
     const tree = [
-      ['film', 'Film Studio', -90, [['Screenwriter', 'Ep 04 script'], ['Director', 'Shot list'], ['Publisher', 'Upload queue'], ['Analytics', 'CTR trends']]],
+      ['youtube', 'YouTube Manager', -90, [['Director', 'Confessions Everywhere'], ['Story Writer', 'Next script'], ['Editor', 'Shorts cut'], ['Uploader', 'Unlisted queue']]],
       ['trading', 'Trading Desk', -54, [['Market Analyst', 'EUR/USD log'], ['Bull vs Bear', 'Debate notes'], ['Trader', 'Trade plans'], ['Portfolio Mgr', 'Decision log']]],
       ['jobs', 'Job Hunt', -18, [['Job Scout', 'Windsor roles'], ['Resume Tailor', 'Resume v7'], ['Outreach', 'Contacts'], ['Tracker', 'Applications']]],
       ['web', 'Web Designer', 18, [['Business Finder', 'Local leads'], ['Competitor Analyst', 'Competitor notes'], ['Website Builder', 'Demo sites'], ['Proposal Drafter', 'Proposals']]],
@@ -2084,7 +2087,7 @@ class Component extends DCLogic {
         edges.push([mid, aid]); edges.push([aid, nid]);
       });
     });
-    const cross = [['film-n0', 'trading-n3'], ['film-n3', 'jobs-n1'], ['web-n0', 'jobs-n2'], ['invest-n1', 'news-n0'], ['news-n1', 'trading-n0'], ['email-n2', 'web-n3'], ['calendar-n2', 'email-n1']];
+    const cross = [['youtube-n0', 'trading-n3'], ['youtube-n3', 'jobs-n1'], ['web-n0', 'jobs-n2'], ['invest-n1', 'news-n0'], ['news-n1', 'trading-n0'], ['email-n2', 'web-n3'], ['calendar-n2', 'email-n1']];
     const pos = {};
     raw.forEach((n, i) => {
       const rr = (n.ang * Math.PI) / 180;
@@ -2111,7 +2114,8 @@ class Component extends DCLogic {
 
     // ---- Agent graph: stage columns, stacked cards, debates (reference layout) ----
     const flows = {
-      film: { loop: true, stages: [['IDEATION',['Content Generator']],['WRITING',['Screenwriter']],['DIRECTION',['Director']],['PRODUCTION',['Video Generator']],['POST',['Editor']],['APPROVAL',['YOU']],['PUBLISH',['YouTube Publisher']],['MONITOR',['Analytics Monitor']]] },
+      youtube: { loop: true, stages: [['SOURCE',['Story Scout']],['WRITE',['Story Writer','Screenplay Writer']],['PREP',['Keyword Generator','Voice Artist']],
+        ['FOOTAGE',['Footage Collector','Footage Generator']],['EDIT',['Editor']],['UPLOAD',['Uploader']],['REPORT',['Analytics Manager']],['DIRECTOR',['Confessions Everywhere Director']]] },
       trading: { loop: false, stages: [
         ['ANALYSTS',['Market Analyst','Sentiment Analyst','News Analyst','Macro Analyst']],
         ['RESEARCH DEBATE',['Bull Researcher','Bear Researcher'],'debate'],
@@ -2132,9 +2136,10 @@ class Component extends DCLogic {
       web: { loop: false, stages: [['FIND',['Business Finder']],['RESEARCH',['Information Collector','Competitor Analyst']],['ASSETS',['Images Downloader','Color Theme Decider']],['BUILD',['Website Builder']],['DEPLOY',['Cloudflare Deployer']],['PITCH',['Proposal Drafter']],['APPROVAL',['YOU']]] }
     };
     const meta = {
-      'Content Generator': ['QUICK','last: 5 topic ideas'], 'Screenwriter': ['DEEP','last: Ep 04 draft 2'], 'Director': ['DEEP','last: shot list sc 1'],
-      'Video Generator': ['GPU','last: Ep 03 render'], 'Editor': ['QUICK','last: Ep 03 cut v2'], 'YouTube Publisher': ['QUICK','last: Ep 03 queued'],
-      'Analytics Monitor': ['QUICK','last: CTR check'],
+      'Confessions Everywhere Director': ['DEEP','runs the channel crew'], 'Story Scout': ['API','Drive folder · inbox'], 'Story Writer': ['CLOUD','last: 201 words'],
+      'Screenplay Writer': ['QUICK','last: 19 beats'], 'Keyword Generator': ['CLOUD','one search per beat'], 'Voice Artist': ['API','sentence by sentence'],
+      'Footage Collector': ['API','Pexels · Pixabay'], 'Footage Generator': ['CLOUD','no AI provider set'], 'Editor': ['LOCAL','captions · watermark'],
+      'Uploader': ['API','uploads as unlisted'], 'Analytics Manager': ['API','views · likes · status'],
       'Market Analyst': ['QUICK','last EURUSD trend'], 'Sentiment Analyst': ['QUICK','last USDJPY 216w'], 'News Analyst': ['QUICK','OFF for this run'],
       'Macro Analyst': ['QUICK','last rates note'], 'Bull Researcher': ['QUICK','last long case #1'], 'Bear Researcher': ['QUICK','last short case #2'],
       'Research Manager': ['DEEP','last Underweight'], 'Trader': ['QUICK','last Sell plan'], 'Aggressive Risk': ['QUICK','last size up'],
@@ -2258,7 +2263,7 @@ class Component extends DCLogic {
     if (RD.invest && RD.invest.mkts && RD.invest.mkts.length) bMkts = RD.invest.mkts.map((m) => m.pct == null ? noRow(m.name) : mk(m.name, m.pct));
     else if (bLive) bMkts = [noRow(RD.invest ? 'Markets unavailable' : 'Waiting for Investments')];
     // ---- Boot sequence: every agent reports in to VISION ----
-    const order = ['email','calendar','trading','invest','news','web','jobs','world','traffic','film'];
+    const order = ['email','calendar','trading','invest','news','web','jobs','world','traffic','youtube'];
     const flat = [];
     order.forEach((m) => data[m].agents.forEach((a2) => flat.push([m, a2[0]])));
     const total = flat.length;
@@ -2267,13 +2272,13 @@ class Component extends DCLogic {
     const bootCols = order.map((m) => {
       const items = data[m].agents.map((a2) => {
         const k = flat.findIndex((x) => x[0] === m && x[1] === a2[0]);
-        const hold = m === 'film';
+        const hold = m === Component.HOLD;
         if (k < bootIdx) return { name: a2[0], mark: hold ? '—' : '[OK]', color: hold ? '#6E6654' : '#67C7EB' };
         if (k === bootIdx) return { name: a2[0], mark: '[..]', color: '#FBCA03' };
         return { name: a2[0], mark: '[  ]', color: '#4A4F5A' };
       });
       const first = flat.findIndex((x) => x[0] === m), last = first + data[m].agents.length - 1;
-      const st = m === 'film' ? (bootIdx > last ? 'ON HOLD' : 'PENDING') : bootIdx > last ? 'ONLINE' : bootIdx >= first ? 'SYNCING' : 'PENDING';
+      const st = m === Component.HOLD ? (bootIdx > last ? 'ON HOLD' : 'PENDING') : bootIdx > last ? 'ONLINE' : bootIdx >= first ? 'SYNCING' : 'PENDING';
       return { name: data[m].name, state: st, stateColor: st === 'ONLINE' ? '#67C7EB' : st === 'SYNCING' ? '#FBCA03' : '#6E6654', items };
     });
     const hr = d.getHours();
@@ -2282,9 +2287,9 @@ class Component extends DCLogic {
     for (let k = Math.max(0, bootIdx - 3); k < Math.min(bootIdx, total); k++) {
       const m = flat[k][0];
       const ts = '[' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds()) + '] ';
-      bootLog.push(ts + flat[k][1] + (m === 'film' ? ' · on hold, skipped' : flat[k][1] === Component.REPORTERS[m] ? ' → reported to ' + data[m].name : ' · online, passing work down the chain'));
+      bootLog.push(ts + flat[k][1] + (m === Component.HOLD ? ' · on hold, skipped' : flat[k][1] === Component.REPORTERS[m] ? ' → reported to ' + data[m].name : ' · online, passing work down the chain'));
       const lastOf = k === total - 1 || flat[k + 1][0] !== m;
-      if (lastOf && m !== 'film') bootLog.push(ts + data[m].name + ' → reported to VISION');
+      if (lastOf && m !== Component.HOLD) bootLog.push(ts + data[m].name + ' → reported to VISION');
     }
     const curM = !doneBoot ? data[flat[bootIdx][0]].name : '';
     const bootPhase = doneBoot ? 'ALL MASTERS REPORTED · ' + greet.toUpperCase() + ', MANI' : 'INITIALIZING · ' + curM + ' COLLECTING REPORTS';
@@ -2300,7 +2305,7 @@ class Component extends DCLogic {
     if (s.off === 'down') {
       const offIdx = Math.floor(s.offT / 2), left = total - Math.min(offIdx, total);
       const cols = order.map((m) => {
-        const first = flat.findIndex((x) => x[0] === m), last = first + data[m].agents.length - 1, hold = m === 'film';
+        const first = flat.findIndex((x) => x[0] === m), last = first + data[m].agents.length - 1, hold = m === Component.HOLD;
         const items = data[m].agents.map((a2, n) => {
           const k = first + n;
           if (hold) return { name: a2[0], mark: '—', color: '#6E6654' };
@@ -2314,8 +2319,8 @@ class Component extends DCLogic {
       const log = [];
       for (let k = Math.max(0, offIdx - 3); k < Math.min(offIdx, total); k++) {
         const m = flat[k][0], ts = '[' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds()) + '] ';
-        log.push(ts + flat[k][1] + (m === 'film' ? ' · on hold' : ' · stopped'));
-        if ((k === total - 1 || flat[k + 1][0] !== m) && m !== 'film') log.push(ts + data[m].name + ' → offline');
+        log.push(ts + flat[k][1] + (m === Component.HOLD ? ' · on hold' : ' · stopped'));
+        if ((k === total - 1 || flat[k + 1][0] !== m) && m !== Component.HOLD) log.push(ts + data[m].name + ' → offline');
       }
       ov = { on: true, cls: 'boot-in', cols, log, pct: Math.round((left / total) * 100) + '%', count: left + ' / ' + total + ' sub-agents still online',
         phase: offIdx >= total ? 'ALL AGENTS STOPPED · GOODBYE, MANI' : 'SHUTTING DOWN · ' + data[flat[offIdx][0]].name + ' SIGNING OFF' };
@@ -2324,8 +2329,8 @@ class Component extends DCLogic {
 
     // ---- "Hey Vision, how are we doing?" reply ----
     const waits = [];
-    Object.keys(data).forEach((m) => { if (m === 'film') return; data[m].agents.forEach((a2) => { if (a2[1] === 'wait') waits.push(a2[0]); }); });
-    const onlineMasters = Object.keys(data).filter((m) => m !== 'film').length;
+    Object.keys(data).forEach((m) => { if (m === Component.HOLD) return; data[m].agents.forEach((a2) => { if (a2[1] === 'wait') waits.push(a2[0]); }); });
+    const onlineMasters = Object.keys(data).filter((m) => m !== Component.HOLD).length;
     // ---- Calendar Manager: next 5 weeks, meetings + forecast icons ----
     const dayMs = 86400000;
     const today0 = new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -2412,12 +2417,12 @@ class Component extends DCLogic {
       : { title: 'TRAFFIC: —', count: 'Say or type "traffic in Toronto"', flag: 'Waiting for a city', flagColor: '#9A8F76', bg: 'rgba(13,15,20,0.82)', border: '#262A33', src: '' };
     const bMasters = mReports.map(([m, name, line0]) => {
       let line = line0;
-      const w = data[m].agents.some((x) => x[1] === 'wait') && m !== 'film';
+      const w = data[m].agents.some((x) => x[1] === 'wait') && m !== Component.HOLD;
       line = (s.live && s.live.reports && s.live.reports[m]) || (bLive && !(m === 'traffic' && s.traffic) ? 'no report yet' : line);
-      return { name, line, color: m === 'film' ? '#6E6654' : w ? '#FF8A73' : '#C9C0AC', border: w ? '#6A0C0B' : '#262A33' };
+      return { name, line, color: m === Component.HOLD ? '#6E6654' : w ? '#FF8A73' : '#C9C0AC', border: w ? '#6A0C0B' : '#262A33' };
     });
     const spokenMasters = 'Email: 24 new in the last day, 3 need your attention, 2 replies drafted. Calendar: ' + calSpoken + ' Trading: the final call is waiting for your approval. Investments: portfolio up 43 dollars yesterday. Web Designer: a pitch is ready. Jobs: 12 new postings. ';
-    const demoReply = greet + ', Mani. ' + onlineMasters + ' masters reporting, Film Studio on hold. ' + spokenMasters + 'Markets: NIFTY +0.44%, NASDAQ +0.57%, Bitcoin −1.35%. Leamington 22° and cloudy. ' + waits.length + ' things need you: ' + waits.join(', ') + '. [demo data]';
+    const demoReply = greet + ', Mani. ' + onlineMasters + ' masters reporting. ' + spokenMasters + 'Markets: NIFTY +0.44%, NASDAQ +0.57%, Bitcoin −1.35%. Leamington 22° and cloudy. ' + waits.length + ' things need you: ' + waits.join(', ') + '. [demo data]';
     const liveRp = (bLive && s.live.reports) || {};
     const liveLines = mReports.filter(([m]) => liveRp[m]);
     const sgn = (p) => (p >= 0 ? '+' : '−') + Math.abs(p).toFixed(2) + '%';
@@ -2564,7 +2569,7 @@ class Component extends DCLogic {
     } else {
       // One card per thing VISION says, in the order it says it: the card on screen is always the one being read.
       const needs = (this.statusModel && this.statusModel.needs) || [];
-      const intro = greet + ', Mani. ' + (bLive ? (liveLines.length ? liveLines.length + ' of ' + mReports.length + ' desks have reported.' : 'No desk has reported yet.') : onlineMasters + ' desks reporting, Film Studio on hold.')
+      const intro = greet + ', Mani. ' + (bLive ? (liveLines.length ? liveLines.length + ' of ' + mReports.length + ' desks have reported.' : 'No desk has reported yet.') : onlineMasters + ' desks reporting.')
         + ' ' + (needs.length ? needs.length + (needs.length === 1 ? ' thing needs you.' : ' things need you.') : 'Nothing needs you right now.');
       const wx = bLive ? (RD.news && RD.news.weather) : { city: 'Leamington', temp: 22, words: 'cloudy' };
       const heads = bNews.filter((n) => n.tag !== 'WEATHER');
@@ -2761,7 +2766,7 @@ class Component extends DCLogic {
     const masterCardX = '50%', gMasterName = sel.name;
     const workingNames = data[s.master].agents.filter((a2) => a2[1] === 'work').map((a2) => a2[0]);
     const waitingNames = data[s.master].agents.filter((a2) => a2[1] === 'wait').map((a2) => a2[0]);
-    const gtabs = [['email','Email'],['calendar','Calendar'],['traffic','Traffic'],['trading','Trading'],['invest','Invest'],['news','News'],['web','Web'],['jobs','Jobs'],['world','World'],['film','Film']].map(([id, label]) => ({
+    const gtabs = [['email','Email'],['calendar','Calendar'],['traffic','Traffic'],['trading','Trading'],['invest','Invest'],['news','News'],['web','Web'],['jobs','Jobs'],['world','World'],['youtube','YouTube']].map(([id, label]) => ({
       label, cls: s.master === id ? 'tab-on' : 'tab', pick: () => this.setState({ master: id })
     }));
 

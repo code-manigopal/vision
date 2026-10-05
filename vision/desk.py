@@ -216,6 +216,23 @@ def trading(store):
     return stages, _each(apps, call) + _each(trades, done)
 
 
+def youtube(store):
+    stages = [("ready", "Waiting for upload"), ("review", "Unlisted · your review"), ("public", "Public"), ("gone", "Deleted / private")]
+    of = {"ready": "ready", "unlisted": "review", "public": "public", "deleted": "gone", "private": "gone"}
+
+    def one(v):
+        st, stats, src = of.get(v.get("status")), v.get("stats") or {}, v.get("source") or {}
+        if not st:
+            return None
+        vid = v.get("video_id")
+        return _item("short:" + _s(v.get("_key")), st, v.get("title"), f"{round(v.get('seconds') or 0)} s · {v.get('status')}", v.get("uploaded") or v.get("made") or v.get("_ts"),
+                     _rows(("Channel", v.get("channel")), ("Views", stats.get("view") if vid else None), ("Likes", stats.get("like") if vid else None),
+                           ("Comments", stats.get("comment") if vid else None), ("Hashtags", " ".join(v.get("hashtags") or [])),
+                           ("Story from", src.get("from")), ("Footage", "; ".join(v.get("credits") or []))),
+                     _s(v.get("script")), _links(("Watch", v.get("url")), ("YouTube Studio", f"https://studio.youtube.com/video/{vid}/edit" if vid else None), ("Source", src.get("url"))))
+    return stages, _each(_kv(store, "yt_videos", 500), one)
+
+
 def reports(store, master: str):
     try:
         with store._conn() as c:
@@ -225,7 +242,7 @@ def reports(store, master: str):
     return [("reports", "Reports")], _each(rows, lambda r: _item("report:" + _s(r["id"]), "reports", r.get("summary"), "", r.get("ts")))
 
 
-BUILDERS = {"web": web, "jobs": jobs, "email": email, "calendar": calendar, "trading": trading}
+BUILDERS = {"web": web, "jobs": jobs, "email": email, "calendar": calendar, "trading": trading, "youtube": youtube}
 
 
 def build(store, master_id: str) -> dict | None:

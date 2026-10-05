@@ -73,7 +73,11 @@ def test_director_crew_failure_blocks_the_rest(tmp_path):
 def test_screenplay_beats_and_outro():
     beats = youtube.screenplay("She never told anyone. Not her husband, not her sister, and certainly not the woman who had trusted her with the key to the "
                                "house on that long, quiet afternoon. Then the phone rang.", "Subscribe for more.")
-    assert beats[-1] == {"i": len(beats) - 1, "text": "Subscribe for more.", "target_s": 1.4, "kind": "outro"}
+    assert beats[-1] == {"i": len(beats) - 1, "text": "Subscribe for more.", "target_s": 1.4, "kind": "outro", "end": True}
+    assert [b["end"] for b in beats] == [False, False, True, True]          # the long sentence is spoken as one line across three beats
+    durs, per = youtube.split_times(["She kept", "the letter."], 2.0, [["She", 0.0, 0.3], ["kept", 0.3, 0.7], ["the", 0.9, 1.0], ["letter", 1.0, 1.6]])
+    assert durs == pytest.approx([0.8, 1.2]) and per[1] == [["the", pytest.approx(0.1), pytest.approx(0.2)], ["letter", pytest.approx(0.2), pytest.approx(0.8)]]
+    assert youtube.split_times(["ab", "abcde"], 3.0, None) == ([1.0, 2.0], [None, None])
     assert all(youtube.words(b["text"]) <= 22 for b in beats) and " ".join(b["text"] for b in beats[:-1]).startswith("She never told anyone. Not her husband")
     assert youtube.fallback_query("She kept the letter in a drawer") == "letter drawer kept"
 

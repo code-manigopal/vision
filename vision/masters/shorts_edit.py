@@ -165,7 +165,8 @@ def assemble(work: Path, beats: list[dict], *, channel: str, logo: str | None = 
         t += b["dur"]
     total = t
 
-    _concat_list(build / "audio.ffconcat", [(str(Path(b["audio"]).resolve()), None) for b in beats])
+    # beats cut from one spoken sentence share its audio file: each file goes in once
+    _concat_list(build / "audio.ffconcat", [(a, None) for a in dict.fromkeys(str(Path(b["audio"]).resolve()) for b in beats)])
     run(["ffmpeg", "-y", "-v", "error", "-f", "concat", "-safe", "0", "-i", str(build / "audio.ffconcat"), "-c", "copy", str(build / "narration.wav")])
 
     seen = [b.get("visual") for b in beats if b.get("visual")]

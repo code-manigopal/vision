@@ -138,7 +138,10 @@ masters:
           subreddits: [confession, offmychest, TrueOffMyChest]   # needs REDDIT_CLIENT_ID / REDDIT_CLIENT_SECRET; or drop .txt files in inbox/confessions/confessions/
           drive_folder: "Confessions Inbox"   # a folder in the Drive of the Google account you sign in with (the channel's); its Docs and .txt files are copied to the inbox
           seconds: [60, 120]
-          voice: en-US-GuyNeural         # edge-tts voice; without edge-tts the local voice below is used
+          voice_engine: edge             # edge (online, exact caption timing) | kokoro (local voices, models/kokoro-v1.0.onnx)
+          voice: en-US-GuyNeural         # an edge voice name, or a Kokoro voice id such as am_michael, bm_george, af_heart
+          voice_speed: 0.95              # 1.0 = the voice's normal pace
+          pause: 0.32                    # seconds of silence after each sentence
           outro: "Subscribe to our channel for more interesting stories."
           logo: ""                       # path to the channel logo (png); blank = the channel name as the watermark
           privacy: unlisted              # how a new Short is uploaded; sign in once at /auth/youtube/login?account=youtube-confessions
