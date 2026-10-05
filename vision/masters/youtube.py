@@ -31,7 +31,7 @@ import httpx
 
 from ..agents import AgentResult, Director, Stage, SubAgent
 from ..config import ROOT
-from ..services import gdrive, genmedia, oauth, reddit, stock_video
+from ..services import bgm, gdrive, genmedia, oauth, reddit, stock_video
 from . import shorts_edit
 
 SEEN, LOG, DRIVE, STATE = "yt_seen", "yt_videos", "yt_drive", "yt_state"
@@ -43,7 +43,7 @@ CHANNEL = {"id": "confessions", "name": "Confessions Everywhere", "director": "C
            "shorts_per_day": 1, "subreddits": ["confession", "offmychest", "TrueOffMyChest"], "seconds": [60, 120],
            "voice_engine": "edge", "voice": "en-US-GuyNeural", "voice_speed": 0.95, "pause": 0.32, "outro": "Subscribe to our channel for more interesting stories.",
            "outro_query": "city lights at night", "logo": "", "caption_font": "", "generator": {},
-           "privacy": "unlisted", "category": "24", "synthetic_flag": True, "uploads_per_run": 2, "drive_folder": "", "voices": {}}
+           "privacy": "unlisted", "category": "24", "synthetic_flag": True, "uploads_per_run": 2, "drive_folder": "", "voices": {}, "music": True, "music_volume": 0.12}
 MOODS = ("dark", "sad", "warm", "light", "dramatic")
 UNSAFE = re.compile(r"\b(suicid\w*|kill(?:ed|ing)? (?:myself|himself|herself|him|her|them)|self[- ]harm\w*|rap(?:e|ed|es|ing|ist)|molest\w*|"
                     r"sexual(?:ly)? (?:assault|abus)\w*|incest\w*|underage|pedo\w*|child abuse|overdos\w*|murder\w*)\b", re.I)
@@ -167,7 +167,7 @@ def save_record(store, ch: dict, job: dict) -> None:
     store.kv_put(LOG, job["id"], {
         "channel": ch["id"], "status": "ready", "made": time.time(), "title": job["title"], "hashtags": job["hashtags"],
         "source": job["source"], "script": job["script"], "keywords": job["keywords"], "seconds": job["seconds"], "file": job["file"],
-        "mood": job.get("mood", ""), "voice": job.get("voice", ""),
+        "mood": job.get("mood", ""), "voice": job.get("voice", ""), "music": job.get("music", ""),
         "screenplay": [{"text": b["text"], "seconds": round(b["dur"], 2), "query": b["query"], "footage": (b.get("visual") or {}).get("page", "")} for b in job["beats"]],
         "credits": sorted({b["visual"]["credit"] for b in job["beats"] if b.get("visual")})})
     store.kv_put(SEEN, job["key"], {"state": "done"})
@@ -523,13 +523,19 @@ class Editor(Crew):
             return self.idle()
         if not any(b.get("visual") for b in job["beats"]):
             raise RuntimeError("no footage for any beat")
+        track = None
+        if self.ch["music"] and job.get("mood"):       # a track from the mood's folder, moving on one each time the mood comes up
+            used = sum(v.get("mood") == job["mood"] and v.get("channel") == self.ch["id"] for v in ctx["store"].kv_list(LOG))
+            track = bgm.pick(job["mood"], used)
+        job["music"] = (bgm.line(track[1]) or track[0].name) if track else ""
         out = await asyncio.to_thread(shorts_edit.assemble, Path(job["dir"]), job["beats"], channel=self.ch["name"],
-                                      logo=self.ch["logo"] or None, font_path=self.ch["caption_font"] or None)
+                                      logo=self.ch["logo"] or None, font_path=self.ch["caption_font"] or None,
+                                      music=str(track[0]) if track else None, music_volume=float(self.ch["music_volume"]))
         job["file"], job["seconds"] = out["file"], out["seconds"]
         for part in ("build", "footage", "audio"):            # the downloads and working files are large; the log keeps their sources
             shutil.rmtree(Path(job["dir"]) / part, ignore_errors=True)
         save_record(ctx["store"], self.ch, job)
-        return AgentResult("done", "CUT", f"{out['seconds']} s Short, {out['captions']} captions")
+        return AgentResult("done", "CUT", f"{out['seconds']} s Short, {out['captions']} captions" + (", with music" if track else ", no music"))
 
 
 class Uploader(Crew):
@@ -546,7 +552,8 @@ class Uploader(Crew):
         ch = self.ch
         tags = list(dict.fromkeys(rec["hashtags"] + ["#Shorts"]))
         body = {"snippet": {"title": rec["title"][:100], "categoryId": str(ch["category"]), "tags": [t.lstrip("#") for t in tags],
-                            "description": " ".join(tags) + ("\n\nFootage: " + "; ".join(rec["credits"]) if rec.get("credits") else "")},
+                            "description": " ".join(tags) + ("\n\nFootage: " + "; ".join(rec["credits"]) if rec.get("credits") else "")
+                            + (f"\nMusic: {rec['music']}" if rec.get("music") else "")},
                 "status": {"privacyStatus": ch["privacy"], "selfDeclaredMadeForKids": False, "containsSyntheticMedia": bool(ch["synthetic_flag"])}}
         size = Path(rec["file"]).stat().st_size
         auth = {"Authorization": f"Bearer {token}"}

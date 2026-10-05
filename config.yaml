@@ -157,6 +157,8 @@ masters:
             dramatic: { engine: kokoro, voice: am_fenrir, speed: 0.95, pause: 0.35 }
           outro: "Subscribe to our channel for more interesting stories."
           logo: ""                       # path to the channel logo (png); blank = the channel name as the watermark
+          music: true                    # a quiet track from assets/bgm/<mood>/ under the narration (fill with: python -m vision bgm)
+          music_volume: 0.12             # against the voice at 1.0
           privacy: unlisted              # how a new Short is uploaded; sign in once at /auth/youtube/login?account=youtube-confessions
           generator: {}                  # AI footage for beats with no stock match, e.g. { provider: name, kind: image, key_env: NAME_API_KEY } (see vision/services/genmedia.py)
 

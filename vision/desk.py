@@ -227,7 +227,7 @@ def youtube(store):
         vid = v.get("video_id")
         return _item("short:" + _s(v.get("_key")), st, v.get("title"), f"{round(v.get('seconds') or 0)} s · {v.get('status')}", v.get("uploaded") or v.get("made") or v.get("_ts"),
                      _rows(("Channel", v.get("channel")), ("Views", stats.get("view") if vid else None), ("Likes", stats.get("like") if vid else None),
-                           ("Comments", stats.get("comment") if vid else None), ("Mood", v.get("mood")), ("Voice", v.get("voice")),
+                           ("Comments", stats.get("comment") if vid else None), ("Mood", v.get("mood")), ("Voice", v.get("voice")), ("Music", v.get("music")),
                            ("Hashtags", " ".join(v.get("hashtags") or [])),
                            ("Story from", src.get("from")), ("Footage", "; ".join(v.get("credits") or []))),
                      _s(v.get("script")), _links(("Watch", v.get("url")), ("YouTube Studio", f"https://studio.youtube.com/video/{vid}/edit" if vid else None), ("Source", src.get("url"))))

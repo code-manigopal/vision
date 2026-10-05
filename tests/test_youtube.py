@@ -13,7 +13,7 @@ from vision.agents import AgentResult, Director, Master, Stage, SubAgent
 from vision.bus import EventBus, Store
 from vision.config import Config, LLMConfig
 from vision.masters import shorts_edit, youtube
-from vision.services import genmedia, oauth, reddit, stock_video
+from vision.services import bgm, genmedia, oauth, reddit, stock_video
 from vision.services.llm import LLM
 
 FFMPEG = pytest.mark.skipif(not shutil.which("ffmpeg"), reason="ffmpeg not installed")
@@ -124,6 +124,28 @@ def test_writer_tier_uses_groq_then_falls_back(monkeypatch):
     assert asyncio.run(llm.pick("writer")) == "local"
 
 
+def test_music_library_keeps_instrumentals_and_rotates(tmp_path, monkeypatch):
+    monkeypatch.setattr(bgm, "DIR", tmp_path)
+    hit = lambda i, tags, **kw: {"id": i, "title": f"T{i}", "creator": "C", "license": "by", "license_version": "3.0", "duration": 120000,
+                                 "url": f"https://audio.test/{i}", "foreign_landing_url": f"https://page.test/{i}", "tags": [{"name": t} for t in tags], **kw}
+    results = [hit("a", ["instrumental", "piano"]), hit("b", ["instrumental", "vocal"]), hit("c", ["piano"]), hit("d", ["instrumental"], duration=20000)]
+
+    def handler(req):
+        if "openverse" in str(req.url):
+            assert req.url.params["license"] == "cc0,pdm,by" and "instrumental" in req.url.params["q"]
+            return httpx.Response(200, json={"results": results})
+        return httpx.Response(200, content=b"x" * 200_000)
+
+    client = lambda: httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    saved = asyncio.run(bgm.fetch("sad", 3, client()))
+    assert [c["title"] for c in saved] == ["Ta"] and saved[0]["license"] == "CC BY 3.0"       # sung, untagged and too-short tracks are left out
+    assert asyncio.run(bgm.fetch("sad", 3, client())) == []                                    # already in the library
+    (tmp_path / "sad" / "my-own.mp3").write_bytes(b"y")                                        # a file dropped in by hand has no credit
+    assert bgm.pick("sad", 0)[0].name == "my-own.mp3" and bgm.pick("sad", 0)[1] is None
+    assert bgm.pick("sad", 1)[1]["title"] == "Ta" and bgm.pick("sad", 2)[0].name == "my-own.mp3" and bgm.pick("dark") is None
+    assert bgm.line(bgm.pick("sad", 1)[1]) == "“Ta” by C (CC BY 3.0) https://page.test/a"
+
+
 def test_generator_slot_is_off_until_a_provider_is_named(monkeypatch, tmp_path):
     assert not genmedia.ready({}) and not genmedia.ready({"provider": "nope"})
 
@@ -203,6 +225,7 @@ def make(tmp_path, monkeypatch, media, posts, llm, yt=None, **ch):
     monkeypatch.setattr(youtube, "ROOT", tmp_path)
     monkeypatch.setattr(reddit, "_token", None)
     monkeypatch.setattr(oauth, "TOKENS", tmp_path / "tokens.json")      # never the real sign-ins
+    monkeypatch.setattr(bgm, "DIR", tmp_path / "assets" / "bgm")        # nor the real music library
     for k in ("REDDIT_CLIENT_ID", "REDDIT_CLIENT_SECRET", "PEXELS_API_KEY"):
         monkeypatch.setenv(k, "x")
     monkeypatch.delenv("PIXABAY_API_KEY", raising=False)
@@ -230,6 +253,10 @@ def test_crew_makes_a_short_uploads_it_unlisted_and_follows_it(tmp_path, monkeyp
 
     monkeypatch.setattr(oauth, "access_token", token)
     m = make(tmp_path, monkeypatch, media, POSTS, WriterLLM(story_words=70), yt)
+    sad = tmp_path / "assets" / "bgm" / "sad"                  # one track in the library for the story's mood
+    sad.mkdir(parents=True)
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", "sine=f=330:d=4", str(sad / "slow-piano.mp3")], check=True)
+    (sad / "slow-piano.json").write_text(json.dumps({"title": "Slow Piano", "creator": "Ana", "license": "CC BY 3.0", "page": "https://music.test/1"}))
     bus, store = EventBus(), Store(tmp_path / "t.db")
     report = asyncio.run(m.cycle(bus, store))
     crew = {a["name"]: a for a in bus.state["masters"]["youtube"]["agents"]}
@@ -241,6 +268,7 @@ def test_crew_makes_a_short_uploads_it_unlisted_and_follows_it(tmp_path, monkeyp
     rec = store.kv_list(youtube.LOG)[0]
     assert rec["source"]["url"] == "https://www.reddit.com/r/confession/ok1" and rec["script"].startswith("She kept the letter") and rec["status"] == "ready"
     assert rec["mood"] == "sad" and rec["voice"] == "edge en-US-GuyNeural"
+    assert rec["music"] == "“Slow Piano” by Ana (CC BY 3.0) https://music.test/1" and "with music" in crew["Editor"]["summary"]
     assert rec["hashtags"] == ["#confession", "#storytime"] and len(rec["keywords"]) == len(rec["screenplay"]) and rec["screenplay"][-1]["text"].startswith("Subscribe")
     assert any("Ana (Pexels)" in c for c in rec["credits"]) and any("Ben (Pexels)" in c for c in rec["credits"])
     assert store.kv_get(youtube.SEEN, "confessions:bad")["state"] == "rejected" and store.kv_get(youtube.SEEN, "confessions:ok1")["state"] == "done"
@@ -261,6 +289,7 @@ def test_crew_makes_a_short_uploads_it_unlisted_and_follows_it(tmp_path, monkeyp
     assert yt["auth"] == "Bearer tok" and yt["bytes"] == (tmp_path / "data" / "shorts" / "confessions").glob("*/final.mp4").__next__().stat().st_size
     assert yt["meta"]["status"] == {"privacyStatus": "unlisted", "selfDeclaredMadeForKids": False, "containsSyntheticMedia": True}
     assert yt["meta"]["snippet"]["title"] == "The letter she never sent" and yt["meta"]["snippet"]["description"].startswith("#confession #storytime #Shorts\n\nFootage: ")
+    assert yt["meta"]["snippet"]["description"].endswith("\nMusic: “Slow Piano” by Ana (CC BY 3.0) https://music.test/1")
     rec = store.kv_list(youtube.LOG)[0]
     assert rec["status"] == "unlisted" and rec["url"] == "https://youtu.be/vid1" and "1 unlisted for your review" in report
     assert bus.state["notices"]["youtube-review-vid1"]["url"] == "https://studio.youtube.com/video/vid1/edit" and "auth:youtube-confessions" not in bus.state["notices"]

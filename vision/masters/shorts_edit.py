@@ -155,7 +155,8 @@ def _concat_list(path: Path, entries: list[tuple[str, float | None]]) -> None:
     path.write_text("\n".join(lines) + "\n")
 
 
-def assemble(work: Path, beats: list[dict], *, channel: str, logo: str | None = None, font_path: str | None = None) -> dict:
+def assemble(work: Path, beats: list[dict], *, channel: str, logo: str | None = None, font_path: str | None = None,
+             music: str | None = None, music_volume: float = 0.12) -> dict:
     """beats: [{text, audio, dur, speech?, words?, visual?, kind}] in order -> work/final.mp4."""
     build = work / "build"
     build.mkdir(parents=True, exist_ok=True)
@@ -202,9 +203,15 @@ def assemble(work: Path, beats: list[dict], *, channel: str, logo: str | None = 
         graph += (f";[w][4:v]overlay=x=(W-w)/2:y='H-h-230+max(0,1-(t-{outro:.3f})/0.35)*520-12*abs(sin((t-{outro:.3f})*5))'"
                   f":enable='gte(t,{outro:.3f})'[v]")
     out = work / "final.mp4"
+    extra, sound = [], "2:a"
+    if music:              # the track loops under the whole Short at an even level, well below the voice, and fades out at the end
+        extra = ["-stream_loop", "-1", "-i", str(music)]
+        graph += (f";[5:a]loudnorm=I=-16:TP=-1.5:LRA=11,aresample=44100,volume={music_volume},afade=t=in:d=0.8,"
+                  f"afade=t=out:st={max(total - 1.6, 0):.3f}:d=1.6[m];[2:a][m]amix=inputs=2:duration=first:normalize=0[a]")
+        sound = "[a]"
     run(["ffmpeg", "-y", "-v", "error", "-reinit_filter", "0", "-i", str(build / "base.mp4"), "-f", "concat", "-safe", "0", "-i", str(build / "caps.ffconcat"),
-         "-i", str(build / "narration.wav"), "-loop", "1", "-i", str(build / "watermark.png"), "-loop", "1", "-i", str(build / "subscribe.png"),
-         "-filter_complex", graph, "-map", "[v]" if outro is not None else "[w]", "-map", "2:a", "-t", f"{total:.3f}",
+         "-i", str(build / "narration.wav"), "-loop", "1", "-i", str(build / "watermark.png"), "-loop", "1", "-i", str(build / "subscribe.png"), *extra,
+         "-filter_complex", graph, "-map", "[v]" if outro is not None else "[w]", "-map", sound, "-t", f"{total:.3f}",
          "-c:v", "libx264", "-preset", "medium", "-crf", "22", "-pix_fmt", "yuv420p", "-r", str(FPS),
          "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", str(out)])
     return {"file": str(out), "seconds": round(total, 1), "captions": len(caps)}

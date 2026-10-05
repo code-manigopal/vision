@@ -30,6 +30,7 @@ bash scripts/setup.sh                     # venv + deps + .env from template + c
 .venv/bin/python -m vision                # run (dashboard http://127.0.0.1:8765)
 .venv/bin/python -m vision check          # config, which keys are set, LM Studio reachable
 .venv/bin/python -m vision traffic "Windsor"
+.venv/bin/python -m vision bgm            # add 3 background tracks per mood to assets/bgm/ (or: bgm sad 5)
 .venv/bin/python -m pytest -q             # 27 tests, all external services mocked
 bash scripts/install_launchagent.sh       # auto-start at login + restart on crash
 tail -f logs/vision.log
@@ -50,7 +51,7 @@ vision/
   voice/           TTS (kokoro | piper | macos), STT (mlx-whisper), WakeWord (openWakeWord)
   channels/telegram.py   briefs, alerts, reminders, notices, /commands, approve/reject buttons
   services/        llm.py (LM Studio OpenAI-compatible + Anthropic + a hosted "writer" tier on Groq), oauth.py (Google/Microsoft),
-                   reddit.py (official API, read-only), gdrive.py (Drive folder, read-only), stock_video.py (Pexels/Pixabay footage), genmedia.py (AI footage provider slot),
+                   reddit.py (official API, read-only), gdrive.py (Drive folder, read-only), bgm.py (music library from Openverse), stock_video.py (Pexels/Pixabay footage), genmedia.py (AI footage provider slot),
                    mailcal.py (Gmail/GCal/Graph), traffic_api.py (TomTom), news.py (Google News RSS),
                    weather.py (Open-Meteo), markets.py (Yahoo chart, CoinGecko, Bank of Canada FX),
                    fyers.py, kite_mcp.py (Zerodha via hosted Kite MCP, persistent session), wealthsimple.py (CSV),
@@ -208,6 +209,11 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   **Mani wants no caption drift**; "base" skips words, don't use it). `align()` maps heard words onto the script's words.
   `shorts_per_day` (5) is the daily number; one run keeps making Shorts until it is reached (`Director(again=...)`).
   The day's count goes by each record's `made` time; `youtube.reset_today(store, channel_id)` starts it again (kv `yt_state`). One clip or photo per beat, ranked by its own description.
+  Background music is a library on disk, `assets/bgm/<mood>/` (git-ignored), filled by `python -m vision bgm [mood] [count]`
+  from Openverse (`services/bgm.py`: CC0 / public domain / CC BY only, tagged instrumental, never sung) or by Mani dropping
+  files in; each fetched track has a `.json` credit. The Editor takes the next track for the story's mood, levels it
+  (`loudnorm`), mixes it at `music_volume` (0.12, about 14 dB under the voice) and fades it out; the Uploader adds a
+  "Music:" credit line. No track for the mood = no music. NCS is not used (not open, no API).
   `masters/shorts_edit.py` renders 1080x1920 with ffmpeg + Pillow (Homebrew ffmpeg has no subtitle filter, so captions are
   drawn as images); every segment must share one pixel format and colour range or the overlays reset mid-video.
   Output: `data/shorts/<channel>/<date-slug>/final.mp4`; log in kv `yt_videos` (source URL, script, screenplay, keywords,

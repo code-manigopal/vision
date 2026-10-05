@@ -1,6 +1,7 @@
 """Run VISION:  python -m vision            (starts the server + boot roll call)
 Quick checks:   python -m vision check      (validates config and keys, no server)
                 python -m vision traffic "Toronto"
+                python -m vision bgm [mood] [count]   (fetch background music into assets/bgm/)
 """
 
 import asyncio
@@ -56,6 +57,14 @@ def main() -> int:
         except TrafficError as e:
             print(f"[{e.status}] {e}", file=sys.stderr)
             return 1
+    if args[:1] == ["bgm"]:      # python -m vision bgm [mood] [count]: add background tracks to assets/bgm/<mood>/
+        from .services import bgm
+        moods = [args[1]] if len(args) > 1 else list(bgm.QUERIES)
+        for mood in moods:
+            for c in asyncio.run(bgm.fetch(mood, int(args[2]) if len(args) > 2 else 3)):
+                print(f"  {mood:<9} {bgm.line(c)}")
+            print(f"{mood}: {len(bgm.tracks(mood))} tracks in {bgm.DIR / mood}")
+        return 0
     _logging()
     import uvicorn
     from .server import create_app
