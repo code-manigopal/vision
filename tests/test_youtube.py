@@ -268,6 +268,7 @@ def test_crew_makes_a_short_uploads_it_unlisted_and_follows_it(tmp_path, monkeyp
     rec = store.kv_list(youtube.LOG)[0]
     assert rec["source"]["url"] == "https://www.reddit.com/r/confession/ok1" and rec["script"].startswith("She kept the letter") and rec["status"] == "ready"
     assert rec["mood"] == "sad" and rec["voice"] == "edge en-US-GuyNeural"
+    assert any(p.startswith("Retell") and "end on a hopeful, motivating note" in p and "no new events" in p for p in m.services["llm"].prompts)
     assert rec["music"] == "“Slow Piano” by Ana (CC BY 3.0) https://music.test/1" and "with music" in crew["Editor"]["summary"]
     assert rec["hashtags"] == ["#confession", "#storytime"] and len(rec["keywords"]) == len(rec["screenplay"]) and rec["screenplay"][-1]["text"].startswith("Subscribe")
     assert any("Ana (Pexels)" in c for c in rec["credits"]) and any("Ben (Pexels)" in c for c in rec["credits"])

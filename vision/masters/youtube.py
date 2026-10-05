@@ -43,8 +43,11 @@ CHANNEL = {"id": "confessions", "name": "Confessions Everywhere", "director": "C
            "shorts_per_day": 1, "subreddits": ["confession", "offmychest", "TrueOffMyChest"], "seconds": [60, 120],
            "voice_engine": "edge", "voice": "en-US-GuyNeural", "voice_speed": 0.95, "pause": 0.32, "outro": "Subscribe to our channel for more interesting stories.",
            "outro_query": "city lights at night", "logo": "", "caption_font": "", "generator": {},
-           "privacy": "unlisted", "category": "24", "synthetic_flag": True, "uploads_per_run": 2, "drive_folder": "", "voices": {}, "music": True, "music_volume": 0.12}
+           "privacy": "unlisted", "category": "24", "synthetic_flag": True, "uploads_per_run": 2, "drive_folder": "", "voices": {}, "music": True, "music_volume": 0.12, "ending": "hopeful"}
 MOODS = ("dark", "sad", "warm", "light", "dramatic")
+ENDINGS = {"plain": "End on the outcome or the thought it leaves.",
+           "hopeful": "However heavy the story, end on a hopeful, motivating note: what the person learned, or how they found the strength to move "
+                      "forward. You may add one or two closing sentences of reflection for that, but no new events."}
 UNSAFE = re.compile(r"\b(suicid\w*|kill(?:ed|ing)? (?:myself|himself|herself|him|her|them)|self[- ]harm\w*|rap(?:e|ed|es|ing|ist)|molest\w*|"
                     r"sexual(?:ly)? (?:assault|abus)\w*|incest\w*|underage|pedo\w*|child abuse|overdos\w*|murder\w*)\b", re.I)
 STOP = set("a an and are as at be but by for from had has have he her his i in is it its me my of on or our she so that the their them "
@@ -312,7 +315,7 @@ class StoryWriter(Crew):
                   "- The first sentence is a hook that makes someone stop scrolling.\n"
                   "- Keep the real events, feelings and outcome. You may add small build-ups and pauses for suspense, but no new events or facts.\n"
                   "- No personal names at all, and no city, workplace, school or other identifying detail; use generic terms.\n"
-                  "- Short spoken sentences. End on the outcome or the thought it leaves. No call to subscribe.\n"
+                  "- Short spoken sentences. " + ENDINGS.get(self.ch["ending"], ENDINGS["plain"]) + " No call to subscribe.\n"
                   'Answer as {"title": "under 70 characters, no names", "story": "...", "hashtags": ["3 to 5 words, no #"], '
                   f'"mood": "the one word that fits the story best: {" | ".join(MOODS)}"}}.\n\n'
                   f"Confession:\n{job['raw'][:6000]}")
