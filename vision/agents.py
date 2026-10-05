@@ -161,9 +161,12 @@ class Director(SubAgent):
 
     tier = "DEEP"
 
-    def __init__(self, name: str, crew: list[Stage], reporter: str, **kw: Any) -> None:
+    MAX_PASSES = 12
+
+    def __init__(self, name: str, crew: list[Stage], reporter: str, again=None, **kw: Any) -> None:
         super().__init__(name=name, **kw)
         self.crew, self.reporter = crew, reporter
+        self.again = again            # again(ctx of the pass just finished) -> True to send the crew through once more
         if reporter not in [a.name for a in self.members]:
             raise ValueError(f"{name}: reporter {reporter!r} is not one of its crew")
 
@@ -176,6 +179,12 @@ class Director(SubAgent):
                 "reporter": False, "director": self.name}
 
     async def run(self, ctx: dict[str, Any]) -> AgentResult:
+        for n in range(self.MAX_PASSES):
+            res, sub = await self._pass(ctx)
+            if res.status == "error" or not self.again or n + 1 == self.MAX_PASSES or not self.again(sub):
+                return res
+
+    async def _pass(self, ctx: dict[str, Any]) -> tuple[AgentResult, dict]:
         bus, store, mid = ctx["bus"], ctx["store"], ctx["master"]
         sub: dict[str, Any] = {**ctx, "results": {}, "director": self.name}
         blocked_by: str | None = None
@@ -195,8 +204,8 @@ class Director(SubAgent):
                 if res.status == "error" and not blocked_by and a.blocking:
                     blocked_by = a.name
         if blocked_by:
-            return AgentResult("error", "BLOCKED", f"{self.name}: {sub['results'][blocked_by].summary}")
-        return sub["results"][self.reporter]
+            return AgentResult("error", "BLOCKED", f"{self.name}: {sub['results'][blocked_by].summary}"), sub
+        return sub["results"][self.reporter], sub
 
     async def _run_member(self, a: SubAgent, ctx: dict) -> AgentResult:
         bus, store, mid = ctx["bus"], ctx["store"], ctx["master"]

@@ -30,7 +30,7 @@ class WriterLLM:
             return {"ok": True, "why": ""} if self.safe else None
         if prompt.startswith("Retell"):
             sentence = "She kept the letter in a drawer, and every year she almost threw it away. "
-            return {"title": "The letter she never sent", "story": " ".join((sentence * 40).split()[:self.story_words]) + ".", "hashtags": ["confession", "#storytime"]}
+            return {"title": "The letter she never sent", "story": " ".join((sentence * 40).split()[:self.story_words]) + ".", "hashtags": ["confession", "#storytime"], "mood": "Sad"}
         return None                                    # keyword list: fall back to plain keywords
 
 
@@ -78,6 +78,14 @@ def test_screenplay_beats_and_outro():
     durs, per = youtube.split_times(["She kept", "the letter."], 2.0, [["She", 0.0, 0.3], ["kept", 0.3, 0.7], ["the", 0.9, 1.0], ["letter", 1.0, 1.6]])
     assert durs == pytest.approx([0.8, 1.2]) and per[1] == [["the", pytest.approx(0.1), pytest.approx(0.2)], ["letter", pytest.approx(0.2), pytest.approx(0.8)]]
     assert youtube.split_times(["ab", "abcde"], 3.0, None) == ([1.0, 2.0], [None, None])
+    # the script's own words, timed from what was heard: "3" was heard as "three" and shares the gap; nothing in common -> no timings
+    got = youtube.align("She had 3 cats.", [["She", 0.0, 0.2], ["had", 0.2, 0.5], ["three", 0.5, 0.9], ["cats", 0.9, 1.4]], 1.5)
+    assert got == [["She", 0.0, 0.2], ["had", 0.2, 0.5], ["3", 0.5, 0.9], ["cats.", 0.9, 1.4]]
+    assert youtube.align("She had some cats.", [["She", 0.0, 0.2], ["had", 0.2, 0.5], ["cats", 0.9, 1.4]], 1.5)[2] == ["some", 0.5, 0.9]
+    assert youtube.align("one two three", [["alpha", 0, 1]], 2.0) is None
+    va = youtube.VoiceArtist(youtube.channel({"voices": {"dark": {"engine": "kokoro", "voice": "am_onyx", "pause": 0.45}}}))
+    assert va.voice_for("dark") == {"engine": "kokoro", "voice": "am_onyx", "speed": 0.95, "pause": 0.45}
+    assert va.voice_for("warm") == {"engine": "edge", "voice": "en-US-GuyNeural", "speed": 0.95, "pause": 0.32}
     assert all(youtube.words(b["text"]) <= 22 for b in beats) and " ".join(b["text"] for b in beats[:-1]).startswith("She never told anyone. Not her husband")
     assert youtube.fallback_query("She kept the letter in a drawer") == "letter drawer kept"
 
@@ -199,7 +207,8 @@ def make(tmp_path, monkeypatch, media, posts, llm, yt=None, **ch):
         monkeypatch.setenv(k, "x")
     monkeypatch.delenv("PIXABAY_API_KEY", raising=False)
     c = youtube.channel({"subreddits": ["confession"], "seconds": [20, 60], **ch})
-    d = Director(c["director"], youtube.crew(c, client_factory=web(media, posts, yt if yt is not None else {}), synth=tone), reporter="Analytics Manager")
+    d = Director(c["director"], youtube.crew(c, client_factory=web(media, posts, yt if yt is not None else {}), synth=tone), reporter="Analytics Manager",
+                 again=youtube.more_today(c))
     m = Master("youtube", "YOUTUBE MANAGER", [Stage("CHANNELS", [d])], reporter=c["director"], mode="live")
     m.services.update(llm=llm, cfg=Config())
     return m
@@ -231,6 +240,7 @@ def test_crew_makes_a_short_uploads_it_unlisted_and_follows_it(tmp_path, monkeyp
 
     rec = store.kv_list(youtube.LOG)[0]
     assert rec["source"]["url"] == "https://www.reddit.com/r/confession/ok1" and rec["script"].startswith("She kept the letter") and rec["status"] == "ready"
+    assert rec["mood"] == "sad" and rec["voice"] == "edge en-US-GuyNeural"
     assert rec["hashtags"] == ["#confession", "#storytime"] and len(rec["keywords"]) == len(rec["screenplay"]) and rec["screenplay"][-1]["text"].startswith("Subscribe")
     assert any("Ana (Pexels)" in c for c in rec["credits"]) and any("Ben (Pexels)" in c for c in rec["credits"])
     assert store.kv_get(youtube.SEEN, "confessions:bad")["state"] == "rejected" and store.kv_get(youtube.SEEN, "confessions:ok1")["state"] == "done"
@@ -255,6 +265,10 @@ def test_crew_makes_a_short_uploads_it_unlisted_and_follows_it(tmp_path, monkeyp
     assert rec["status"] == "unlisted" and rec["url"] == "https://youtu.be/vid1" and "1 unlisted for your review" in report
     assert bus.state["notices"]["youtube-review-vid1"]["url"] == "https://studio.youtube.com/video/vid1/edit" and "auth:youtube-confessions" not in bus.state["notices"]
 
+    bus.state["notices"].clear()                             # as after a restart: the reminder comes back while it is still unlisted
+    asyncio.run(m.cycle(bus, store))
+    assert "youtube-review-vid1" in bus.state["notices"]
+
     yt["items"] = [{"id": "vid1", "status": {"privacyStatus": "public"}, "statistics": {"viewCount": "1234", "likeCount": "56"}}]
     report = asyncio.run(m.cycle(bus, store))                # Mani made it public on YouTube: noticed, counted, the reminder goes
     assert "1 public with 1,234 views" in report and "youtube-review-vid1" not in bus.state["notices"] and yt["bytes"] and len(yt) == 4
@@ -263,6 +277,22 @@ def test_crew_makes_a_short_uploads_it_unlisted_and_follows_it(tmp_path, monkeyp
 
     yt["items"] = []
     assert "1 deleted" in asyncio.run(m.cycle(bus, store)) and store.kv_list(youtube.LOG)[0]["status"] == "deleted"
+
+
+@FFMPEG
+def test_one_run_makes_shorts_until_the_days_number_is_reached(tmp_path, monkeypatch, media):
+    m = make(tmp_path, monkeypatch, media, [], WriterLLM(story_words=70), shorts_per_day=2)
+    monkeypatch.delenv("REDDIT_CLIENT_ID")
+    box = tmp_path / "inbox" / "confessions" / "confessions"
+    box.mkdir(parents=True)
+    for n in "abc":
+        (box / f"story {n}.txt").write_text(GOOD)
+    bus, store = EventBus(), Store(tmp_path / "t.db")
+    report = asyncio.run(m.cycle(bus, store))
+    assert len(store.kv_list(youtube.LOG)) == 2 and "2 made" in report              # three stories waiting, two a day
+    assert len(list((tmp_path / "data" / "shorts" / "confessions").glob("*/final.mp4"))) == 2
+    asyncio.run(m.cycle(bus, store))
+    assert len(store.kv_list(youtube.LOG)) == 2
 
 
 def test_scout_says_no_without_a_clear_yes_and_asks_for_a_source(tmp_path, monkeypatch, media):

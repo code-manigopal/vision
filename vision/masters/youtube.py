@@ -20,6 +20,7 @@
 from __future__ import annotations
 
 import asyncio
+import difflib
 import re
 import shutil
 import time
@@ -42,7 +43,8 @@ CHANNEL = {"id": "confessions", "name": "Confessions Everywhere", "director": "C
            "shorts_per_day": 1, "subreddits": ["confession", "offmychest", "TrueOffMyChest"], "seconds": [60, 120],
            "voice_engine": "edge", "voice": "en-US-GuyNeural", "voice_speed": 0.95, "pause": 0.32, "outro": "Subscribe to our channel for more interesting stories.",
            "outro_query": "city lights at night", "logo": "", "caption_font": "", "generator": {},
-           "privacy": "unlisted", "category": "24", "synthetic_flag": True, "uploads_per_run": 2, "drive_folder": ""}
+           "privacy": "unlisted", "category": "24", "synthetic_flag": True, "uploads_per_run": 2, "drive_folder": "", "voices": {}}
+MOODS = ("dark", "sad", "warm", "light", "dramatic")
 UNSAFE = re.compile(r"\b(suicid\w*|kill(?:ed|ing)? (?:myself|himself|herself|him|her|them)|self[- ]harm\w*|rap(?:e|ed|es|ing|ist)|molest\w*|"
                     r"sexual(?:ly)? (?:assault|abus)\w*|incest\w*|underage|pedo\w*|child abuse|overdos\w*|murder\w*)\b", re.I)
 STOP = set("a an and are as at be but by for from had has have he her his i in is it its me my of on or our she so that the their them "
@@ -116,6 +118,41 @@ def split_times(texts: list[str], total: float, marks: list | None) -> tuple[lis
     return [total * c / sum(chars) for c in chars], [None] * len(texts)
 
 
+def align(text: str, heard: list | None, total: float) -> list | None:
+    """Timings for every word of the script, from the words a voice engine or the listener reported:
+    [[word, start, end]]. Words that match in order take their heard time; a word in between that was heard
+    differently (a number, a name) shares the gap between its neighbours. Too little in common -> None."""
+    mine = text.split()
+    if not heard or not mine:
+        return None
+    norm = lambda w: re.sub(r"[^a-z0-9]", "", str(w).lower())
+    times: list = [None] * len(mine)
+    for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, [norm(w) for w in mine], [norm(h[0]) for h in heard], autojunk=False).get_opcodes():
+        if tag == "equal" or (tag == "replace" and i2 - i1 == j2 - j1):
+            for k in range(i2 - i1):
+                times[i1 + k] = (float(heard[j1 + k][1]), float(heard[j1 + k][2]))
+    if sum(t is not None for t in times) < len(mine) * 0.6:
+        return None
+    i = 0
+    while i < len(mine):
+        if times[i] is not None:
+            i += 1
+            continue
+        j = i
+        while j < len(mine) and times[j] is None:
+            j += 1
+        a = times[i - 1][1] if i else 0.0
+        z = times[j][0] if j < len(mine) else total
+        size = [len(w) + 1 for w in mine[i:j]]
+        at = a
+        for k in range(i, j):
+            d = max(z - a, 0.0) * size[k - i] / sum(size)
+            times[k] = (at, at + d)
+            at += d
+        i = j
+    return [[w, t[0], t[1]] for w, t in zip(mine, times)]
+
+
 def fallback_query(text: str) -> str:
     picks = sorted(dict.fromkeys(w for w in re.findall(r"[a-zA-Z]{4,}", text.lower()) if w not in STOP), key=len, reverse=True)[:3]
     return " ".join(picks) or "person thinking alone"
@@ -130,9 +167,14 @@ def save_record(store, ch: dict, job: dict) -> None:
     store.kv_put(LOG, job["id"], {
         "channel": ch["id"], "status": "ready", "made": time.time(), "title": job["title"], "hashtags": job["hashtags"],
         "source": job["source"], "script": job["script"], "keywords": job["keywords"], "seconds": job["seconds"], "file": job["file"],
+        "mood": job.get("mood", ""), "voice": job.get("voice", ""),
         "screenplay": [{"text": b["text"], "seconds": round(b["dur"], 2), "query": b["query"], "footage": (b.get("visual") or {}).get("page", "")} for b in job["beats"]],
         "credits": sorted({b["visual"]["credit"] for b in job["beats"] if b.get("visual")})})
     store.kv_put(SEEN, job["key"], {"state": "done"})
+
+
+def made_today(store, ch: dict) -> int:
+    return sum(v.get("channel") == ch["id"] for v in store.kv_list(LOG, since=_midnight()))
 
 
 def _midnight() -> float:
@@ -207,9 +249,9 @@ class StoryScout(Crew):
 
     async def run(self, ctx: dict) -> AgentResult:
         ch, store, bus = self.ch, ctx["store"], ctx["bus"]
-        made = [v for v in store.kv_list(LOG, since=_midnight()) if v.get("channel") == ch["id"]]
-        if len(made) >= ch["shorts_per_day"]:
-            return AgentResult("idle", "QUOTA MET", f"{len(made)} of {ch['shorts_per_day']} Shorts made today")
+        made = made_today(store, ch)
+        if made >= ch["shorts_per_day"]:
+            return AgentResult("idle", "QUOTA MET", f"{made} of {ch['shorts_per_day']} Shorts made today")
         await self._from_drive(ctx)
         cands = self._inbox()
         if reddit.configured():
@@ -269,7 +311,8 @@ class StoryWriter(Crew):
                   "- Keep the real events, feelings and outcome. You may add small build-ups and pauses for suspense, but no new events or facts.\n"
                   "- No personal names at all, and no city, workplace, school or other identifying detail; use generic terms.\n"
                   "- Short spoken sentences. End on the outcome or the thought it leaves. No call to subscribe.\n"
-                  'Answer as {"title": "under 70 characters, no names", "story": "...", "hashtags": ["3 to 5 words, no #"]}.\n\n'
+                  'Answer as {"title": "under 70 characters, no names", "story": "...", "hashtags": ["3 to 5 words, no #"], '
+                  f'"mood": "the one word that fits the story best: {" | ".join(MOODS)}"}}.\n\n'
                   f"Confession:\n{job['raw'][:6000]}")
         note = ""
         for _ in range(2):
@@ -279,8 +322,10 @@ class StoryWriter(Crew):
             if lo <= n <= hi:
                 job["title"] = " ".join(str(d.get("title") or job["source"]["title"]).split())[:90]
                 job["script"] = story
+                mood = re.sub(r"[^a-z]", "", str(d.get("mood") or "").lower())
+                job["mood"] = mood if mood in MOODS else ""
                 job["hashtags"] = ["#" + re.sub(r"\W", "", str(h)) for h in (d.get("hashtags") or []) if re.sub(r"\W", "", str(h))][:5]
-                return AgentResult("done", "WRITTEN", f"“{job['title']}” · {n} words")
+                return AgentResult("done", "WRITTEN", f"“{job['title']}” · {n} words" + (f" · {job['mood']}" if job["mood"] else ""))
             note = f"\n\nYour last answer had {n} words. It must be between {lo} and {hi} words, as JSON."
         raise RuntimeError(f"the model did not return a story of {lo}-{hi} words")
 
@@ -325,16 +370,22 @@ class KeywordGenerator(Crew):
 
 class VoiceArtist(Crew):
     """Narrates sentence by sentence (a whole sentence keeps its intonation), then divides each sentence's audio
-    between its beats. Engine per channel: edge (online, word timings) or kokoro (VISION's local voices)."""
-    name, tier, note = "Voice Artist", "API", "narrates each sentence and measures it"
+    between its beats. The voice follows the story's mood (channel option `voices`), else the channel's own voice.
+    Engines: edge (online, reports its word timings) and kokoro (VISION's local voices; a local Whisper model then
+    listens to each sentence to time its words, so captions never drift)."""
+    name, tier, note = "Voice Artist", "API", "a voice for the mood, sentence by sentence"
 
-    async def _edge(self, text: str, stem: Path) -> tuple[Path, list | None]:
+    def voice_for(self, mood: str) -> dict:
+        ch = self.ch
+        return {"engine": ch["voice_engine"], "voice": ch["voice"], "speed": ch["voice_speed"], "pause": ch["pause"], **((ch.get("voices") or {}).get(mood) or {})}
+
+    async def _edge(self, v: dict, text: str, stem: Path) -> tuple[Path, list | None]:
         import edge_tts
-        kw = {"rate": f"{round((float(self.ch['voice_speed']) - 1) * 100):+d}%"}
+        kw = {"rate": f"{round((float(v['speed']) - 1) * 100):+d}%"}
         try:
-            com = edge_tts.Communicate(text, self.ch["voice"], boundary="WordBoundary", **kw)
+            com = edge_tts.Communicate(text, v["voice"], boundary="WordBoundary", **kw)
         except TypeError:                         # older edge-tts: word timings are the default
-            com = edge_tts.Communicate(text, self.ch["voice"], **kw)
+            com = edge_tts.Communicate(text, v["voice"], **kw)
         marks, raw = [], stem.with_suffix(".mp3")
         with open(raw, "wb") as f:
             async for ch in com.stream():
@@ -344,24 +395,31 @@ class VoiceArtist(Crew):
                     marks.append([ch["text"], ch["offset"] / 1e7, (ch["offset"] + ch["duration"]) / 1e7])
         return raw, marks or None
 
-    def _kokoro(self, ctx: dict, text: str, stem: Path) -> tuple[Path, list | None]:
+    def _kokoro(self, ctx: dict, v: dict, text: str, stem: Path) -> tuple[Path, list | None]:
         import soundfile
         from kokoro_onnx import Kokoro
+        vc = ctx["cfg"].voice
         if self._model is None:
-            vc = ctx["cfg"].voice
             self._model = Kokoro(str(ROOT / vc.get("kokoro_model", "models/kokoro-v1.0.onnx")), str(ROOT / vc.get("kokoro_voices", "models/voices-v1.0.bin")))
-        voice = self.ch["voice"]
-        samples, rate = self._model.create(text, voice=voice, speed=float(self.ch["voice_speed"]), lang="en-gb" if voice.startswith("b") else "en-us")
+        if v["voice"] not in self._model.get_voices():
+            raise RuntimeError(f"Kokoro has no voice named {v['voice']}")
+        samples, rate = self._model.create(text, voice=v["voice"], speed=float(v["speed"]), lang="en-gb" if v["voice"].startswith("b") else "en-us")
         raw = stem.with_suffix(".src.wav")
         soundfile.write(raw, samples, rate)
-        return raw, None
+        try:
+            import mlx_whisper
+        except ImportError:
+            return raw, None                       # no listener: captions are spread over the beat instead
+        heard = mlx_whisper.transcribe(str(raw), path_or_hf_repo=vc.get("whisper_model", "mlx-community/whisper-small-mlx"), language="en",
+                                       word_timestamps=True, initial_prompt=text)
+        return raw, [[w["word"], w["start"], w["end"]] for seg in heard.get("segments", []) for w in seg.get("words", [])] or None
 
-    async def _synth(self, ctx: dict, text: str, stem: Path) -> tuple[Path, list | None]:
+    async def _synth(self, ctx: dict, v: dict, text: str, stem: Path) -> tuple[Path, list | None]:
         if self.opts.get("synth"):
             return await self.opts["synth"](text, stem)
-        if self.ch["voice_engine"] == "kokoro":
-            return await asyncio.to_thread(self._kokoro, ctx, text, stem)
-        return await self._edge(text, stem)
+        if v["engine"] == "kokoro":
+            return await asyncio.to_thread(self._kokoro, ctx, v, text, stem)
+        return await self._edge(v, text, stem)
 
     async def run(self, ctx: dict) -> AgentResult:
         job = ctx.get("job")
@@ -369,20 +427,26 @@ class VoiceArtist(Crew):
             return self.idle()
         folder = Path(job["dir"]) / "audio"
         folder.mkdir(exist_ok=True)
+        v = self.voice_for(job.get("mood", ""))
+        job["voice"] = f"{v['engine']} {v['voice']}"
+        pause = float(v["pause"])
         self._model = None
         group: list[dict] = []
+        timed = total_lines = 0
         try:
             for b in job["beats"]:
                 group.append(b)
                 if not b.get("end", True):
                     continue
                 stem = folder / f"line{group[0]['i']:02d}"
-                raw, marks = await self._synth(ctx, " ".join(x["text"] for x in group), stem)
+                text = " ".join(x["text"] for x in group)
+                raw, heard = await self._synth(ctx, v, text, stem)
                 wav = stem.with_suffix(".wav")
-                pause = float(self.ch["pause"])
                 await asyncio.to_thread(shorts_edit.run, ["ffmpeg", "-y", "-v", "error", "-i", str(raw), "-af", f"apad=pad_dur={pause}",
                                                           "-ar", "44100", "-ac", "1", "-c:a", "pcm_s16le", str(wav)])
                 total = await asyncio.to_thread(shorts_edit.probe, wav)
+                marks = align(text, heard, total - pause)
+                timed, total_lines = timed + bool(marks), total_lines + 1
                 durs, per = split_times([x["text"] for x in group], total - pause, marks)
                 durs[-1] += pause                                   # the pause after the sentence stays on its last beat
                 for x, d, m in zip(group, durs, per):
@@ -393,7 +457,8 @@ class VoiceArtist(Crew):
             self._model = None                                      # the local voice model is large: let it go after the run
         total = sum(b["dur"] for b in job["beats"])
         job["seconds"] = round(total, 1)
-        return AgentResult("done", "RECORDED", f"{round(total)} s of narration over {len(job['beats'])} beats ({self.ch['voice']})")
+        note = "" if timed == total_lines else f"; captions estimated on {total_lines - timed} of {total_lines} sentences"
+        return AgentResult("done", "RECORDED", f"{round(total)} s in {v['voice']}" + (f" for a {job['mood']} story" if job.get("mood") else "") + note)
 
 
 class FootageCollector(Crew):
@@ -513,10 +578,14 @@ class Uploader(Crew):
                 rec.pop("_ts", None)
                 rec.update(status=ch["privacy"], video_id=out["id"], url=f"https://youtu.be/{out['id']}", uploaded=time.time())
                 store.kv_put(LOG, key, rec)
-                bus.notice(f"youtube-review-{out['id']}", f"New {ch['privacy']} Short on {ch['name']}: “{rec['title']}”. Review it, then make it public or delete it.",
-                           f"https://studio.youtube.com/video/{out['id']}/edit")
+                review_notice(bus, ch, rec)
                 done.append(rec["title"])
         return AgentResult("done", "UPLOADED", f"Uploaded as {ch['privacy']}: " + "; ".join(f"“{t}”" for t in done))
+
+
+def review_notice(bus, ch: dict, rec: dict) -> None:
+    bus.notice(f"youtube-review-{rec['video_id']}", f"New {rec['status']} Short on {ch['name']}: “{rec['title']}”. Review it, then make it public or delete it.",
+               f"https://studio.youtube.com/video/{rec['video_id']}/edit")
 
 
 def _reason(r: httpx.Response) -> str:
@@ -561,6 +630,9 @@ class AnalyticsManager(Crew):
         if not log:
             return AgentResult("done", "LOGGED", f"{ch['name']}: no Shorts made yet", {"channel": ch["id"], "made": 0})
         await self._refresh(ctx, log)
+        for v in log:                              # notices live in memory: put the reminder back after a restart
+            if v["status"] == "unlisted" and v.get("video_id"):
+                review_notice(ctx["bus"], ch, v)
         n = {s: sum(v["status"] == s for v in log) for s in ("ready", "unlisted", "private", "public", "deleted")}
         views = sum((v.get("stats") or {}).get("view", 0) for v in log if v["status"] == "public")
         parts = [f"{len(log)} made"]
@@ -587,9 +659,14 @@ def crew(ch: dict, **opts: Any) -> list[Stage]:
             Stage("REPORT", [AnalyticsManager(ch, **opts)])]
 
 
+def more_today(ch: dict):
+    """One pass of the crew makes one Short. Go round again while the last pass made one and the day's number isn't reached."""
+    return lambda ctx: bool((ctx.get("job") or {}).get("file")) and made_today(ctx["store"], ch) < ch["shorts_per_day"]
+
+
 def build_agents(options: dict, cfg) -> dict[str, SubAgent]:
     out: dict[str, SubAgent] = {}
     for raw in options.get("channels") or [{}]:
         ch = channel(raw)
-        out[ch["director"]] = Director(ch["director"], crew(ch), reporter="Analytics Manager", note=f"runs {ch['name']}")
+        out[ch["director"]] = Director(ch["director"], crew(ch), reporter="Analytics Manager", again=more_today(ch), note=f"runs {ch['name']}")
     return out

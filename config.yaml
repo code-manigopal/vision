@@ -141,7 +141,7 @@ masters:
         - id: confessions
           name: Confessions Everywhere
           director: Confessions Everywhere Director
-          shorts_per_day: 1
+          shorts_per_day: 5              # a run keeps making Shorts, one after another, until the day's number is reached or the stories run out
           subreddits: [confession, offmychest, TrueOffMyChest]   # needs REDDIT_CLIENT_ID / REDDIT_CLIENT_SECRET; or drop .txt files in inbox/confessions/confessions/
           drive_folder: "Confessions Inbox"   # a folder in the Drive of the Google account you sign in with (the channel's); its Docs and .txt files are copied to the inbox
           seconds: [60, 120]
@@ -149,6 +149,12 @@ masters:
           voice: en-US-GuyNeural         # an edge voice name, or a Kokoro voice id such as am_michael, bm_george, af_heart
           voice_speed: 0.95              # 1.0 = the voice's normal pace
           pause: 0.32                    # seconds of silence after each sentence
+          voices:                        # the voice follows the story's mood (the writer names it); a mood not listed uses the voice above
+            dark:     { engine: kokoro, voice: am_onyx,   speed: 0.90, pause: 0.45 }
+            sad:      { engine: kokoro, voice: af_heart,  speed: 0.90, pause: 0.45 }
+            warm:     { engine: kokoro, voice: af_bella,  speed: 0.95, pause: 0.32 }
+            light:    { engine: kokoro, voice: am_puck,   speed: 1.00, pause: 0.25 }
+            dramatic: { engine: kokoro, voice: am_fenrir, speed: 0.95, pause: 0.35 }
           outro: "Subscribe to our channel for more interesting stories."
           logo: ""                       # path to the channel logo (png); blank = the channel name as the watermark
           privacy: unlisted              # how a new Short is uploaded; sign in once at /auth/youtube/login?account=youtube-confessions

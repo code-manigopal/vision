@@ -202,7 +202,11 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   **Quora is out** (no API). A story is screened by rule and by the model (no clear yes = not used), retold in the third
   person with no names or places, and split into beats by code, not by the model. The voice speaks whole sentences
   (fragment-by-fragment sounded like reading) and each sentence's audio is divided between its beats; the real audio sets
-  the timeline. Engine per channel: `voice_engine: edge` (word timings) or `kokoro` (local), with `voice`, `voice_speed`, `pause`. One clip or photo per beat, ranked by its own description.
+  the timeline. The writer names the story's mood (dark, sad, warm, light, dramatic) and the channel's `voices` table maps a
+  mood to engine, voice, speed and pause; other moods use `voice_engine` / `voice` / `voice_speed` / `pause`. Engines: `edge`
+  (reports word timings) and `kokoro` (local; mlx-whisper "small" then listens to each sentence to time its words, because
+  **Mani wants no caption drift**; "base" skips words, don't use it). `align()` maps heard words onto the script's words.
+  `shorts_per_day` (5) is the daily number; one run keeps making Shorts until it is reached (`Director(again=...)`). One clip or photo per beat, ranked by its own description.
   `masters/shorts_edit.py` renders 1080x1920 with ffmpeg + Pillow (Homebrew ffmpeg has no subtitle filter, so captions are
   drawn as images); every segment must share one pixel format and colour range or the overlays reset mid-video.
   Output: `data/shorts/<channel>/<date-slug>/final.mp4`; log in kv `yt_videos` (source URL, script, screenplay, keywords,
@@ -233,8 +237,8 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
 4. Dashboard: show live job matches / leads / trading calls in their views (data already in
    `report_data`); approvals panel already live.
 5. Nightly backup of `data/` and `vault/`; a 05:30 health check (LM Studio, tokens, Telegram).
-6. YouTube Manager: first real upload done 2026-10-05 (Drive → Short → unlisted, counted as a Short). Open: Mani's pick of
-   narration voice (samples in `data/shorts/_voices/`), collecting confessions from comments on the channel's own videos,
+6. YouTube Manager: first real upload done 2026-10-05 (Drive → Short → unlisted, counted as a Short). Open: Mani tuning the
+   mood → voice table by ear (samples in `data/shorts/_voices/`), collecting confessions from comments on the channel's own videos,
    crew progress in vision.log.
 
 Canvas design of the dashboard: https://claude.ai/artifact/46JvfVBsfsbd5f8FSqaYVf
