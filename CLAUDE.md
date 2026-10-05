@@ -206,7 +206,8 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   mood to engine, voice, speed and pause; other moods use `voice_engine` / `voice` / `voice_speed` / `pause`. Engines: `edge`
   (reports word timings) and `kokoro` (local; mlx-whisper "small" then listens to each sentence to time its words, because
   **Mani wants no caption drift**; "base" skips words, don't use it). `align()` maps heard words onto the script's words.
-  `shorts_per_day` (5) is the daily number; one run keeps making Shorts until it is reached (`Director(again=...)`). One clip or photo per beat, ranked by its own description.
+  `shorts_per_day` (5) is the daily number; one run keeps making Shorts until it is reached (`Director(again=...)`).
+  The day's count goes by each record's `made` time; `youtube.reset_today(store, channel_id)` starts it again (kv `yt_state`). One clip or photo per beat, ranked by its own description.
   `masters/shorts_edit.py` renders 1080x1920 with ffmpeg + Pillow (Homebrew ffmpeg has no subtitle filter, so captions are
   drawn as images); every segment must share one pixel format and colour range or the overlays reset mid-video.
   Output: `data/shorts/<channel>/<date-slug>/final.mp4`; log in kv `yt_videos` (source URL, script, screenplay, keywords,

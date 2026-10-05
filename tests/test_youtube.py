@@ -294,6 +294,16 @@ def test_one_run_makes_shorts_until_the_days_number_is_reached(tmp_path, monkeyp
     asyncio.run(m.cycle(bus, store))
     assert len(store.kv_list(youtube.LOG)) == 2
 
+    youtube.reset_today(store, "confessions")                 # a reset: what was made earlier today no longer counts
+    assert youtube.made_today(store, m.agents[0].members[0].ch) == 0
+    store.kv_delete(youtube.STATE, "confessions:quota_reset")
+    assert youtube.made_today(store, m.agents[0].members[0].ch) == 2
+
+    for v in store.kv_list(youtube.LOG):                      # yesterday's Shorts, re-saved today by a stats update, don't use up today
+        store.kv_put(youtube.LOG, v["_key"], {**{k: x for k, x in v.items() if not k.startswith("_")}, "made": v["made"] - 86400})
+    asyncio.run(m.cycle(bus, store))
+    assert len(store.kv_list(youtube.LOG)) == 3
+
 
 def test_scout_says_no_without_a_clear_yes_and_asks_for_a_source(tmp_path, monkeypatch, media):
     m = make(tmp_path, monkeypatch, media, POSTS, WriterLLM(safe=False))

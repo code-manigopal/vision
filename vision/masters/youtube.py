@@ -34,7 +34,7 @@ from ..config import ROOT
 from ..services import gdrive, genmedia, oauth, reddit, stock_video
 from . import shorts_edit
 
-SEEN, LOG, DRIVE = "yt_seen", "yt_videos", "yt_drive"
+SEEN, LOG, DRIVE, STATE = "yt_seen", "yt_videos", "yt_drive", "yt_state"
 WPS = 2.5                 # narration pace used for planning; the real audio sets the final timing
 GAP = 0.18                # pause after each beat, seconds
 UPLOAD = "https://www.googleapis.com/upload/youtube/v3/videos"
@@ -174,7 +174,9 @@ def save_record(store, ch: dict, job: dict) -> None:
 
 
 def made_today(store, ch: dict) -> int:
-    return sum(v.get("channel") == ch["id"] for v in store.kv_list(LOG, since=_midnight()))
+    # by the day it was made (a later status or stats update re-saves the record); a reset starts the day's count again
+    start = max(_midnight(), (store.kv_get(STATE, f"{ch['id']}:quota_reset") or {}).get("at", 0))
+    return sum(v.get("channel") == ch["id"] and (v.get("made") or 0) >= start for v in store.kv_list(LOG))
 
 
 def _midnight() -> float:
@@ -657,6 +659,11 @@ def crew(ch: dict, **opts: Any) -> list[Stage]:
             Stage("PREP", [KeywordGenerator(ch), VoiceArtist(ch, **opts)]), Stage("FOOTAGE", [FootageCollector(ch, **opts)]),
             Stage("GENERATE", [FootageGenerator(ch, **opts)]), Stage("EDIT", [Editor(ch)]), Stage("UPLOAD", [Uploader(ch, **opts)]),
             Stage("REPORT", [AnalyticsManager(ch, **opts)])]
+
+
+def reset_today(store, channel_id: str) -> None:
+    """Start today's count for a channel again: Shorts made before this moment no longer count toward shorts_per_day."""
+    store.kv_put(STATE, f"{channel_id}:quota_reset", {"at": time.time()})
 
 
 def more_today(ch: dict):
