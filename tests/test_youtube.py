@@ -222,6 +222,8 @@ def web(media, posts, yt):
         if "/playlistItems" in u:
             yt.setdefault("playlist_items", []).append(json.loads(req.content)["snippet"])
             return httpx.Response(200, json={"id": "pi1"})
+        if "upload/youtube/v3/videos" in u and yt.get("limit"):
+            return httpx.Response(400, json={"error": {"message": "The user has exceeded the number of videos they may upload.", "errors": [{"reason": "uploadLimitExceeded"}]}})
         if "upload/youtube/v3/videos" in u:
             yt["meta"], yt["auth"] = json.loads(req.content), req.headers["authorization"]
             return httpx.Response(200, headers={"Location": "https://upload.test/session1"})
@@ -376,7 +378,7 @@ def test_one_run_makes_shorts_until_the_days_number_is_reached(tmp_path, monkeyp
     assert youtube.made_today(store, m.agents[0].members[0].ch) == 2
 
     for v in store.kv_list(youtube.LOG):                      # yesterday's Shorts, re-saved today by a stats update, don't use up today
-        store.kv_put(youtube.LOG, v["_key"], {**{k: x for k, x in v.items() if not k.startswith("_")}, "made": v["made"] - 86400})
+        store.kv_put(youtube.LOG, v["_key"], {**{k: x for k, x in v.items() if not k.startswith("_")}, "made": v["made"] - 86400, "status": "public"})
     asyncio.run(m.cycle(bus, store))
     assert len(store.kv_list(youtube.LOG)) == 3
 
@@ -501,6 +503,22 @@ def test_scheduled_upload_takes_the_next_free_slot_and_needs_no_review(tmp_path,
     assert yt["meta"]["status"]["privacyStatus"] == "private" and yt["meta"]["status"]["publishAt"] == _t.strftime("%Y-%m-%dT%H:%M:%SZ", _t.gmtime(rec["publish_at"]))
     assert rec["status"] == "scheduled" and rec["publish_at"] > _t.time() + 1700 and "Uploaded as scheduled: A Short for " in res.summary
     assert not bus.state["notices"]                                                                          # nothing waits for Mani
+
+    # YouTube's own daily cap on uploads: the Short waits, it is said plainly, nothing turns red, and no more are made on top of a backlog
+    store.kv_put(youtube.LOG, "j2", {"channel": "confessions", "status": "ready", "made": _t.time(), "title": "Second", "hashtags": [], "file": str(f), "seconds": 60, "kind": "real"})
+    yt["limit"] = True
+    yt["items"] = [{"id": "vid1", "status": {"privacyStatus": "private", "publishAt": "2031-01-02T03:04:05Z"}, "statistics": {}}]
+    res = asyncio.run(uploader.run(ctx))
+    assert (res.status, res.label) == ("wait", "UPLOAD LIMIT") and "1 waiting" in res.summary and store.kv_get(youtube.LOG, "j2")["status"] == "ready"
+    assert "daily upload limit" in bus.state["notices"]["youtube-limit-confessions"]["text"]
+    scout = m.agents[0].members[0]
+    scout.ch["shorts_per_day"] = 1
+    youtube.reset_today(store, "confessions")
+    assert asyncio.run(scout.run({**ctx, "llm": WriterLLM()})).label == "BACKLOG"
+    yt["limit"] = False
+    assert asyncio.run(uploader.run(ctx)).label == "UPLOADED" and "youtube-limit-confessions" not in bus.state["notices"]
+    assert store.kv_get(youtube.LOG, "j2")["publish_at"] > 1925089445          # queued after the release already set for 2031
+    store.kv_delete(youtube.LOG, "j2")
 
     yt["items"] = [{"id": "vid1", "status": {"privacyStatus": "private", "publishAt": "2031-01-02T03:04:05Z"}, "statistics": {}}]
     assert "1 scheduled" in asyncio.run(analytics.run(ctx)).summary and store.kv_get(youtube.LOG, "j1")["publish_at"] == 1925089445

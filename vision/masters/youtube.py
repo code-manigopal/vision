@@ -46,7 +46,7 @@ CHANNEL = {"id": "confessions", "name": "Confessions Everywhere", "director": "C
            "shorts_per_day": 1, "subreddits": ["confession", "offmychest", "TrueOffMyChest"], "seconds": [60, 120],
            "voice_engine": "edge", "voice": "en-US-GuyNeural", "voice_speed": 0.95, "pause": 0.32, "outro": "Subscribe to our channel for more interesting stories.",
            "outro_query": "city lights at night", "logo": "", "caption_font": "", "generator": {},
-           "privacy": "unlisted", "category": "24", "synthetic_flag": True, "uploads_per_run": 2, "drive_folder": "", "voices": {}, "music": True, "music_volume": 0.12, "ending": "hopeful", "originals": False, "original_genres": ["confession"],
+           "privacy": "unlisted", "category": "24", "synthetic_flag": True, "uploads_per_run": 4, "drive_folder": "", "voices": {}, "music": True, "music_volume": 0.12, "ending": "hopeful", "originals": False, "original_genres": ["confession"],
            "publish_times": ["06:00", "12:00", "18:00", "00:00"], "create_after": "",
            "classics": [], "classics_per_day": 1, "playlists": {}, "viewer_comments": False, "cta": ""}
 # Original stories: a premise is built from one of each, so no two start from the same place (20 x 12 x 10 x 10 combinations).
@@ -357,6 +357,9 @@ class StoryScout(Crew):
         made = made_today(store, ch)
         if made >= ch["shorts_per_day"]:
             return AgentResult("idle", "QUOTA MET", f"{made} of {ch['shorts_per_day']} Shorts made today")
+        waiting = sum(v.get("channel") == ch["id"] and v.get("status") == "ready" for v in store.kv_list(LOG))
+        if waiting >= ch["shorts_per_day"]:          # finished Shorts are piling up unsent (YouTube's upload limit): make no more until they go
+            return AgentResult("idle", "BACKLOG", f"{waiting} finished Shorts are waiting to upload; no new ones until they go")
         if ch["create_after"] and time.strftime("%H:%M") < ch["create_after"]:      # the day's Shorts are not started before this hour
             return AgentResult("idle", "NOT YET", f"Today's Shorts start at {ch['create_after']}")
         await self._from_drive(ctx)
@@ -792,6 +795,10 @@ class Editor(Crew):
         return AgentResult("done", "CUT", f"{out['seconds']} s Short, {out['captions']} captions" + (", with music" if track else ", no music"))
 
 
+class UploadLimit(Exception):
+    pass
+
+
 class Uploader(Crew):
     """Uploads finished Shorts as unlisted and hands Mani the link. Public or deleted is his move, on YouTube."""
     name, tier, note = "Uploader", "API", "uploads as unlisted, sends you the link"
@@ -817,6 +824,8 @@ class Uploader(Crew):
         r = await c.post(UPLOAD, params={"uploadType": "resumable", "part": "snippet,status"}, json=body,
                          headers={**auth, "X-Upload-Content-Type": "video/mp4", "X-Upload-Content-Length": str(size)})
         if r.status_code != 200 or "location" not in r.headers:
+            if "uploadLimitExceeded" in r.text or "exceeded the number of videos" in r.text:
+                raise UploadLimit()
             raise RuntimeError(f"YouTube refused the upload ({r.status_code}): {_reason(r)}")
         r = await c.put(r.headers["location"], content=self._file(Path(rec["file"])), headers={**auth, "Content-Type": "video/mp4", "Content-Length": str(size)})
         if r.status_code not in (200, 201):
@@ -873,7 +882,15 @@ class Uploader(Crew):
         done = []
         async with self.client() as c:
             for rec in sorted(ready, key=lambda v: v["made"])[:ch["uploads_per_run"]]:
-                out = await self._upload(ctx, c, token, rec)
+                try:
+                    out = await self._upload(ctx, c, token, rec)
+                except UploadLimit:                # YouTube's own cap on uploads per channel per day: not a fault, the Shorts wait
+                    left = len(ready) - len(done)
+                    bus.notice(f"youtube-limit-{ch['id']}", f"{ch['name']}: YouTube's daily upload limit for the channel is reached. "
+                                                            f"{left} finished Short{'s' if left != 1 else ''} will upload on a later run.")
+                    return AgentResult("wait", "UPLOAD LIMIT", (f"Uploaded as {ch['privacy']}: " + "; ".join(done) + ". " if done else "")
+                                       + f"YouTube's daily upload limit reached; {left} waiting")
+                bus.clear_notice(f"youtube-limit-{ch['id']}")
                 key = rec.pop("_key")
                 rec.pop("_ts", None)
                 rec.update(status=ch["privacy"], video_id=out["id"], url=f"https://youtu.be/{out['id']}", uploaded=time.time(), publish_at=out["publish_at"])

@@ -218,6 +218,9 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   Mani pins by hand). `playlists` maps a story kind to a playlist (classics → "Classic Stories"), created if missing.
   Playlists and comments need the `youtube.force-ssl` permission: `can_manage()` checks the sign-in's recorded scope and
   raises a "sign in again" notice without stopping uploads. VISION never deletes a video.
+  YouTube caps uploads per channel per rolling day (hit on 2026-10-06 after about ten in 24 hours, deleted ones included;
+  error `uploadLimitExceeded`). The Uploader treats it as a wait, not a fault: a notice, the Shorts stay `ready` and go up on
+  a later run; and the Scout makes no new Shorts while `shorts_per_day` or more are waiting (label BACKLOG).
   Originals come in kinds that take turns (`original_genres`): confession, motivational, and science (48 subjects across
   space, earth, forests, oceans in `SCIENCE`; a subject isn't repeated while others are unused). Each kind has its own
   premise request and writing rules (`GENRE_ASK`, `GENRE_WRITE`); science must stay with established facts and leaves
