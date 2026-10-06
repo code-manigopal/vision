@@ -486,7 +486,11 @@ def test_scheduled_upload_takes_the_next_free_slot_and_needs_no_review(tmp_path,
     second = youtube.next_slot(store, ch, noon)
     assert _t.strftime("%H:%M", _t.localtime(second)) == "08:00" and 0 < second - first < 86400        # that slot is taken: the next morning
     assert youtube.next_slot(store, ch, first - 600) == second                                             # under half an hour away is too close
+    store.kv_put(youtube.LOG, "later", {"channel": "confessions", "status": "scheduled", "publish_at": second + 86400, "made": 1.0, "title": "T2", "seconds": 60})
+    queued = youtube.next_slot(store, ch, noon)                # releases form one queue: after the last one scheduled, never into a gap before it
+    assert queued > second + 86400 and _t.strftime("%H:%M", _t.localtime(queued)) == "20:00" and queued - (second + 86400) == 12 * 3600
     store.kv_delete(youtube.LOG, "taken")
+    store.kv_delete(youtube.LOG, "later")
 
     f = tmp_path / "final.mp4"
     f.write_bytes(b"v" * 10)

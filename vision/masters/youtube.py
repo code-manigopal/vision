@@ -261,17 +261,19 @@ def save_record(store, ch: dict, job: dict) -> None:
 
 
 def next_slot(store, ch: dict, now: float | None = None) -> float:
-    """The next free publishing time for the channel: one of its publish_times, at least half an hour away, not already taken."""
+    """The publishing time for the next Short: the first of the channel's publish_times after the last one already
+    scheduled (the releases form one queue, in upload order), and at least half an hour away."""
     now = now or time.time()
     taken = [v["publish_at"] for v in store.kv_list(LOG) if v.get("channel") == ch["id"] and v.get("publish_at") and v.get("status") != "deleted"]
-    lt = time.localtime(now)
-    for day in range(60):
+    after = max([now + 1800] + [t + 60 for t in taken])
+    lt = time.localtime(after)
+    for day in range(3):
         for hm in sorted(ch["publish_times"]):
             h, m = (int(x) for x in str(hm).split(":"))
             ts = time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday + day, h, m, 0, 0, 0, -1))
-            if ts > now + 1800 and not any(abs(ts - t) < 60 for t in taken):
+            if ts > after:
                 return ts
-    return now + 86400
+    return after + 86400
 
 
 def made_today(store, ch: dict) -> int:
@@ -866,6 +868,8 @@ class Uploader(Crew):
             bus.notice(f"auth:{acct}", f"Sign in to YouTube for {ch['name']}", f"http://127.0.0.1:{port}/auth/youtube/login?account={acct}")
             return AgentResult("wait", "SIGN IN", f"{len(ready)} Short{'s' if len(ready) != 1 else ''} waiting: sign in to YouTube for {ch['name']}")
         bus.clear_notice(f"auth:{acct}")
+        if ch["privacy"] == "scheduled":           # know every release already set, Mani's own included, before choosing the next time
+            await AnalyticsManager(ch, **self.opts)._refresh(ctx, [v for v in store.kv_list(LOG) if v.get("channel") == ch["id"]])
         done = []
         async with self.client() as c:
             for rec in sorted(ready, key=lambda v: v["made"])[:ch["uploads_per_run"]]:

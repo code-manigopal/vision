@@ -193,7 +193,9 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   agent events carry `director`. Crew for Confessions Everywhere: Story Scout → Story Writer → Screenplay Writer →
   Keyword Generator + Voice Artist → Footage Collector → Footage Generator → Editor → Uploader → Analytics Manager.
   **Mani's choice (2026-10-06): no review at all for Confessions Everywhere.** `privacy: scheduled` uploads each Short as
-  private with a publishing time, the next free slot in `publish_times` (`next_slot`), and YouTube makes it public by
+  private with a publishing time: the first `publish_times` slot after the last release already scheduled (`next_slot`;
+  the releases are one queue in upload order, never filled into an earlier gap; the Uploader first refreshes every
+  video's `publishAt` so Mani's hand-set times count), and YouTube makes it public by
   itself; no notice is raised. His rhythm: four a day, released at 06:00, 12:00, 18:00 and 00:00. The master runs every morning
   at 05:00 (`run_at` on the master, a cron job beside the six-hourly cycle) to make, upload and schedule the day's four;
   `create_after: "05:00"` keeps a night-time cycle from starting the day's Shorts early. (`privacy: unlisted` is the earlier mode: a notice with the Studio link, public or delete by
