@@ -448,7 +448,7 @@ def test_viewer_comment_then_a_classic_with_citation_playlist_and_invitation(tmp
     assert c["screenplay"][-2]["text"].endswith("A retelling of “The Last Leaf”, by O. Henry.") and c["screenplay"][-1]["text"].startswith("Subscribe")
     desc = yt["meta"]["snippet"]["description"]                  # the last upload was the classic
     assert f"\n\n{cta}\n\nRetold from “The Last Leaf” by O. Henry, in “The Four Million” (public domain): https://www.gutenberg.org/ebooks/2776" in desc
-    assert yt["made_playlist"] == "Classic Stories" and [i["playlistId"] for i in yt["playlist_items"]] == ["PL1"] and yt["posted"] == [cta, cta]
+    assert yt["made_playlist"] == "Classic Stories" and [i["playlistId"] for i in yt["playlist_items"]] == ["PL1"] and yt["posted"] == [cta, cta, cta]     # both uploads, and the earlier public Short that never had it
     assert store.kv_get(youtube.STATE, "confessions:playlist:Classic Stories") == {"id": "PL1"}
     assert "in “Classic Stories”" in {a["name"]: a for a in bus.state["masters"]["youtube"]["agents"]}["Uploader"]["summary"]
 
@@ -456,7 +456,7 @@ def test_viewer_comment_then_a_classic_with_citation_playlist_and_invitation(tmp
     youtube.reset_today(store, "confessions")
     m.agents[0].members[0].ch["shorts_per_day"] = 1
     asyncio.run(m.cycle(bus, store))
-    assert "youtube-scope-confessions" in bus.state["notices"] and len(yt["posted"]) == 2
+    assert "youtube-scope-confessions" in bus.state["notices"] and len(yt["posted"]) == 3
     assert len([v for v in store.kv_list(youtube.LOG) if v.get("kind") == "classic"]) == 2
 
 
@@ -535,7 +535,12 @@ def test_scheduled_upload_takes_the_next_free_slot_and_needs_no_review(tmp_path,
     yt["items"] = [{"id": "vid1", "status": {"privacyStatus": "private", "publishAt": "2031-01-02T03:04:05Z"}, "statistics": {}}]
     assert "1 scheduled" in asyncio.run(analytics.run(ctx)).summary and store.kv_get(youtube.LOG, "j1")["publish_at"] == 1925089445
     yt["items"] = [{"id": "vid1", "status": {"privacyStatus": "public"}, "statistics": {"viewCount": "7"}}]
+    monkeypatch.setattr(oauth, "granted", lambda account: "https://www.googleapis.com/auth/youtube.force-ssl")
+    uploader.ch["cta"] = "Tell us yours."                      # a scheduled video is private, so the invitation waits until it is public
+    assert "posted" not in yt
     assert "1 public with 7 views" in asyncio.run(analytics.run(ctx)).summary
+    asyncio.run(analytics.run(ctx))
+    assert yt["posted"] == ["Tell us yours."] and store.kv_get(youtube.LOG, "j1")["cta_done"] is True      # once, not on every run
 
 
 def test_text_is_cut_into_even_parts():

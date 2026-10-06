@@ -1029,14 +1029,18 @@ class Uploader(Crew):
                     pid = r.json().get("id") if r.status_code == 200 else None
                 if pid:
                     store.kv_put(STATE, slot, {"id": pid})
-                    r = await c.post(API + "/playlistItems", params={"part": "snippet"}, headers=auth,
-                                     json={"snippet": {"playlistId": pid, "resourceId": {"kind": "youtube#video", "videoId": rec["video_id"]}}})
+                    for attempt in range(3):          # YouTube now and then answers "the operation was aborted" on a fresh upload: ask again
+                        r = await c.post(API + "/playlistItems", params={"part": "snippet"}, headers=auth,
+                                         json={"snippet": {"playlistId": pid, "resourceId": {"kind": "youtube#video", "videoId": rec["video_id"]}}})
+                        if r.status_code == 200:
+                            break
+                        await asyncio.sleep(4)
                 notes.append(f"in “{name}”" if pid and r.status_code == 200 else f"playlist failed: {_reason(r)}")
-            if ch["cta"]:
-                r = await c.post(API + "/commentThreads", params={"part": "snippet"}, headers=auth,
-                                 json={"snippet": {"videoId": rec["video_id"], "topLevelComment": {"snippet": {"textOriginal": ch["cta"]}}}})
-                if r.status_code != 200:
-                    notes.append(f"comment failed: {_reason(r)}")
+            if ch["cta"] and rec.get("status") in ("public", "unlisted"):     # a private (scheduled) video takes no comments: the Analytics
+                if await post_invitation(c, auth, ch, rec["video_id"]):        # Manager posts the invitation once it has gone public
+                    rec["cta_done"] = True
+                else:
+                    notes.append("comment failed")
         except httpx.HTTPError as e:
             notes.append(f"extras failed: {e}")
         return f" ({', '.join(notes)})" if notes else ""
@@ -1072,13 +1076,25 @@ class Uploader(Crew):
                 rec.pop("_ts", None)
                 rec.update(status=ch["privacy"], video_id=out["id"], url=f"https://youtu.be/{out['id']}", uploaded=time.time(), publish_at=out["publish_at"])
                 store.kv_put(LOG, key, rec)
+                extras = await self._extras(ctx, c, token, rec)
+                store.kv_put(LOG, key, rec)
                 when = time.strftime(" for %a %H:%M", time.localtime(out["publish_at"])) if out["publish_at"] else ""
                 if when:                                   # no review step: it goes public by itself
                     bus.say(f"{ch['name']} · “{rec['title']}” goes public{when.replace(' for', '')}")
                 else:
                     review_notice(bus, ch, rec)
-                done.append(rec["title"] + when + await self._extras(ctx, c, token, rec))
+                done.append(rec["title"] + when + extras)
         return AgentResult("done", "UPLOADED", f"Uploaded as {ch['privacy']}: " + "; ".join(f"“{t}”" if " for " not in t else t for t in done))
+
+
+async def post_invitation(c: httpx.AsyncClient, auth: dict, ch: dict, video_id: str) -> bool:
+    """The channel's own comment under a video, inviting viewers' confessions. Only a public or unlisted video can take it."""
+    try:
+        r = await c.post(API + "/commentThreads", params={"part": "snippet"}, headers=auth,
+                         json={"snippet": {"videoId": video_id, "topLevelComment": {"snippet": {"textOriginal": ch["cta"]}}}})
+        return r.status_code == 200
+    except httpx.HTTPError:
+        return False
 
 
 def _about(rec: dict) -> str:
@@ -1120,6 +1136,7 @@ class AnalyticsManager(Crew):
         if r.status_code != 200:
             raise RuntimeError(f"YouTube stats failed ({r.status_code}): {_reason(r)}")
         found = {i["id"]: i for i in r.json().get("items", [])}
+        invite = bool(self.ch["cta"]) and "youtube.force-ssl" in oauth.granted(account(self.ch))
         for v in live[:50]:
             item = found.get(v["video_id"])
             was = v["status"]
@@ -1132,6 +1149,9 @@ class AnalyticsManager(Crew):
             if item:
                 v["stats"] = {k: int(item.get("statistics", {}).get(f"{k}Count", 0)) for k in ("view", "like", "comment")}
                 v["checked"] = time.time()
+            if invite and v["status"] == "public" and not v.get("cta_done"):     # it has gone public: now it can take the channel's invitation
+                async with self.client() as c2:
+                    v["cta_done"] = await post_invitation(c2, {"Authorization": f"Bearer {token}"}, self.ch, v["video_id"])
             if v["status"] in ("public", "deleted", "scheduled") and was != v["status"]:
                 ctx["bus"].clear_notice(f"youtube-review-{v['video_id']}")
             ctx["store"].kv_put(LOG, v["_key"], {k: x for k, x in v.items() if not k.startswith("_")})
