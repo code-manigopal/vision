@@ -32,6 +32,11 @@ class WriterLLM:
         self.prompts.append(prompt)
         if prompt.startswith("You screen"):
             return {"ok": True, "why": ""} if self.safe else None
+        if prompt.startswith("Plan short science") or "motivational stories" in prompt[:60]:
+            what = "science" if prompt.startswith("Plan") else "motivational"
+            body = {"science": "Why is the sea salty? Rain wears salts out of rock, rivers carry them down, and the sun lifts only the water back out.",
+                    "motivational": "A single father fails his licence exam twice, nearly gives up, and passes by studying one page every night."}[what]
+            return [{"title": f"A {what} one", "premise": body}]
         if prompt.startswith("Invent premises"):
             texts = ["A retired teacher kept quiet about the exam she let a struggling pupil pass, until an old letter turned up at a funeral.",
                      "A delivery driver pocketed a tip meant for a colleague, and a message sent to the wrong person brought it all out.",
@@ -39,7 +44,7 @@ class WriterLLM:
             return [{"title": f"Premise {n + 1}", "premise": t} for n, t in enumerate(texts)] + [
                 {"title": "Same again", "premise": texts[0].replace("funeral", "wedding")}, {"title": "Too thin", "premise": "Short."},
                 {"title": "Dark", "premise": "A man planned a murder in a small town and nobody ever found out about it at all."}]
-        if prompt.startswith("Retell") or prompt.startswith("Write an original"):
+        if prompt.startswith("Retell") or prompt.startswith("Write a"):
             sentence = "She kept the letter in a drawer, and every year she almost threw it away. "
             return {"title": "The letter she never sent", "story": " ".join((sentence * 40).split()[:self.story_words]) + ".", "hashtags": ["confession", "#storytime"], "mood": "Sad"}
         return None                                    # keyword list: fall back to plain keywords
@@ -129,7 +134,21 @@ def test_writer_tier_uses_groq_then_falls_back(monkeypatch):
     monkeypatch.setenv("GROQ_API_KEY", "k")
     assert asyncio.run(llm.json("hi", tier="writer")) == {"ok": True}
     assert seen == {"url": "https://api.groq.com/openai/v1/chat/completions", "auth": "Bearer k", "model": "llama-x"}
-    monkeypatch.delenv("GROQ_API_KEY")
+    calls = []                                    # a 429 from the hosted model: wait as told, then the same request again
+
+    async def nap(seconds):
+        calls.append(seconds)
+
+    def busy(req):
+        calls.append("post")
+        return httpx.Response(429, headers={"retry-after": "7"}) if calls.count("post") == 1 else httpx.Response(200, json={"choices": [{"message": {"content": "[1]"}}]})
+
+    import vision.services.llm as llm_mod
+    monkeypatch.setattr(llm_mod.asyncio, "sleep", nap)
+    slow = LLM(Config(llm=LLMConfig(writer_model="llama-x")), client_factory=lambda: httpx.AsyncClient(transport=httpx.MockTransport(busy)))
+    assert asyncio.run(slow.json("hi", tier="writer")) == [1] and calls == ["post", 7.0, "post"]
+    monkeypatch.undo()
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     llm._local_ok = (9e12, True)
     assert asyncio.run(llm.pick("writer")) == "local"
@@ -375,7 +394,7 @@ def test_original_stories_fill_the_day_when_no_real_story_is_waiting(tmp_path, m
     bus, store = EventBus(), Store(tmp_path / "t.db")
     report = asyncio.run(m.cycle(bus, store))
     log = store.kv_list(youtube.LOG)
-    assert len(log) == 2 and all(v["original"] and v["source"]["from"] == "original" for v in log) and "2 made" in report
+    assert len(log) == 2 and all(v["original"] and v["source"]["from"] == "original (confession)" and v["kind"] == "original" for v in log) and "2 made" in report
     assert len({v["source"]["title"] for v in log} & {"Premise 1", "Premise 2", "Premise 3"}) == 2     # two different premises, each used once
     bank = store.kv_list(youtube.PREMISES)
     assert sorted(p["title"] for p in bank) == ["Premise 1", "Premise 2", "Premise 3"] and sum(p["used"] for p in bank) == 2   # thin and unsafe ones never enter
@@ -425,6 +444,64 @@ def test_viewer_comment_then_a_classic_with_citation_playlist_and_invitation(tmp
     asyncio.run(m.cycle(bus, store))
     assert "youtube-scope-confessions" in bus.state["notices"] and len(yt["posted"]) == 2
     assert len([v for v in store.kv_list(youtube.LOG) if v.get("kind") == "classic"]) == 2
+
+
+def test_original_kinds_take_turns_and_each_is_written_by_its_own_rules(tmp_path, monkeypatch, media):
+    llm = WriterLLM(story_words=70)
+    m = make(tmp_path, monkeypatch, media, [], llm, originals=True, original_genres=["confession", "motivational", "science"])
+    monkeypatch.delenv("REDDIT_CLIENT_ID")
+    scout, writer = m.agents[0].members[0], m.agents[0].members[1]
+    store, bus = Store(tmp_path / "t.db"), EventBus()
+    seen = []
+    for _ in range(3):
+        ctx = {"store": store, "bus": bus, "llm": llm, "cfg": Config(), "master": "youtube"}
+        asyncio.run(scout.run(ctx))
+        asyncio.run(writer.run(ctx))
+        seen.append((ctx["job"]["genre"], youtube.kind(ctx["job"]), next(p for p in reversed(llm.prompts) if p.startswith("Write a"))))
+    assert [g for g, _, _ in seen] == ["confession", "motivational", "science"] and [k for _, k, _ in seen] == ["original", "motivational", "science"]
+    assert "confession-style story" in seen[0][2] and "end on a hopeful, motivating note" in seen[0][2]
+    assert "motivational story" in seen[1][2] and "never by luck" in seen[1][2]
+    assert seen[2][2].startswith("Write a true science story") and "leave it out" in seen[2][2] and "the wonder of it" in seen[2][2] and "hopeful" not in seen[2][2]
+    science = next(p for p in store.kv_list(youtube.PREMISES) if p["genre"] == "science")
+    assert science["seed"].split(":")[0] in youtube.SCIENCE and science["used"]
+    assert youtube._about({"kind": "motivational"}).strip() == "This story is fiction." and youtube._about({"kind": "science"}) == ""
+
+
+def test_scheduled_upload_takes_the_next_free_slot_and_needs_no_review(tmp_path, monkeypatch, media):
+    async def token(account, provider, client=None):
+        return "tok"
+
+    import time as _t
+    monkeypatch.setattr(oauth, "access_token", token)
+    yt = {}
+    m = make(tmp_path, monkeypatch, media, [], WriterLLM(), yt, privacy="scheduled", publish_times=["08:00", "20:00"])
+    uploader, analytics = m.agents[0].members[-2], m.agents[0].members[-1]
+    ch = uploader.ch
+    store, bus = Store(tmp_path / "t.db"), EventBus()
+    lt = _t.localtime()
+    noon = _t.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday, 12, 0, 0, 0, 0, -1))
+    first = youtube.next_slot(store, ch, noon)
+    assert _t.strftime("%H:%M", _t.localtime(first)) == "20:00" and first - noon == 8 * 3600
+    store.kv_put(youtube.LOG, "taken", {"channel": "confessions", "status": "scheduled", "publish_at": first, "made": 1.0, "title": "T", "seconds": 60})
+    second = youtube.next_slot(store, ch, noon)
+    assert _t.strftime("%H:%M", _t.localtime(second)) == "08:00" and 0 < second - first < 86400        # that slot is taken: the next morning
+    assert youtube.next_slot(store, ch, first - 600) == second                                             # under half an hour away is too close
+    store.kv_delete(youtube.LOG, "taken")
+
+    f = tmp_path / "final.mp4"
+    f.write_bytes(b"v" * 10)
+    store.kv_put(youtube.LOG, "j1", {"channel": "confessions", "status": "ready", "made": _t.time(), "title": "A Short", "hashtags": [], "file": str(f), "seconds": 60, "kind": "real"})
+    ctx = {"store": store, "bus": bus, "cfg": Config(), "master": "youtube"}
+    res = asyncio.run(uploader.run(ctx))
+    rec = store.kv_get(youtube.LOG, "j1")
+    assert yt["meta"]["status"]["privacyStatus"] == "private" and yt["meta"]["status"]["publishAt"] == _t.strftime("%Y-%m-%dT%H:%M:%SZ", _t.gmtime(rec["publish_at"]))
+    assert rec["status"] == "scheduled" and rec["publish_at"] > _t.time() + 1700 and "Uploaded as scheduled: A Short for " in res.summary
+    assert not bus.state["notices"]                                                                          # nothing waits for Mani
+
+    yt["items"] = [{"id": "vid1", "status": {"privacyStatus": "private", "publishAt": "2031-01-02T03:04:05Z"}, "statistics": {}}]
+    assert "1 scheduled" in asyncio.run(analytics.run(ctx)).summary and store.kv_get(youtube.LOG, "j1")["publish_at"] == 1925089445
+    yt["items"] = [{"id": "vid1", "status": {"privacyStatus": "public"}, "statistics": {"viewCount": "7"}}]
+    assert "1 public with 7 views" in asyncio.run(analytics.run(ctx)).summary
 
 
 def test_scout_says_no_without_a_clear_yes_and_asks_for_a_source(tmp_path, monkeypatch, media):
@@ -484,6 +561,31 @@ def test_catalog_matches_the_crew():
     assert [[s.title, [a.name for a in s.agents]] for s in d.crew] == spec["agents"][0]["crew_stages"]
     cfg = Config(masters={"youtube": {"mode": "live"}})
     assert isinstance(next(m for m in build_masters(cfg) if m.id == "youtube").agents[0], Director)
+
+
+def test_morning_run_and_no_shorts_before_the_starting_hour(tmp_path, monkeypatch, media):
+    from vision.orchestrator import Orchestrator
+    cfg = Config(only_masters=["youtube"], masters={"youtube": {"mode": "live", "run_at": ["05:00"], "cycle_minutes": 360}})
+    from vision.masters import build_masters
+
+    async def jobs():
+        orch = Orchestrator(cfg, build_masters(cfg), EventBus(), Store(tmp_path / "o.db"))
+        orch.start_schedules()
+        found = {j.id: str(j.trigger) for j in orch.scheduler.get_jobs()}
+        orch.scheduler.shutdown(wait=False)
+        orch._watch.cancel()
+        return found
+
+    found = asyncio.run(jobs())
+    assert "cycle:youtube" in found and "hour='5', minute='0'" in found["at:youtube:05:00"] and not any(k.startswith("at:news") for k in found)
+
+    m = make(tmp_path, monkeypatch, media, [], WriterLLM(), originals=True, create_after="23:59")
+    monkeypatch.delenv("REDDIT_CLIENT_ID")
+    monkeypatch.setattr(youtube.time, "strftime", lambda fmt, *a: "04:10" if fmt == "%H:%M" else __import__("time").strftime(fmt, *a))
+    bus, store = EventBus(), Store(tmp_path / "t.db")
+    asyncio.run(m.cycle(bus, store))
+    scout = {a["name"]: a for a in bus.state["masters"]["youtube"]["agents"]}["Story Scout"]
+    assert scout["label"] == "NOT YET" and scout["summary"] == "Today's Shorts start at 23:59" and store.kv_list(youtube.LOG) == []
 
 
 def test_only_masters_switches_the_others_off():

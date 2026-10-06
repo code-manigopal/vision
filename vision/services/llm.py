@@ -12,6 +12,7 @@ available, calls raise LLMUnavailable and agents fall back to their rule-based b
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
@@ -94,9 +95,17 @@ class LLM:
                                 "messages": ([{"role": "system", "content": system}] if system else []) + _to_openai(messages)}
         if tools:
             body["tools"] = [{"type": "function", "function": t} for t in tools]
-        async with self._client() as c:
-            r = await c.post((base or self.cfg.llm.local_base_url).rstrip("/") + "/chat/completions", json=body,
-                             headers={"Authorization": f"Bearer {key}"} if key else None)
+        for attempt in range(4):
+            async with self._client() as c:
+                r = await c.post((base or self.cfg.llm.local_base_url).rstrip("/") + "/chat/completions", json=body,
+                                 headers={"Authorization": f"Bearer {key}"} if key else None)
+            if r.status_code != 429 or not key or attempt == 3:
+                break
+            try:                                   # a hosted model's per-minute allowance: wait as long as it says, then ask again
+                wait = float(r.headers.get("retry-after") or 20)
+            except ValueError:
+                wait = 20
+            await asyncio.sleep(min(max(wait, 1), 65))
         r.raise_for_status()
         msg = r.json()["choices"][0]["message"]
         calls = [{"id": tc.get("id") or f"call_{i}", "name": tc["function"]["name"],

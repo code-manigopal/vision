@@ -20,6 +20,7 @@
 from __future__ import annotations
 
 import asyncio
+import calendar
 import difflib
 import random
 import re
@@ -45,7 +46,8 @@ CHANNEL = {"id": "confessions", "name": "Confessions Everywhere", "director": "C
            "shorts_per_day": 1, "subreddits": ["confession", "offmychest", "TrueOffMyChest"], "seconds": [60, 120],
            "voice_engine": "edge", "voice": "en-US-GuyNeural", "voice_speed": 0.95, "pause": 0.32, "outro": "Subscribe to our channel for more interesting stories.",
            "outro_query": "city lights at night", "logo": "", "caption_font": "", "generator": {},
-           "privacy": "unlisted", "category": "24", "synthetic_flag": True, "uploads_per_run": 2, "drive_folder": "", "voices": {}, "music": True, "music_volume": 0.12, "ending": "hopeful", "originals": False,
+           "privacy": "unlisted", "category": "24", "synthetic_flag": True, "uploads_per_run": 2, "drive_folder": "", "voices": {}, "music": True, "music_volume": 0.12, "ending": "hopeful", "originals": False, "original_genres": ["confession"],
+           "publish_times": ["06:00", "12:00", "18:00", "00:00"], "create_after": "",
            "classics": [], "classics_per_day": 1, "playlists": {}, "viewer_comments": False, "cta": ""}
 # Original stories: a premise is built from one of each, so no two start from the same place (20 x 12 x 10 x 10 combinations).
 THEMES = ["a family secret", "a betrayal by a close friend", "a lie that grew too big", "a second chance that felt undeserved", "a debt never repaid",
@@ -57,6 +59,52 @@ SETTINGS = ["a small town", "a big-city apartment block", "a family business", "
             "a wedding reception", "a gathering after a funeral", "an office after hours", "a village festival", "a first job abroad", "a shared taxi home"]
 TELLERS = ["a woman in her thirties", "a man in his forties", "a young man just out of college", "a grandmother", "a single father", "a newly married woman",
            "a retired teacher", "a night-shift nurse", "a delivery driver", "an eldest daughter"]
+STRUGGLES = ["starting over at fifty after losing a job", "failing the same exam twice", "a small shop a month from closing", "an injury that ended a sport",
+             "learning to read as an adult", "the first lonely year in a new country", "a stammer and a job that needs speaking", "a manuscript rejected thirty times",
+             "caring for a sick parent while studying at night", "paying off a debt that felt endless", "going back to school with teenagers", "a business partner who walked away",
+             "stage fright before a first performance", "training for a race after years of illness", "raising two children on one small wage", "a farm after a ruined harvest"]
+LIFTS = ["one sentence from a teacher", "a small habit kept every single day", "a second attempt nobody expected", "help from a stranger", "a letter kept in a wallet",
+         "a promise made to a child", "the worst day turning out to be the start", "watching someone older try again", "a plain notebook of small wins", "a neighbour's quiet example"]
+SCIENCE = {
+    "space": ["how a star is born and how it dies", "why the Moon always shows us the same face", "the journey of the Voyager probes", "what a black hole's edge is",
+              "why Mars is red", "what Saturn's rings are made of", "why a day on Venus is longer than its year", "how sunlight reaches Earth", "what causes the auroras",
+              "where comets come from and why they grow tails", "how astronauts sleep and eat in orbit", "why we only ever see the past when we look at the stars"],
+    "earth": ["how mountains rise", "why volcanoes erupt", "the journey of a single raindrop", "what causes earthquakes", "why the sky is blue and sunsets are red",
+              "how lightning forms", "how a river carves a canyon", "how fossils form", "why we have seasons", "how Earth's magnetic field shields us",
+              "how deserts form", "what the ice ages left behind"],
+    "forests": ["how trees share food through fungi underground", "how a tree lifts water to its top", "why leaves change colour in autumn", "how a forest returns after fire",
+                "the journey of a seed", "the layers of a rainforest", "how tree rings record the years", "how bees and flowers depend on each other",
+                "what happens to a fallen log", "how mangroves live in salt water", "why old forests store so much carbon", "how a single fig tree feeds a forest"],
+    "oceans": ["what happens when a whale dies and sinks", "life around deep-sea vents", "how coral reefs are built", "the great ocean currents", "why some sea creatures glow",
+               "what causes the tides", "why the sea is salty", "the midnight zone of the deep sea", "how sea turtles find their way home", "how tiny plankton make the air we breathe",
+               "the hidden forests of kelp", "how an octopus thinks and hides"]}
+ANGLES = ["as a journey followed from start to finish", "as a mystery that people slowly solved", "as a day in the life of one creature or thing",
+          "as the answer to a question a child might ask", "as a story of something happening right now, unseen"]
+GENRE_ASK = {
+    "confession": ("Invent premises for short confession-style stories: an ordinary adult did or hid something, and it comes into the open. One premise per numbered "
+                   "line below, using that line's ingredients. Believable everyday life; adults only; no names or real places; nothing sexual, no self-harm, no "
+                   "violent crime.", "2-3 sentences: who, what they did or hid, what forces it out, what is at stake"),
+    "motivational": ("Invent premises for short motivational stories: an ordinary adult faces a real difficulty and gets through it by their own effort, a step at a "
+                     "time, with no luck, miracle or sudden riches. One premise per numbered line below, using that line's ingredients. Believable everyday life; "
+                     "no names or real places; no self-harm.", "2-3 sentences: who, what they are up against, the low point, what they do about it"),
+    "science": ("Plan short science stories that teach one thing well. One plan per numbered line below, on that line's subject and told the way it says. Use only "
+                "well-established facts of the kind found in a school textbook or an encyclopedia; no numbers or dates unless they are famous and certain; nothing "
+                "speculative.", "the question it answers, then the 3-4 established facts it will tell, in order")}
+GENRE_WRITE = {
+    "confession": ("Write an original, fictional confession-style story from the premise below",
+                   "- Third person, told like something a person carried for years and finally admitted (\"she\", \"he\", \"they\"). Do not claim it is real "
+                   "and do not say anyone shared or sent it.\n"
+                   "- Believable, specific, everyday detail; build the tension step by step to the moment it comes out.\n"
+                   "- Adults only. No personal names at all, and no real city, company or school. Nothing sexual, no self-harm, no violent crime.\n"),
+    "motivational": ("Write an original, fictional motivational story from the premise below",
+                     "- Third person (\"she\", \"he\", \"they\"). Do not claim it is real.\n"
+                     "- Show the difficulty honestly, then the small, concrete steps that got them through; earned by effort, never by luck.\n"
+                     "- No personal names, no real city, company or school. No self-harm. No preaching and no list of tips: the story carries the lesson.\n"),
+    "science": ("Write a true science story from the plan below",
+                "- Every statement must be established science, as a good encyclopedia would give it. If you are not certain of a number or a date, leave it out. "
+                "Nothing speculative, no myths presented as fact.\n"
+                "- Tell it as a story with a beginning, a turn and an end, in plain words a twelve-year-old follows; explain any term you use.\n"
+                "- No invented people or dialogue.\n")}
 TURNS = ["a message sent to the wrong person", "an old letter found by accident", "an overheard phone call", "a stranger who knew the truth",
          "a photograph that should not exist", "a bank statement left open", "a child's innocent question", "a confession at the worst possible moment",
          "a reunion after ten years", "a diary returned by mistake"]
@@ -194,8 +242,10 @@ def can_manage(ctx: dict, ch: dict) -> bool:
 
 
 def kind(job: dict) -> str:
-    """classic (a public-domain story), original (written from a premise), viewer (a comment on the channel) or real."""
-    return "classic" if job.get("classic") else "original" if job.get("original") else "viewer" if job["source"].get("from") == "viewer comment" else "real"
+    """classic (a public-domain story), original / motivational / science (written from a premise), viewer (a comment on the channel) or real."""
+    if job.get("original"):
+        return job["genre"] if job.get("genre") in ("motivational", "science") else "original"
+    return "classic" if job.get("classic") else "viewer" if job["source"].get("from") == "viewer comment" else "real"
 
 
 def save_record(store, ch: dict, job: dict) -> None:
@@ -208,6 +258,20 @@ def save_record(store, ch: dict, job: dict) -> None:
         "screenplay": [{"text": b["text"], "seconds": round(b["dur"], 2), "query": b["query"], "footage": (b.get("visual") or {}).get("page", "")} for b in job["beats"]],
         "credits": sorted({b["visual"]["credit"] for b in job["beats"] if b.get("visual")})})
     store.kv_put(SEEN, job["key"], {"state": "done"})
+
+
+def next_slot(store, ch: dict, now: float | None = None) -> float:
+    """The next free publishing time for the channel: one of its publish_times, at least half an hour away, not already taken."""
+    now = now or time.time()
+    taken = [v["publish_at"] for v in store.kv_list(LOG) if v.get("channel") == ch["id"] and v.get("publish_at") and v.get("status") != "deleted"]
+    lt = time.localtime(now)
+    for day in range(60):
+        for hm in sorted(ch["publish_times"]):
+            h, m = (int(x) for x in str(hm).split(":"))
+            ts = time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday + day, h, m, 0, 0, 0, -1))
+            if ts > now + 1800 and not any(abs(ts - t) < 60 for t in taken):
+                return ts
+    return now + 86400
 
 
 def made_today(store, ch: dict) -> int:
@@ -291,6 +355,8 @@ class StoryScout(Crew):
         made = made_today(store, ch)
         if made >= ch["shorts_per_day"]:
             return AgentResult("idle", "QUOTA MET", f"{made} of {ch['shorts_per_day']} Shorts made today")
+        if ch["create_after"] and time.strftime("%H:%M") < ch["create_after"]:      # the day's Shorts are not started before this hour
+            return AgentResult("idle", "NOT YET", f"Today's Shorts start at {ch['create_after']}")
         await self._from_drive(ctx)
         cands = self._inbox() + await self._from_comments(ctx)
         if reddit.configured():
@@ -339,7 +405,7 @@ class StoryScout(Crew):
         if ch["originals"]:                         # no real story to tell today: an original one, from a premise never used before
             p = await self._original(ctx)
             if p:
-                return AgentResult("done", "INVENTED", f"An original story: “{p['title'][:70]}”", {"source": ctx["job"]["source"]})
+                return AgentResult("done", "INVENTED", f"An original {ctx['job']['genre']} story: “{p['title'][:70]}”", {"source": ctx["job"]["source"]})
         return AgentResult("idle", "NOTHING NEW", f"No usable story among {len(cands)} candidates")
 
     async def _from_comments(self, ctx: dict) -> list[dict]:
@@ -404,26 +470,38 @@ class StoryScout(Crew):
             return cite
         return None
 
-    async def _premises(self, ctx: dict, bank: list[dict]) -> list[dict]:
+    def _mixes(self, genre: str, bank: list[dict], rng) -> list[tuple[str, str]]:
+        """Eight (seed, ingredient line) pairs for a genre. A science subject is not taken twice while others are still unused."""
+        if genre == "science":
+            taken = {p.get("seed") for p in bank}
+            subjects = [(d, t) for d, ts in SCIENCE.items() for t in ts]
+            pool = [x for x in subjects if f"{x[0]}: {x[1]}" not in taken] or subjects
+            return [(f"{d}: {t}", f"{d}: {t}; told {rng.choice(ANGLES)}") for d, t in rng.sample(pool, min(8, len(pool)))]
+        if genre == "motivational":
+            return [("", f"{rng.choice(STRUGGLES)}; about {rng.choice(TELLERS)}; in {rng.choice(SETTINGS)}; it turns on {rng.choice(LIFTS)}") for _ in range(8)]
+        return [("", f"{rng.choice(THEMES)}; set in {rng.choice(SETTINGS)}; told about {rng.choice(TELLERS)}; it comes out through {rng.choice(TURNS)}") for _ in range(8)]
+
+    async def _premises(self, ctx: dict, bank: list[dict], genre: str) -> list[dict]:
         """Ask the model for a batch of new premises, each from its own mix of ingredients; keep the ones unlike any before."""
         ch, store = self.ch, ctx["store"]
-        rng = self.opts.get("rng") or random
-        mixes = [(rng.choice(THEMES), rng.choice(SETTINGS), rng.choice(TELLERS), rng.choice(TURNS)) for _ in range(8)]
-        listing = "\n".join(f"{n + 1}. {t}; set in {s}; told about {w}; it comes out through {u}" for n, (t, s, w, u) in enumerate(mixes))
-        got = await ctx["llm"].json(
-            "Invent premises for short confession-style stories: an ordinary adult did or hid something, and it comes into the open. One premise per "
-            "numbered line below, using that line's ingredients. Believable everyday life; adults only; no names or real places; nothing sexual, no "
-            "self-harm, no violent crime. Each premise must be clearly different from the others and from these already used: "
-            + "; ".join(p["title"] for p in bank[:40]) + ".\n"
-            f'Answer as a JSON list of {len(mixes)} objects: {{"title": "under 60 characters", "premise": "2-3 sentences: who, what they did or hid, '
-            f'what forces it out, what is at stake"}}.\n\n{listing}', tier="writer", max_tokens=2500)
+        mixes = self._mixes(genre, bank, self.opts.get("rng") or random)
+        ask, shape = GENRE_ASK[genre]
+        listing = "\n".join(f"{n + 1}. {line}" for n, (_, line) in enumerate(mixes))
+        got = None
+        for _ in range(2):                            # the model now and then returns a broken list: ask once more
+            got = await ctx["llm"].json(
+                f"{ask} Each must be clearly different from the others and from these already used: " + "; ".join(p["title"] for p in bank[:40]) + ".\n"
+                f'Answer as a JSON list of {len(mixes)} objects: {{"title": "under 60 characters", "premise": "{shape}"}}.\n\n{listing}', tier="writer", max_tokens=3000)
+            if isinstance(got, list) and got:
+                break
         old = [p["premise"].lower() for p in bank]
         fresh = []
         for n, d in enumerate(got if isinstance(got, list) else []):
             text = " ".join(str((d or {}).get("premise") or "").split()) if isinstance(d, dict) else ""
-            if not 60 <= len(text) <= 700 or UNSAFE.search(text) or any(difflib.SequenceMatcher(None, text.lower(), o).ratio() > 0.75 for o in old):
+            if not 60 <= len(text) <= 900 or UNSAFE.search(text) or any(difflib.SequenceMatcher(None, text.lower(), o).ratio() > 0.75 for o in old):
                 continue
-            rec = {"channel": ch["id"], "title": " ".join(str(d.get("title") or text[:50]).split())[:80], "premise": text, "used": False}
+            rec = {"channel": ch["id"], "genre": genre, "seed": mixes[n][0] if n < len(mixes) else "", "used": False,
+                   "title": " ".join(str(d.get("title") or text[:50]).split())[:80], "premise": text}
             key = f"{ch['id']}:{time.time_ns()}-{n}"
             store.kv_put(PREMISES, key, rec)
             old.append(text.lower())
@@ -432,8 +510,12 @@ class StoryScout(Crew):
 
     async def _original(self, ctx: dict) -> dict | None:
         ch, store = self.ch, ctx["store"]
-        bank = [p for p in store.kv_list(PREMISES, limit=5000) if p.get("channel") == ch["id"]]
-        fresh = [p for p in bank if not p.get("used")] or await self._premises(ctx, bank)
+        everything = [p for p in store.kv_list(PREMISES, limit=5000) if p.get("channel") == ch["id"]]
+        genres = [g for g in ch["original_genres"] if g in GENRE_ASK] or ["confession"]
+        told = {g: sum(p.get("used") and p.get("genre", "confession") == g for p in everything) for g in genres}
+        genre = min(genres, key=lambda g: told[g])                 # the kind told least so far, so the kinds take turns
+        bank = [p for p in everything if p.get("genre", "confession") == genre]
+        fresh = [p for p in bank if not p.get("used")] or await self._premises(ctx, bank, genre)
         if not fresh:
             return None
         p = fresh[-1]
@@ -443,7 +525,7 @@ class StoryScout(Crew):
         work = ROOT / "data" / "shorts" / ch["id"] / f"{time.strftime('%Y%m%d')}-{slug}"
         work.mkdir(parents=True, exist_ok=True)
         ctx["job"] = {"id": f"{ch['id']}-orig-{tail}", "key": f"{ch['id']}:orig-{tail}", "channel": ch["id"], "dir": str(work), "raw": p["premise"],
-                      "original": True, "source": {"url": "", "title": p["title"], "from": "original", "score": None}}
+                      "original": True, "genre": genre, "source": {"url": "", "title": p["title"], "from": f"original ({genre})", "score": None}}
         return p
 
 
@@ -456,13 +538,11 @@ class StoryWriter(Crew):
             return self.idle()
         lo, hi = word_range(self.ch)
         ending = ENDINGS.get(self.ch["ending"], ENDINGS["plain"])
-        prompt = (f"Write an original, fictional confession-style story from the premise below, narrated for a 1-2 minute video, {lo + 20}-{hi - 20} words.\n"
-                  "- Third person, told like something a person carried for years and finally admitted (\"she\", \"he\", \"they\"). Do not claim it is real "
-                  "and do not say anyone shared or sent it.\n"
-                  "- The first sentence is a hook that makes someone stop scrolling.\n"
-                  "- Believable, specific, everyday detail; build the tension step by step to the moment it comes out.\n"
-                  "- Adults only. No personal names at all, and no real city, company or school. Nothing sexual, no self-harm, no violent crime.\n"
-                  f"- Short spoken sentences. {ending} No call to subscribe.\n"
+        head, rules = GENRE_WRITE.get(job.get("genre") or "confession", GENRE_WRITE["confession"])
+        science = job.get("genre") == "science"
+        prompt = (f"{head}, narrated for a 1-2 minute video, {lo + 20}-{hi - 20} words.\n"
+                  "- The first sentence is a hook that makes someone stop scrolling.\n" + rules +
+                  "- Short spoken sentences. " + ("End on what it means for us, or the wonder of it." if science else ending) + " No call to subscribe.\n"
                   'Answer as {"title": "under 70 characters, no names", "story": "...", "hashtags": ["3 to 5 words, no #"], '
                   f'"mood": "the one word that fits the story best: {" | ".join(MOODS)}"}}.\n\n'
                   f"Premise:\n{job['raw']}") if job.get("original") else (
@@ -720,14 +800,16 @@ class Uploader(Crew):
             while chunk := f.read(1 << 20):
                 yield chunk
 
-    async def _upload(self, c: httpx.AsyncClient, token: str, rec: dict) -> dict:
+    async def _upload(self, ctx: dict, c: httpx.AsyncClient, token: str, rec: dict) -> dict:
         ch = self.ch
         tags = list(dict.fromkeys(rec["hashtags"] + ["#Shorts"]))
+        when = next_slot(ctx["store"], ch) if ch["privacy"] == "scheduled" else None     # scheduled = private now, public by itself at its slot
         body = {"snippet": {"title": rec["title"][:100], "categoryId": str(ch["category"]), "tags": [t.lstrip("#") for t in tags],
                             "description": " ".join(tags) + (f"\n\n{ch['cta']}" if ch["cta"] else "") + _about(rec)
                             + ("\n\nFootage: " + "; ".join(rec["credits"]) if rec.get("credits") else "")
                             + (f"\nMusic: {rec['music']}" if rec.get("music") else "")},
-                "status": {"privacyStatus": ch["privacy"], "selfDeclaredMadeForKids": False, "containsSyntheticMedia": bool(ch["synthetic_flag"])}}
+                "status": {"privacyStatus": "private" if when else ch["privacy"], "selfDeclaredMadeForKids": False, "containsSyntheticMedia": bool(ch["synthetic_flag"]),
+                           **({"publishAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(when))} if when else {})}}
         size = Path(rec["file"]).stat().st_size
         auth = {"Authorization": f"Bearer {token}"}
         r = await c.post(UPLOAD, params={"uploadType": "resumable", "part": "snippet,status"}, json=body,
@@ -737,7 +819,7 @@ class Uploader(Crew):
         r = await c.put(r.headers["location"], content=self._file(Path(rec["file"])), headers={**auth, "Content-Type": "video/mp4", "Content-Length": str(size)})
         if r.status_code not in (200, 201):
             raise RuntimeError(f"YouTube upload failed ({r.status_code}): {_reason(r)}")
-        return r.json()
+        return {**r.json(), "publish_at": when}
 
     async def _extras(self, ctx: dict, c: httpx.AsyncClient, token: str, rec: dict) -> str:
         """After the upload: the Short joins its playlist and gets the channel's invitation as a comment. Neither can fail the upload."""
@@ -787,14 +869,18 @@ class Uploader(Crew):
         done = []
         async with self.client() as c:
             for rec in sorted(ready, key=lambda v: v["made"])[:ch["uploads_per_run"]]:
-                out = await self._upload(c, token, rec)
+                out = await self._upload(ctx, c, token, rec)
                 key = rec.pop("_key")
                 rec.pop("_ts", None)
-                rec.update(status=ch["privacy"], video_id=out["id"], url=f"https://youtu.be/{out['id']}", uploaded=time.time())
+                rec.update(status=ch["privacy"], video_id=out["id"], url=f"https://youtu.be/{out['id']}", uploaded=time.time(), publish_at=out["publish_at"])
                 store.kv_put(LOG, key, rec)
-                review_notice(bus, ch, rec)
-                done.append(rec["title"] + await self._extras(ctx, c, token, rec))
-        return AgentResult("done", "UPLOADED", f"Uploaded as {ch['privacy']}: " + "; ".join(f"“{t}”" for t in done))
+                when = time.strftime(" for %a %H:%M", time.localtime(out["publish_at"])) if out["publish_at"] else ""
+                if when:                                   # no review step: it goes public by itself
+                    bus.say(f"{ch['name']} · “{rec['title']}” goes public{when.replace(' for', '')}")
+                else:
+                    review_notice(bus, ch, rec)
+                done.append(rec["title"] + when + await self._extras(ctx, c, token, rec))
+        return AgentResult("done", "UPLOADED", f"Uploaded as {ch['privacy']}: " + "; ".join(f"“{t}”" if " for " not in t else t for t in done))
 
 
 def _about(rec: dict) -> str:
@@ -802,7 +888,8 @@ def _about(rec: dict) -> str:
     c = rec.get("classic")
     if c:
         return f"\n\nRetold from “{c['title']}” by {c['author']}, in “{c['book']}” (public domain): {c['url']}"
-    return {"original": "\n\nThis story is fiction.", "viewer": "\n\nRetold from a viewer's comment."}.get(rec.get("kind"), "")
+    return {"original": "\n\nThis story is fiction.", "motivational": "\n\nThis story is fiction.",
+            "viewer": "\n\nRetold from a viewer's comment."}.get(rec.get("kind"), "")
 
 
 def review_notice(bus, ch: dict, rec: dict) -> None:
@@ -823,7 +910,7 @@ class AnalyticsManager(Crew):
     name, tier, note = "Analytics Manager", "API", "follows each Short, reports the channel"
 
     async def _refresh(self, ctx: dict, log: list[dict]) -> None:
-        live = [v for v in log if v.get("video_id") and v.get("status") in ("unlisted", "private", "public")]
+        live = [v for v in log if v.get("video_id") and v.get("status") in ("unlisted", "private", "public", "scheduled")]
         if not live:
             return
         try:
@@ -839,10 +926,15 @@ class AnalyticsManager(Crew):
             item = found.get(v["video_id"])
             was = v["status"]
             v["status"] = item["status"]["privacyStatus"] if item else "deleted"
+            due = (item or {}).get("status", {}).get("publishAt")
+            if due:                                # private with a publishing time = scheduled, whether VISION or Mani set it
+                v["publish_at"] = calendar.timegm(time.strptime(due[:19], "%Y-%m-%dT%H:%M:%S"))
+            if v["status"] == "private" and (due or (v.get("publish_at") or 0) > time.time() - 3600):
+                v["status"] = "scheduled"
             if item:
                 v["stats"] = {k: int(item.get("statistics", {}).get(f"{k}Count", 0)) for k in ("view", "like", "comment")}
                 v["checked"] = time.time()
-            if v["status"] in ("public", "deleted") and was != v["status"]:
+            if v["status"] in ("public", "deleted", "scheduled") and was != v["status"]:
                 ctx["bus"].clear_notice(f"youtube-review-{v['video_id']}")
             ctx["store"].kv_put(LOG, v["_key"], {k: x for k, x in v.items() if not k.startswith("_")})
 
@@ -855,13 +947,15 @@ class AnalyticsManager(Crew):
         for v in log:                              # notices live in memory: put the reminder back after a restart
             if v["status"] == "unlisted" and v.get("video_id"):
                 review_notice(ctx["bus"], ch, v)
-        n = {s: sum(v["status"] == s for v in log) for s in ("ready", "unlisted", "private", "public", "deleted")}
+        n = {s: sum(v["status"] == s for v in log) for s in ("ready", "unlisted", "scheduled", "private", "public", "deleted")}
         views = sum((v.get("stats") or {}).get("view", 0) for v in log if v["status"] == "public")
         parts = [f"{len(log)} made"]
         if n["ready"]:
             parts.append(f"{n['ready']} waiting for upload")
         if n["unlisted"]:
             parts.append(f"{n['unlisted']} unlisted for your review")
+        if n["scheduled"]:
+            parts.append(f"{n['scheduled']} scheduled")
         if n["private"]:
             parts.append(f"{n['private']} held private by YouTube")
         if n["public"]:

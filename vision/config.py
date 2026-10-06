@@ -23,6 +23,7 @@ class MasterConfig(BaseModel):
     trust: str = "OBSERVE"          # OBSERVE | SUGGEST | ACT | HOLD
     mode: str = "stub"              # stub = demo agents until the real master is built; live = real agents
     cycle_minutes: int | None = None
+    run_at: list[str] = Field(default_factory=list)   # extra runs at fixed times of day, e.g. ["05:00"]
     options: dict[str, Any] = Field(default_factory=dict)
 
 

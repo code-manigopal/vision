@@ -192,8 +192,12 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   (`options.channels`) → that channel's crew. `Director` (agents.py) runs its crew like a master runs sub-agents; crew
   agent events carry `director`. Crew for Confessions Everywhere: Story Scout → Story Writer → Screenplay Writer →
   Keyword Generator + Voice Artist → Footage Collector → Footage Generator → Editor → Uploader → Analytics Manager.
-  **Mani's choice: no approval before upload.** The Uploader posts every Short as unlisted (`privacy`) and raises a notice
-  with the YouTube Studio link; public or delete is done by hand on YouTube. Analytics Manager checks each uploaded Short
+  **Mani's choice (2026-10-06): no review at all for Confessions Everywhere.** `privacy: scheduled` uploads each Short as
+  private with a publishing time, the next free slot in `publish_times` (`next_slot`), and YouTube makes it public by
+  itself; no notice is raised. His rhythm: four a day, released at 06:00, 12:00, 18:00 and 00:00. The master runs every morning
+  at 05:00 (`run_at` on the master, a cron job beside the six-hourly cycle) to make, upload and schedule the day's four;
+  `create_after: "05:00"` keeps a night-time cycle from starting the day's Shorts early. (`privacy: unlisted` is the earlier mode: a notice with the Studio link, public or delete by
+  hand.) A private video with a `publishAt` counts as `scheduled`, whether VISION or Mani scheduled it. Analytics Manager checks each uploaded Short
   (status, views, likes, comments), clears the notice once it is public or deleted, and its report feeds the briefs.
   Sign-in per channel: `/auth/youtube/login?account=youtube-<channel id>` (oauth provider `youtube`, same Google app).
   Stories come from `inbox/confessions/<channel id>/*.txt` (first line may be the source URL); the Scout first copies new
@@ -212,6 +216,11 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   Mani pins by hand). `playlists` maps a story kind to a playlist (classics → "Classic Stories"), created if missing.
   Playlists and comments need the `youtube.force-ssl` permission: `can_manage()` checks the sign-in's recorded scope and
   raises a "sign in again" notice without stopping uploads. VISION never deletes a video.
+  Originals come in kinds that take turns (`original_genres`): confession, motivational, and science (48 subjects across
+  space, earth, forests, oceans in `SCIENCE`; a subject isn't repeated while others are unused). Each kind has its own
+  premise request and writing rules (`GENRE_ASK`, `GENRE_WRITE`); science must stay with established facts and leaves
+  out any number it isn't sure of, but **nothing checks its facts**. Kinds `science` and `motivational` have their own playlists.
+  Groq's free allowance is 8,000 tokens a minute and 1,000 requests a day; `llm.py` waits and retries on a 429.
   Real stories always go first. **Mani intends to monetise**: YouTube's "inauthentic content" policy is the standing risk
   for AI-written stories; variety and his review before publishing are the mitigations. A story is screened by rule and by the model (no clear yes = not used), retold in the third
   person with no names or places, and split into beats by code, not by the model. The voice speaks whole sentences

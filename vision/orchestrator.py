@@ -80,6 +80,10 @@ class Orchestrator:
             minutes = self.cfg.cycle_minutes(m.id)
             self.scheduler.add_job(self.run_master, IntervalTrigger(minutes=minutes), args=[m.id, "schedule"],
                                    id=f"cycle:{m.id}", max_instances=1, coalesce=True, replace_existing=True)
+            for hhmm in self.cfg.master(m.id).run_at:            # and at fixed times of day, where a master asks for them
+                h, mnt = (int(x) for x in hhmm.split(":"))
+                self.scheduler.add_job(self.run_master, CronTrigger(hour=h, minute=mnt), args=[m.id, "schedule"],
+                                       id=f"at:{m.id}:{hhmm}", max_instances=1, coalesce=True, replace_existing=True)
         for hhmm in self.cfg.vision.brief_times:
             h, mnt = (int(x) for x in hhmm.split(":"))
             kind = "morning" if h < 12 else "evening"
