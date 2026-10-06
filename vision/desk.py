@@ -226,7 +226,7 @@ def youtube(store):
             return None
         vid = v.get("video_id")
         return _item("short:" + _s(v.get("_key")), st, v.get("title"), f"{round(v.get('seconds') or 0)} s · {v.get('status')}", v.get("uploaded") or v.get("made") or v.get("_ts"),
-                     _rows(("Channel", v.get("channel")), ("Kind", v.get("kind")),
+                     _rows(("Channel", v.get("channel")), ("Format", "long video" if v.get("format") == "long" else "Short"), ("Kind", v.get("kind")),
                            ("Goes public", time.strftime("%a %d %b %H:%M", time.localtime(v["publish_at"])) if v.get("publish_at") and v.get("status") == "scheduled" else None), ("Views", stats.get("view") if vid else None), ("Likes", stats.get("like") if vid else None),
                            ("Comments", stats.get("comment") if vid else None), ("Mood", v.get("mood")), ("Voice", v.get("voice")), ("Music", v.get("music")),
                            ("Hashtags", " ".join(v.get("hashtags") or [])),

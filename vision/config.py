@@ -44,6 +44,7 @@ class LLMConfig(BaseModel):
     cloud_model: str = ""
     writer_base_url: str = "https://api.groq.com/openai/v1"
     writer_model: str = ""
+    writer_reasoning: str = ""      # low | medium | high for a hosted reasoning model; blank = not sent
 
 
 class Config(BaseModel):

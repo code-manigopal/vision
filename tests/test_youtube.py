@@ -4,6 +4,7 @@ import asyncio
 import json
 import shutil
 import subprocess
+from pathlib import Path
 
 import httpx
 import pytest
@@ -44,6 +45,12 @@ class WriterLLM:
             return [{"title": f"Premise {n + 1}", "premise": t} for n, t in enumerate(texts)] + [
                 {"title": "Same again", "premise": texts[0].replace("funeral", "wedding")}, {"title": "Too thin", "premise": "Short."},
                 {"title": "Dark", "premise": "A man planned a murder in a small town and nobody ever found out about it at all."}]
+        if prompt.startswith("You are retelling"):
+            part = int(prompt.split("This is part ")[1].split(".")[0])
+            return {"heading": f"Chapter {part}", "text": " ".join(("He climbed the stair once more that night and said nothing. " * 12).split()[:self.story_words])}
+        if prompt.startswith("For a narrated video"):
+            return {"title": "The Last Leaf, Retold", "thumbnail": "one last leaf", "thumbnail_image": "ivy leaf wall", "summary": "A painter. A promise.",
+                    "hashtags": ["classic", "ohenry"], "mood": "sad"}
         if prompt.startswith("Retell") or prompt.startswith("Write a"):
             sentence = "She kept the letter in a drawer, and every year she almost threw it away. "
             return {"title": "The letter she never sent", "story": " ".join((sentence * 40).split()[:self.story_words]) + ".", "hashtags": ["confession", "#storytime"], "mood": "Sad"}
@@ -107,6 +114,7 @@ def test_screenplay_beats_and_outro():
 
 
 def test_speed_and_caption_chunks():
+    assert shorts_edit.plain("side\u2011walk\u00a0now") == "side-walk now"
     assert shorts_edit.speed(4, 4) == 1 and shorts_edit.speed(30, 4) == 1 and shorts_edit.speed(5, 4) == 1.25 and shorts_edit.speed(1, 4) == 0.6
     caps = shorts_edit.chunks([{"start": 0, "dur": 2.2, "speech": 2.0, "text": "one two three four"},
                                {"start": 2.2, "dur": 1.2, "text": "x", "words": [["Hello", 0.1, 0.4], ["extraordinarily", 0.4, 1.0]]}])
@@ -128,12 +136,13 @@ def test_writer_tier_uses_groq_then_falls_back(monkeypatch):
 
     def handler(req):
         seen["url"], seen["auth"], seen["model"] = str(req.url), req.headers.get("authorization"), json.loads(req.content)["model"]
+        seen["effort"] = json.loads(req.content).get("reasoning_effort")
         return httpx.Response(200, json={"choices": [{"message": {"content": '{"ok": true}'}}]})
 
-    llm = LLM(Config(llm=LLMConfig(writer_model="llama-x")), client_factory=lambda: httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+    llm = LLM(Config(llm=LLMConfig(writer_model="llama-x", writer_reasoning="low")), client_factory=lambda: httpx.AsyncClient(transport=httpx.MockTransport(handler)))
     monkeypatch.setenv("GROQ_API_KEY", "k")
     assert asyncio.run(llm.json("hi", tier="writer")) == {"ok": True}
-    assert seen == {"url": "https://api.groq.com/openai/v1/chat/completions", "auth": "Bearer k", "model": "llama-x"}
+    assert seen == {"url": "https://api.groq.com/openai/v1/chat/completions", "auth": "Bearer k", "model": "llama-x", "effort": "low"}
     calls = []                                    # a 429 from the hosted model: wait as told, then the same request again
 
     async def nap(seconds):
@@ -218,6 +227,9 @@ def web(media, posts, yt):
             if req.method == "POST":
                 yt["made_playlist"] = json.loads(req.content)["snippet"]["title"]
                 return httpx.Response(200, json={"id": "PL1"})
+            return httpx.Response(200, json={"items": []})
+        if "thumbnails/set" in u:
+            yt["thumb"] = (req.url.params["videoId"], len(req.read()), req.headers["content-type"])
             return httpx.Response(200, json={"items": []})
         if "/playlistItems" in u:
             yt.setdefault("playlist_items", []).append(json.loads(req.content)["snippet"])
@@ -510,7 +522,7 @@ def test_scheduled_upload_takes_the_next_free_slot_and_needs_no_review(tmp_path,
     yt["items"] = [{"id": "vid1", "status": {"privacyStatus": "private", "publishAt": "2031-01-02T03:04:05Z"}, "statistics": {}}]
     res = asyncio.run(uploader.run(ctx))
     assert (res.status, res.label) == ("wait", "UPLOAD LIMIT") and "1 waiting" in res.summary and store.kv_get(youtube.LOG, "j2")["status"] == "ready"
-    assert "daily upload limit" in bus.state["notices"]["youtube-limit-confessions"]["text"]
+    assert "YouTube itself is refusing uploads" in bus.state["notices"]["youtube-limit-confessions"]["text"]
     scout = m.agents[0].members[0]
     scout.ch["shorts_per_day"] = 1
     youtube.reset_today(store, "confessions")
@@ -524,6 +536,57 @@ def test_scheduled_upload_takes_the_next_free_slot_and_needs_no_review(tmp_path,
     assert "1 scheduled" in asyncio.run(analytics.run(ctx)).summary and store.kv_get(youtube.LOG, "j1")["publish_at"] == 1925089445
     yt["items"] = [{"id": "vid1", "status": {"privacyStatus": "public"}, "statistics": {"viewCount": "7"}}]
     assert "1 public with 7 views" in asyncio.run(analytics.run(ctx)).summary
+
+
+def test_text_is_cut_into_even_parts():
+    text = "\n\n".join(f"Paragraph {n} has exactly seven words here." for n in range(12))
+    cut = youtube.parts(text, 3)
+    assert len(cut) == 3 and [len(c.split()) for c in cut] == [28, 28, 28] and " ".join(cut) == " ".join(text.split())
+    assert len(youtube.parts("One. Two. Three. Four. Five. Six.", 3)) == 3 and youtube.clock(605) == "10:05"
+
+
+@FFMPEG
+def test_long_video_is_written_in_chapters_made_wide_given_a_cover_and_queued_apart(tmp_path, monkeypatch, media):
+    async def token(account, provider, client=None):
+        return "tok"
+
+    import time as _t
+    monkeypatch.setattr(oauth, "access_token", token)
+    monkeypatch.setattr(oauth, "granted", lambda account: "https://www.googleapis.com/auth/youtube.force-ssl")
+    yt, llm = {}, WriterLLM(story_words=45)
+    m = make(tmp_path, monkeypatch, media, [], llm, yt, shorts_per_day=0, classics=[2776], privacy="scheduled", publish_times=["06:00"],
+             long={"enabled": True, "minutes": [1, 1], "min_source_words": 300, "create_after": "", "publish_time": "20:00", "shot_seconds": 6})
+    monkeypatch.delenv("REDDIT_CLIENT_ID")
+    bus, store = EventBus(), Store(tmp_path / "t.db")
+    store.kv_put(youtube.LOG, "short", {"channel": "confessions", "status": "scheduled", "publish_at": _t.time() + 9 * 86400, "made": 1.0, "title": "A Short", "seconds": 60,
+                                        "video_id": "s1"})
+    yt["items"] = [{"id": "s1", "status": {"privacyStatus": "private", "publishAt": _t.strftime("%Y-%m-%dT%H:%M:%SZ", _t.gmtime(_t.time() + 9 * 86400))}, "statistics": {}},
+                   {"id": "vid1", "status": {"privacyStatus": "private", "publishAt": "2031-01-02T03:04:05Z"}, "statistics": {}}]
+    report = asyncio.run(m.cycle(bus, store))
+    crew = {a["name"]: a for a in bus.state["masters"]["youtube"]["agents"]}
+    rec = next(v for v in store.kv_list(youtube.LOG) if v.get("format") == "long")
+    assert sum(p.startswith("You are retelling") for p in llm.prompts) == 3 and "3 chapters" in crew["Story Writer"]["summary"]     # one request per chapter
+    first, last = [p for p in llm.prompts if p.startswith("You are retelling")][0], [p for p in llm.prompts if p.startswith("You are retelling")][-1]
+    assert "Open with one sentence that hooks" in first and "keep the author's own ending" in last and "The part before this one ended" in last
+    assert [c["heading"] for c in rec["chapters"]] == ["Chapter 1", "Chapter 2", "Chapter 3"] and rec["chapters"][0]["t"] == 0 and rec["chapters"][1]["t"] > 5
+    assert "shots" in crew["Screenplay Writer"]["summary"] and "long video" in crew["Editor"]["summary"] and "thumbnail made" in crew["Editor"]["summary"]
+    assert rec["title"] == "The Last Leaf, Retold" and rec["thumb_text"] == "one last leaf" and rec["kind"] == "classic" and rec["mood"] == "sad"
+
+    probe = json.loads(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "stream=codec_type,width,height", "-of", "json", rec["file"]],
+                                      capture_output=True, text=True, check=True).stdout)
+    video = next(x for x in probe["streams"] if x["codec_type"] == "video")
+    assert (video["width"], video["height"]) == (1920, 1080)
+    assert Image.open(rec["thumb"]).size == (1280, 720) and sorted(p.name for p in Path(rec["file"]).parent.iterdir()) == ["final.mp4", "thumb.jpg"]
+
+    desc, tags = yt["meta"]["snippet"]["description"], yt["meta"]["snippet"]["tags"]
+    assert desc.startswith("A painter. A promise.\n\n#classic #ohenry") and "#Shorts" not in desc and "Shorts" not in tags
+    assert "\n\n0:00 Chapter 1\n" in desc and "Retold from “The Last Leaf” by O. Henry" in desc
+    assert yt["thumb"][0] == "vid1" and yt["thumb"][1] > 2000 and yt["thumb"][2] == "image/jpeg" and yt["made_playlist"] == "Long Stories"
+    import calendar
+    sent = calendar.timegm(_t.strptime(yt["meta"]["status"]["publishAt"], "%Y-%m-%dT%H:%M:%SZ"))
+    due = _t.localtime(sent)                                    # its own queue: the next 20:00, not after the Short scheduled nine days out
+    assert (due.tm_hour, due.tm_min) == (20, 0) and sent < _t.time() + 2 * 86400 and "thumbnail set" in crew["Uploader"]["summary"]
+    assert "2 made" in report
 
 
 def test_scout_says_no_without_a_clear_yes_and_asks_for_a_source(tmp_path, monkeypatch, media):

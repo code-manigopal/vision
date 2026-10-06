@@ -86,15 +86,18 @@ class LLM:
         if which == "local":
             return await self._openai(messages, system, tools, max_tokens, temperature)
         if which == "writer":
+            # a reasoning model left to itself can spend the whole answer on hidden thinking and return nothing: cap the effort
+            extra = {"reasoning_effort": self.cfg.llm.writer_reasoning} if self.cfg.llm.writer_reasoning else {}
             return await self._openai(messages, system, tools, max_tokens, temperature, base=self.cfg.llm.writer_base_url,
-                                      model=self.cfg.llm.writer_model, key=secret("GROQ_API_KEY"))
+                                      model=self.cfg.llm.writer_model, key=secret("GROQ_API_KEY"), extra=extra)
         return await self._anthropic(messages, system, tools, max_tokens, temperature)
 
-    async def _openai(self, messages, system, tools, max_tokens, temperature, *, base: str | None = None, model: str | None = None, key: str | None = None) -> dict:
+    async def _openai(self, messages, system, tools, max_tokens, temperature, *, base: str | None = None, model: str | None = None, key: str | None = None, extra: dict | None = None) -> dict:
         body: dict[str, Any] = {"model": model or self.cfg.llm.local_model or "local-model", "max_tokens": max_tokens, "temperature": temperature,
                                 "messages": ([{"role": "system", "content": system}] if system else []) + _to_openai(messages)}
         if tools:
             body["tools"] = [{"type": "function", "function": t} for t in tools]
+        body.update(extra or {})
         for attempt in range(4):
             async with self._client() as c:
                 r = await c.post((base or self.cfg.llm.local_base_url).rstrip("/") + "/chat/completions", json=body,

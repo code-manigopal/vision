@@ -218,6 +218,16 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   Mani pins by hand). `playlists` maps a story kind to a playlist (classics → "Classic Stories"), created if missing.
   Playlists and comments need the `youtube.force-ssl` permission: `can_manage()` checks the sign-in's recorded scope and
   raises a "sign in again" notice without stopping uploads. VISION never deletes a video.
+  **Long videos** (`long:` on the channel, defaults in `LONG`): one a day beside the Shorts, wide 1920x1080, 6-9 minutes, a
+  classic with at least `min_source_words` (1600). Written **chapter by chapter on Groq** (Mani's choice over the local
+  model): `parts()` cuts the original into 3-6 pieces and each request retells only its piece, which keeps every request
+  under Groq's 8,000 tokens a minute; one more small request gives title, cover words, summary, hashtags, mood. Beats are
+  grouped into shots of about `shot_seconds` (8) that share one clip (`shot` on a beat; a Short's beats are each their own
+  shot); keywords and footage are per shot; `assemble(wide=True)` joins beats with the same footage into one segment.
+  The Editor makes `thumb.jpg` (`shorts_edit.thumbnail`: a stock photo, darkened, with the writer's 2-5 words) and the
+  Uploader sets it, adds chapter timestamps to the description and puts the video in `long.playlist`. Long videos have
+  their own release queue (`next_slot(fmt="long")`, daily at `long.publish_time`) and are made in the 03:00 run
+  (`long.create_after`), apart from the Shorts, to stay inside Pexels' 200 requests an hour.
   YouTube caps uploads per channel per rolling day (hit on 2026-10-06 after about ten in 24 hours, deleted ones included;
   error `uploadLimitExceeded`). The Uploader treats it as a wait, not a fault: a notice, the Shorts stay `ready` and go up on
   a later run; and the Scout makes no new Shorts while `shorts_per_day` or more are waiting (label BACKLOG).

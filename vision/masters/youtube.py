@@ -48,7 +48,7 @@ CHANNEL = {"id": "confessions", "name": "Confessions Everywhere", "director": "C
            "outro_query": "city lights at night", "logo": "", "caption_font": "", "generator": {},
            "privacy": "unlisted", "category": "24", "synthetic_flag": True, "uploads_per_run": 4, "drive_folder": "", "voices": {}, "music": True, "music_volume": 0.12, "ending": "hopeful", "originals": False, "original_genres": ["confession"],
            "publish_times": ["06:00", "12:00", "18:00", "00:00"], "create_after": "",
-           "classics": [], "classics_per_day": 1, "playlists": {}, "viewer_comments": False, "cta": ""}
+           "classics": [], "classics_per_day": 1, "playlists": {}, "viewer_comments": False, "cta": "", "long": {}}
 # Original stories: a premise is built from one of each, so no two start from the same place (20 x 12 x 10 x 10 combinations).
 THEMES = ["a family secret", "a betrayal by a close friend", "a lie that grew too big", "a second chance that felt undeserved", "a debt never repaid",
           "an inheritance dispute", "a workplace mistake hidden for years", "a kindness kept secret", "a marriage on autopilot", "jealousy of a sibling",
@@ -109,6 +109,11 @@ TURNS = ["a message sent to the wrong person", "an old letter found by accident"
          "a photograph that should not exist", "a bank statement left open", "a child's innocent question", "a confession at the worst possible moment",
          "a reunion after ten years", "a diary returned by mistake"]
 MOODS = ("dark", "sad", "warm", "light", "dramatic")
+# A long video (wide, several minutes) beside the Shorts: channel option `long`, these are its defaults.
+LONG = {"enabled": False, "per_day": 1, "minutes": [6, 9], "publish_time": "20:00", "playlist": "Long Stories", "create_after": "03:00",
+        "min_source_words": 1600, "shot_seconds": 8}
+OLD_WORDS = ("The original is old: never repeat a slur or a dated word for a race, nationality, religion or disability; describe the person plainly "
+             "(\"a musician\", \"a man on the ferry\") or leave the detail out.")
 ENDINGS = {"plain": "End on the outcome or the thought it leaves.",
            "hopeful": "However heavy the story, end on a hopeful, motivating note: what the person learned, or how they found the strength to move "
                       "forward. You may add one or two closing sentences of reflection for that, but no new events."}
@@ -120,6 +125,29 @@ STOP = set("a an and are as at be but by for from had has have he her his i in i
 
 def channel(raw: dict | None) -> dict:
     return {**CHANNEL, **(raw or {})}
+
+
+def long_of(ch: dict) -> dict:
+    return {**LONG, **(ch.get("long") or {})}
+
+
+def parts(text: str, n: int) -> list[str]:
+    """The text cut into n consecutive pieces of about equal length, at paragraph ends (at sentence ends when it has few paragraphs)."""
+    units = [" ".join(u.split()) for u in re.split(r"\n\s*\n", text) if u.strip()]
+    if len(units) < n * 2:
+        units = [u for u in re.split(r"(?<=[.!?])[\"'”’)\]]*\s+", " ".join(text.split())) if u.strip()]
+    total, out, cur, done = sum(len(u.split()) for u in units), [], [], 0
+    for u in units:
+        cur.append(u)
+        done += len(u.split())
+        if len(out) < n - 1 and done >= total * (len(out) + 1) / n:
+            out.append(" ".join(cur))
+            cur = []
+    return [x for x in out + [" ".join(cur)] if x]
+
+
+def clock(seconds: float) -> str:
+    return f"{int(seconds) // 60}:{int(seconds) % 60:02d}"
 
 
 def words(text: str) -> int:
@@ -249,26 +277,30 @@ def kind(job: dict) -> str:
 
 
 def save_record(store, ch: dict, job: dict) -> None:
-    """The log entry for a finished Short: where it came from and everything that went into it."""
+    """The log entry for a finished video: where it came from and everything that went into it."""
     store.kv_put(LOG, job["id"], {
         "channel": ch["id"], "status": "ready", "made": time.time(), "title": job["title"], "hashtags": job["hashtags"],
         "source": job["source"], "script": job["script"], "keywords": job["keywords"], "seconds": job["seconds"], "file": job["file"],
         "mood": job.get("mood", ""), "voice": job.get("voice", ""), "music": job.get("music", ""), "original": bool(job.get("original")), "kind": kind(job),
-        "classic": job.get("classic"),
+        "classic": job.get("classic"), "format": job.get("format", "short"), "summary": job.get("summary", ""),
+        "thumb": job.get("thumb", ""), "thumb_text": job.get("thumb_text", ""),
+        "chapters": [{"t": round(sum(x["dur"] for x in job["beats"][:n])), "heading": b["heading"]} for n, b in enumerate(job["beats"]) if b.get("heading")],
         "screenplay": [{"text": b["text"], "seconds": round(b["dur"], 2), "query": b["query"], "footage": (b.get("visual") or {}).get("page", "")} for b in job["beats"]],
         "credits": sorted({b["visual"]["credit"] for b in job["beats"] if b.get("visual")})})
     store.kv_put(SEEN, job["key"], {"state": "done"})
 
 
-def next_slot(store, ch: dict, now: float | None = None) -> float:
-    """The publishing time for the next Short: the first of the channel's publish_times after the last one already
-    scheduled (the releases form one queue, in upload order), and at least half an hour away."""
+def next_slot(store, ch: dict, now: float | None = None, fmt: str = "short") -> float:
+    """The publishing time for the next video: the first of the channel's publish_times after the last one already
+    scheduled (the releases form one queue, in upload order), and at least half an hour away. Long videos have
+    their own queue, one a day at long.publish_time, so they never take a Short's slot."""
     now = now or time.time()
-    taken = [v["publish_at"] for v in store.kv_list(LOG) if v.get("channel") == ch["id"] and v.get("publish_at") and v.get("status") != "deleted"]
+    taken = [v["publish_at"] for v in store.kv_list(LOG) if v.get("channel") == ch["id"] and v.get("publish_at") and v.get("status") != "deleted"
+             and (v.get("format") == "long") == (fmt == "long")]
     after = max([now + 1800] + [t + 60 for t in taken])
     lt = time.localtime(after)
     for day in range(3):
-        for hm in sorted(ch["publish_times"]):
+        for hm in sorted([long_of(ch)["publish_time"]] if fmt == "long" else ch["publish_times"]):
             h, m = (int(x) for x in str(hm).split(":"))
             ts = time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday + day, h, m, 0, 0, 0, -1))
             if ts > after:
@@ -276,10 +308,11 @@ def next_slot(store, ch: dict, now: float | None = None) -> float:
     return after + 86400
 
 
-def made_today(store, ch: dict) -> int:
+def made_today(store, ch: dict, fmt: str | None = None) -> int:
     # by the day it was made (a later status or stats update re-saves the record); a reset starts the day's count again
     start = max(_midnight(), (store.kv_get(STATE, f"{ch['id']}:quota_reset") or {}).get("at", 0))
-    return sum(v.get("channel") == ch["id"] and (v.get("made") or 0) >= start for v in store.kv_list(LOG))
+    return sum(v.get("channel") == ch["id"] and (v.get("made") or 0) >= start and (fmt is None or (v.get("format") == "long") == (fmt == "long"))
+               for v in store.kv_list(LOG))
 
 
 def _midnight() -> float:
@@ -353,15 +386,33 @@ class StoryScout(Crew):
         return new
 
     async def run(self, ctx: dict) -> AgentResult:
-        ch, store, bus = self.ch, ctx["store"], ctx["bus"]
-        made = made_today(store, ch)
-        if made >= ch["shorts_per_day"]:
-            return AgentResult("idle", "QUOTA MET", f"{made} of {ch['shorts_per_day']} Shorts made today")
+        ch, store = self.ch, ctx["store"]
+        L, now = long_of(ch), time.strftime("%H:%M")
+        shorts, longs = made_today(store, ch, "short"), made_today(store, ch, "long")
+        short_due, long_due = shorts < ch["shorts_per_day"], bool(L["enabled"]) and longs < L["per_day"]
+        if not short_due and not long_due:
+            return AgentResult("idle", "QUOTA MET", f"{shorts} of {ch['shorts_per_day']} Shorts made today" + (f", {longs} of {L['per_day']} long" if L["enabled"] else ""))
         waiting = sum(v.get("channel") == ch["id"] and v.get("status") == "ready" for v in store.kv_list(LOG))
-        if waiting >= ch["shorts_per_day"]:          # finished Shorts are piling up unsent (YouTube's upload limit): make no more until they go
-            return AgentResult("idle", "BACKLOG", f"{waiting} finished Shorts are waiting to upload; no new ones until they go")
-        if ch["create_after"] and time.strftime("%H:%M") < ch["create_after"]:      # the day's Shorts are not started before this hour
-            return AgentResult("idle", "NOT YET", f"Today's Shorts start at {ch['create_after']}")
+        if waiting >= max(1, ch["shorts_per_day"] + (L["per_day"] if L["enabled"] else 0)):    # a day's worth is piling up unsent (YouTube's upload limit)
+            return AgentResult("idle", "BACKLOG", f"{waiting} finished videos are waiting to upload; no new ones until they go")
+        short_now = short_due and not (ch["create_after"] and now < ch["create_after"])      # neither kind is started before its hour
+        long_now = long_due and not (L["create_after"] and now < L["create_after"])
+        if not short_now and not long_now:
+            return AgentResult("idle", "NOT YET", f"Today's Shorts start at {ch['create_after']}" if short_due else f"Today's long video starts at {L['create_after']}")
+        res = None
+        if short_now:
+            res = await self._short(ctx)
+            if ctx.get("job"):
+                return res
+        if long_now:                                 # the day's long video: a classic rich enough to tell over several minutes
+            c = await self._classic(ctx, long=True)
+            if c:
+                return AgentResult("done", "LONG", f"A long video: “{c['title']}” by {c['author']}", {"source": ctx["job"]["source"]})
+        return res or AgentResult("idle", "NOTHING NEW", "No story on the shelf is long enough for a long video")
+
+    async def _short(self, ctx: dict) -> AgentResult:
+        """Find the next Short's story: viewers' comments and Mani's own stories, then a classic, then an original."""
+        ch, store, bus = self.ch, ctx["store"], ctx["bus"]
         await self._from_drive(ctx)
         cands = self._inbox() + await self._from_comments(ctx)
         if reddit.configured():
@@ -437,13 +488,16 @@ class StoryScout(Crew):
                                 "sub": "viewer comment", "url": f"https://www.youtube.com/watch?v={v['video_id']}&lc={top['id']}"})
         return out
 
-    async def _classic(self, ctx: dict) -> dict | None:
-        """The next unused story from the shelf of public-domain books (taking from the least-used book), at most classics_per_day."""
+    async def _classic(self, ctx: dict, long: bool = False) -> dict | None:
+        """The next unused story from the shelf of public-domain books (taking from the least-used book): for a Short at
+        most classics_per_day; for a long video only stories with enough in them to fill it. A story is told once, in one form."""
         ch, store, bus = self.ch, ctx["store"], ctx["bus"]
         start = max(_midnight(), (store.kv_get(STATE, f"{ch['id']}:quota_reset") or {}).get("at", 0))
-        today = sum(v.get("channel") == ch["id"] and v.get("kind") == "classic" and (v.get("made") or 0) >= start for v in store.kv_list(LOG))
-        if not ch["classics"] or today >= ch["classics_per_day"]:
+        today = sum(v.get("channel") == ch["id"] and v.get("kind") == "classic" and v.get("format") != "long" and (v.get("made") or 0) >= start
+                    for v in store.kv_list(LOG))
+        if not ch["classics"] or (not long and today >= ch["classics_per_day"]):
             return None
+        least = long_of(ch)["min_source_words"] if long else 0
         used = {v["_key"] for v in store.kv_list(CLASSICS, limit=5000)}
         for _ in range(6):                            # a story the rules screen out is marked and the next one is tried
             best = None
@@ -453,9 +507,10 @@ class StoryScout(Crew):
                 except (RuntimeError, httpx.HTTPError) as e:
                     bus.say(f"⚠ {ch['name']} · book {bid} could not be fetched: {e}")
                     continue
-                free = [r for r in rows if f"{ch['id']}:{bid}:{r['n']}" not in used]
-                if free and (best is None or len(rows) - len(free) < best[0]):
-                    best = (len(rows) - len(free), int(bid), free[0])
+                free = [r for r in rows if f"{ch['id']}:{bid}:{r['n']}" not in used and r["words"] >= least]
+                told = sum(f"{ch['id']}:{bid}:{r['n']}" in used for r in rows)
+                if free and (best is None or told < best[0]):
+                    best = (told, int(bid), free[0])
             if not best:
                 return None
             _, bid, row = best
@@ -467,11 +522,12 @@ class StoryScout(Crew):
             if not safe:
                 continue
             slug = re.sub(r"[^a-z0-9]+", "-", row["title"].lower()).strip("-")[:40] or f"{bid}-{row['n']}"
-            work = ROOT / "data" / "shorts" / ch["id"] / f"{time.strftime('%Y%m%d')}-{slug}"
+            work = ROOT / "data" / "shorts" / ch["id"] / f"{time.strftime('%Y%m%d')}-{'long-' if long else ''}{slug}"
             work.mkdir(parents=True, exist_ok=True)
             cite = {"title": row["title"], "author": row["author"], "book": row["book"], "url": gutenberg.page(bid)}
-            ctx["job"] = {"id": f"{ch['id']}-classic-{bid}-{row['n']}", "key": f"{ch['id']}:classic-{bid}-{row['n']}", "channel": ch["id"], "dir": str(work),
-                          "raw": text, "classic": cite, "source": {"url": cite["url"], "title": row["title"], "from": "classic", "score": None}}
+            tag = "long" if long else "classic"
+            ctx["job"] = {"id": f"{ch['id']}-{tag}-{bid}-{row['n']}", "key": f"{ch['id']}:{tag}-{bid}-{row['n']}", "channel": ch["id"], "dir": str(work),
+                          "format": "long" if long else "short", "raw": text, "classic": cite, "source": {"url": cite["url"], "title": row["title"], "from": "classic", "score": None}}
             return cite
         return None
 
@@ -537,10 +593,62 @@ class StoryScout(Crew):
 class StoryWriter(Crew):
     name, tier, note = "Story Writer", "CLOUD", "retells it with a hook, names and places removed"
 
+    async def _long(self, ctx: dict, job: dict) -> AgentResult:
+        """A long retelling, written chapter by chapter: each request carries only its own part of the original, so
+        the whole stays inside the hosted model's per-minute allowance and no chapter is rushed."""
+        L, cite, src = long_of(self.ch), job["classic"], job["raw"]
+        total = max(L["minutes"][0] * 150, min(L["minutes"][1] * 150, int(words(src) * 0.55)))      # about 150 spoken words a minute
+        pieces = parts(src, max(3, min(6, round(words(src) / 700))))
+        per, chapters = total // len(pieces), []
+        for k, piece in enumerate(pieces):
+            where = ("Open with one sentence that hooks a listener, then begin the story." if k == 0 else
+                     "This is the end of the story: keep the author's own ending, and add no moral of your own." if k == len(pieces) - 1 else
+                     "Do not wrap anything up: the story goes on in the next part.")
+            prev = f"- The part before this one ended: “{' '.join(chapters[-1]['text'].split()[-45:])}” Carry straight on from there; do not repeat it.\n" if chapters else ""
+            prompt = (f"You are retelling the classic short story “{cite['title']}” by {cite['author']} for a narrated video, in {len(pieces)} parts. "
+                      f"This is part {k + 1}.\n"
+                      f"- Retell only this part, faithfully, in {int(per * 0.8)}-{int(per * 1.25)} words: the same characters and events, in order; the turns of the story "
+                      "matter more than every line of talk. Add nothing.\n"
+                      "- Third person, your own plain spoken sentences, easy to follow by ear; do not copy the author's sentences. Character names may stay.\n"
+                      f"- {OLD_WORDS}\n"
+                      f"- {where}\n{prev}"
+                      'Answer as {"heading": "2-5 words naming this part, giving nothing away", "text": "..."}.\n\n'
+                      f"This part of the original:\n{piece}")
+            note, best = "", None
+            for _ in range(3):                         # a part heavy with dialogue comes back long: ask again, then take the nearest
+                d = await ctx["llm"].json(prompt + note, tier="writer", max_tokens=2600)
+                text = " ".join(str((d or {}).get("text") or "").split()) if isinstance(d, dict) else ""
+                if words(text) >= min(80, per * 0.5) and (best is None or abs(words(text) - per) < abs(words(best["text"]) - per)):
+                    best = {"heading": " ".join(str(d.get("heading") or f"Part {k + 1}").split())[:50], "text": text}
+                if per * 0.6 <= words(text) <= per * 1.5:
+                    break
+                note = f"\n\nYour last answer had {words(text)} words. This part must be between {int(per * 0.8)} and {int(per * 1.25)} words, as JSON."
+            if not best:
+                raise RuntimeError(f"the model did not return part {k + 1} of {len(pieces)}")
+            chapters.append(best)
+        job["chapters"], job["script"] = chapters, " ".join(c["text"] for c in chapters)
+        meta = await ctx["llm"].json(
+            f"For a narrated video retelling “{cite['title']}” by {cite['author']}, answer as "
+            '{"title": "under 70 characters, built around the story\'s own title", "thumbnail": "2-5 words for the cover image that make someone click, '
+            'giving nothing away", "thumbnail_image": "2-4 words: one concrete thing to photograph for the cover", "summary": "two sentences for the '
+            f'description, giving nothing away", "hashtags": ["3 to 5 words, no #"], "mood": "one word: {" | ".join(MOODS)}"}}.\n\n'
+            f"How it opens:\n{' '.join(job['script'].split()[:260])}", tier="writer", max_tokens=1200)
+        meta = meta if isinstance(meta, dict) else {}
+        job["title"] = " ".join(str(meta.get("title") or f"{cite['title']}, by {cite['author']}").split())[:90]
+        job["thumb_text"] = " ".join(str(meta.get("thumbnail") or cite["title"]).split()[:6])
+        job["thumb_query"] = " ".join(str(meta.get("thumbnail_image") or "").split())[:60]
+        job["summary"] = " ".join(str(meta.get("summary") or "").split())[:400]
+        job["hashtags"] = ["#" + re.sub(r"\W", "", str(h)) for h in (meta.get("hashtags") or []) if re.sub(r"\W", "", str(h))][:5]
+        mood = re.sub(r"[^a-z]", "", str(meta.get("mood") or "").lower())
+        job["mood"] = mood if mood in MOODS else ""
+        return AgentResult("done", "WRITTEN", f"“{job['title']}” · {words(job['script'])} words in {len(chapters)} chapters" + (f" · {job['mood']}" if job["mood"] else ""))
+
     async def run(self, ctx: dict) -> AgentResult:
         job = ctx.get("job")
         if not job:
             return self.idle()
+        if job.get("format") == "long":
+            return await self._long(ctx, job)
         lo, hi = word_range(self.ch)
         ending = ENDINGS.get(self.ch["ending"], ENDINGS["plain"])
         head, rules = GENRE_WRITE.get(job.get("genre") or "confession", GENRE_WRITE["confession"])
@@ -554,6 +662,7 @@ class StoryWriter(Crew):
                   f"Retell the classic short story below for a 1-2 minute video, {lo + 20}-{hi - 20} words.\n"
                   "- Stay faithful: the same characters, events and the author's own ending. Do not modernise it or add a moral of your own.\n"
                   "- Third person, in your own plain spoken sentences; do not copy the author's sentences. Character names from the story may stay.\n"
+                  f"- {OLD_WORDS}\n"
                   "- The first sentence is a hook that makes someone stop scrolling. No call to subscribe.\n"
                   f'Answer as {{"title": "under 70 characters, built around the story\'s own title", "story": "...", "hashtags": ["3 to 5 words, no #"], '
                   f'"mood": "the one word that fits the story best: {" | ".join(MOODS)}"}}.\n\n'
@@ -593,10 +702,30 @@ class ScreenplayWriter(Crew):
         job = ctx.get("job")
         if not job:
             return self.idle()
+        if job.get("format") == "long":             # chapter by chapter; the picture changes every few sentences, not every one
+            beats: list[dict] = []
+            for k, chp in enumerate(job["chapters"]):
+                mine = screenplay(chp["text"], "")
+                if mine:
+                    mine[0]["heading"] = chp["heading"]
+                beats += [{**b, "chapter": k} for b in mine]
+            beats += screenplay(f"This was a retelling of “{job['classic']['title']}”, by {job['classic']['author']}.", self.ch["outro"])
+            shot, run, need = 0, 0.0, long_of(self.ch)["shot_seconds"]
+            for i, b in enumerate(beats):
+                last = i + 1 == len(beats) or beats[i + 1]["kind"] == "outro" or beats[i + 1].get("chapter") != b.get("chapter")
+                b["i"], b["shot"] = i, shot
+                run += b["target_s"]
+                if run >= need or last or b["kind"] == "outro":
+                    shot, run = shot + 1, 0.0
+            job["beats"] = beats
+            plan = sum(b["target_s"] for b in beats)
+            return AgentResult("done", "TIMED", f"{len(beats)} beats in {shot} shots, about {clock(plan)}")
         told = job["script"]
         if job.get("classic"):                      # the citation is spoken, as the story's last line
             told += f" A retelling of “{job['classic']['title']}”, by {job['classic']['author']}."
         job["beats"] = screenplay(told, self.ch["outro"])
+        for b in job["beats"]:
+            b["shot"] = b["i"]                      # in a Short every beat has its own picture
         plan = sum(b["target_s"] for b in job["beats"])
         return AgentResult("done", "TIMED", f"{len(job['beats'])} beats, about {round(plan)} s")
 
@@ -608,23 +737,32 @@ class KeywordGenerator(Crew):
         job = ctx.get("job")
         if not job:
             return self.idle()
-        story = [b for b in job["beats"] if b["kind"] == "story"]
-        listing = "\n".join(f"{b['i'] + 1}. {b['text']}" for b in story)
-        got = None
-        try:
-            got = await ctx["llm"].json(
-                "For each numbered line of this story give one stock-footage search of 2-4 words: a concrete thing a camera could film that fits the "
-                "line (\"woman staring out rainy window\", not \"sadness\"). No names, no text on screen. "
-                f'Answer as a JSON list of exactly {len(story)} strings, in order.\n\n{listing}', tier="writer", max_tokens=1800)
-        except Exception:
-            pass                                  # no model: plain keywords from the line itself
-        qs = [str(q).strip() for q in got] if isinstance(got, list) and len(got) == len(story) else []
-        for n, b in enumerate(story):
-            b["query"] = qs[n][:60] if qs and qs[n] else fallback_query(b["text"])
+        groups: dict[int, list[dict]] = {}
+        for b in job["beats"]:
+            if b["kind"] == "story":
+                groups.setdefault(b.get("shot", b["i"]), []).append(b)
+        shots, modelled = list(groups.values()), True
+        for at in range(0, len(shots), 30):           # a long video has more shots than one request should carry
+            batch = shots[at:at + 30]
+            listing = "\n".join(f"{n + 1}. {' '.join(x['text'] for x in g)[:320]}" for n, g in enumerate(batch))
+            got = None
+            try:
+                got = await ctx["llm"].json(
+                    "For each numbered line of this story give one stock-footage search of 2-4 words: a concrete thing a camera could film that fits the "
+                    "line (\"woman staring out rainy window\", not \"sadness\"). No names, no text on screen. "
+                    f'Answer as a JSON list of exactly {len(batch)} strings, in order.\n\n{listing}', tier="writer", max_tokens=1800)
+            except Exception:
+                pass                              # no model: plain keywords from the line itself
+            ok = isinstance(got, list) and len(got) == len(batch)
+            modelled = modelled and ok
+            for n, g in enumerate(batch):
+                q = str(got[n]).strip()[:60] if ok and str(got[n]).strip() else fallback_query(g[0]["text"])
+                for x in g:
+                    x["query"] = q
         for b in job["beats"]:
             b.setdefault("query", self.ch["outro_query"])
         job["keywords"] = [b["query"] for b in job["beats"]]
-        return AgentResult("done", "DONE", f"{len(job['keywords'])} searches" + ("" if qs else " (plain keywords, no model)"))
+        return AgentResult("done", "DONE", f"{len(shots) + 1} searches" + ("" if modelled else " (plain keywords where the model gave none)"))
 
 
 class VoiceArtist(Crew):
@@ -732,21 +870,27 @@ class FootageCollector(Crew):
         folder = Path(job["dir"]) / "footage"
         folder.mkdir(exist_ok=True)
         used: set[str] = set()
+        wide = job.get("format") == "long"
+        shots: dict[int, dict | None] = {}             # one clip or photo per shot; the beats of a shot share it
         async with self.client() as c:
             for b in job["beats"]:
-                b["visual"] = None
-                hit = await stock_video.find(c, b["query"], used) or await stock_video.find(c, fallback_query(b["text"]), used)
+                sid = b.get("shot", b["i"])
+                if sid in shots:
+                    b["visual"] = shots[sid]
+                    continue
+                b["visual"] = shots[sid] = None
+                hit = await stock_video.find(c, b["query"], used, wide=wide) or await stock_video.find(c, fallback_query(b["text"]), used, wide=wide)
                 if not hit:
                     continue
-                path = folder / f"beat{b['i']:02d}.{'mp4' if hit['kind'] == 'video' else 'jpg'}"
+                path = folder / f"shot{sid:03d}.{'mp4' if hit['kind'] == 'video' else 'jpg'}"
                 try:
                     await stock_video.download(c, hit["url"], path)
                 except httpx.HTTPError:
                     continue
-                b["visual"] = {**{k: hit[k] for k in ("kind", "duration", "credit", "page", "source")}, "path": str(path)}
-        have = [b["visual"] for b in job["beats"] if b["visual"]]
+                b["visual"] = shots[sid] = {**{k: hit[k] for k in ("kind", "duration", "credit", "page", "source")}, "path": str(path)}
+        have = [v for v in shots.values() if v]
         clips = sum(v["kind"] == "video" for v in have)
-        return AgentResult("done", "COLLECTED", f"{len(have)} of {len(job['beats'])} beats have footage ({clips} clips, {len(have) - clips} photos)")
+        return AgentResult("done", "COLLECTED", f"{len(have)} of {len(shots)} shots have footage ({clips} clips, {len(have) - clips} photos)")
 
 
 class FootageGenerator(Crew):
@@ -785,14 +929,37 @@ class Editor(Crew):
             used = sum(v.get("mood") == job["mood"] and v.get("channel") == self.ch["id"] for v in ctx["store"].kv_list(LOG))
             track = bgm.pick(job["mood"], used)
         job["music"] = (bgm.line(track[1]) or track[0].name) if track else ""
+        wide = job.get("format") == "long"
         out = await asyncio.to_thread(shorts_edit.assemble, Path(job["dir"]), job["beats"], channel=self.ch["name"],
                                       logo=self.ch["logo"] or None, font_path=self.ch["caption_font"] or None,
-                                      music=str(track[0]) if track else None, music_volume=float(self.ch["music_volume"]))
+                                      music=str(track[0]) if track else None, music_volume=float(self.ch["music_volume"]), wide=wide)
         job["file"], job["seconds"] = out["file"], out["seconds"]
+        if wide:
+            job["thumb"] = await self._thumbnail(job)
         for part in ("build", "footage", "audio"):            # the downloads and working files are large; the log keeps their sources
             shutil.rmtree(Path(job["dir"]) / part, ignore_errors=True)
         save_record(ctx["store"], self.ch, job)
-        return AgentResult("done", "CUT", f"{out['seconds']} s Short, {out['captions']} captions" + (", with music" if track else ", no music"))
+        what = f"{clock(out['seconds'])} long video, {out['shots']} shots" + (", thumbnail made" if job.get("thumb") else ", no thumbnail") if wide else f"{out['seconds']} s Short"
+        return AgentResult("done", "CUT", f"{what}, {out['captions']} captions" + (", with music" if track else ", no music"))
+
+    async def _thumbnail(self, job: dict) -> str:
+        """The cover for a long video: a photo for the story (else a frame of the video itself) with the writer's few words on it."""
+        work = Path(job["dir"])
+        src, out = work / "thumb_src.jpg", work / "thumb.jpg"
+        try:
+            hit = None
+            if job.get("thumb_query") and stock_video.configured():
+                async with self.client() as c:
+                    hit = await stock_video.photo(c, job["thumb_query"])
+                    if hit:
+                        await stock_video.download(c, hit["url"], src)
+            if not hit:
+                await asyncio.to_thread(shorts_edit.run, ["ffmpeg", "-y", "-v", "error", "-ss", f"{job['seconds'] * 0.15:.1f}", "-i", job["file"], "-frames:v", "1", str(src)])
+            await asyncio.to_thread(shorts_edit.thumbnail, out, src, job.get("thumb_text") or job["title"], self.ch["name"], self.ch["caption_font"] or None)
+            src.unlink(missing_ok=True)
+            return str(out)
+        except Exception:
+            return ""
 
 
 class UploadLimit(Exception):
@@ -811,10 +978,14 @@ class Uploader(Crew):
 
     async def _upload(self, ctx: dict, c: httpx.AsyncClient, token: str, rec: dict) -> dict:
         ch = self.ch
-        tags = list(dict.fromkeys(rec["hashtags"] + ["#Shorts"]))
-        when = next_slot(ctx["store"], ch) if ch["privacy"] == "scheduled" else None     # scheduled = private now, public by itself at its slot
+        long = rec.get("format") == "long"
+        tags = list(dict.fromkeys(rec["hashtags"] + ([] if long else ["#Shorts"])))
+        when = next_slot(ctx["store"], ch, fmt="long" if long else "short") if ch["privacy"] == "scheduled" else None     # private now, public by itself at its slot
+        marks = rec.get("chapters") or []           # YouTube shows chapters from three or more timestamps starting at 0:00
+        chapters = "\n\n" + "\n".join(f"{clock(m['t'])} {m['heading']}" for m in marks) if long and len(marks) >= 3 and marks[0]["t"] == 0 else ""
         body = {"snippet": {"title": rec["title"][:100], "categoryId": str(ch["category"]), "tags": [t.lstrip("#") for t in tags],
-                            "description": " ".join(tags) + (f"\n\n{ch['cta']}" if ch["cta"] else "") + _about(rec)
+                            "description": (rec["summary"] + "\n\n" if long and rec.get("summary") else "") + " ".join(tags) + (f"\n\n{ch['cta']}" if ch["cta"] else "")
+                            + _about(rec) + chapters
                             + ("\n\nFootage: " + "; ".join(rec["credits"]) if rec.get("credits") else "")
                             + (f"\nMusic: {rec['music']}" if rec.get("music") else "")},
                 "status": {"privacyStatus": "private" if when else ch["privacy"], "selfDeclaredMadeForKids": False, "containsSyntheticMedia": bool(ch["synthetic_flag"]),
@@ -835,11 +1006,17 @@ class Uploader(Crew):
     async def _extras(self, ctx: dict, c: httpx.AsyncClient, token: str, rec: dict) -> str:
         """After the upload: the Short joins its playlist and gets the channel's invitation as a comment. Neither can fail the upload."""
         ch, store = self.ch, ctx["store"]
-        name = (ch["playlists"] or {}).get(rec.get("kind") or "")
-        if not (name or ch["cta"]) or not can_manage(ctx, ch):
+        long = rec.get("format") == "long"
+        name = long_of(ch)["playlist"] if long else (ch["playlists"] or {}).get(rec.get("kind") or "")
+        thumb = rec.get("thumb") if long and Path(rec.get("thumb") or "-").exists() else ""
+        if not (name or ch["cta"] or thumb) or not can_manage(ctx, ch):
             return ""
         auth, notes = {"Authorization": f"Bearer {token}"}, []
         try:
+            if thumb:
+                r = await c.post("https://www.googleapis.com/upload/youtube/v3/thumbnails/set", params={"videoId": rec["video_id"], "uploadType": "media"},
+                                 content=Path(thumb).read_bytes(), headers={**auth, "Content-Type": "image/jpeg"})
+                notes.append("thumbnail set" if r.status_code == 200 else f"thumbnail failed: {_reason(r)}")
             if name:
                 slot = f"{ch['id']}:playlist:{name}"
                 pid = (store.kv_get(STATE, slot) or {}).get("id")
@@ -886,8 +1063,8 @@ class Uploader(Crew):
                     out = await self._upload(ctx, c, token, rec)
                 except UploadLimit:                # YouTube's own cap on uploads per channel per day: not a fault, the Shorts wait
                     left = len(ready) - len(done)
-                    bus.notice(f"youtube-limit-{ch['id']}", f"{ch['name']}: YouTube's daily upload limit for the channel is reached. "
-                                                            f"{left} finished Short{'s' if left != 1 else ''} will upload on a later run.")
+                    bus.notice(f"youtube-limit-{ch['id']}", f"{ch['name']}: YouTube itself is refusing uploads for now (its own cap per channel per day, not VISION's count). "
+                                                            f"{left} finished Short{'s' if left != 1 else ''} kept; they upload by themselves on a later run. Nothing to do.")
                     return AgentResult("wait", "UPLOAD LIMIT", (f"Uploaded as {ch['privacy']}: " + "; ".join(done) + ". " if done else "")
                                        + f"YouTube's daily upload limit reached; {left} waiting")
                 bus.clear_notice(f"youtube-limit-{ch['id']}")
@@ -992,7 +1169,7 @@ class AnalyticsManager(Crew):
 def crew(ch: dict, **opts: Any) -> list[Stage]:
     return [Stage("SOURCE", [StoryScout(ch, **opts)]), Stage("STORY", [StoryWriter(ch)]), Stage("SCREENPLAY", [ScreenplayWriter(ch)]),
             Stage("PREP", [KeywordGenerator(ch), VoiceArtist(ch, **opts)]), Stage("FOOTAGE", [FootageCollector(ch, **opts)]),
-            Stage("GENERATE", [FootageGenerator(ch, **opts)]), Stage("EDIT", [Editor(ch)]), Stage("UPLOAD", [Uploader(ch, **opts)]),
+            Stage("GENERATE", [FootageGenerator(ch, **opts)]), Stage("EDIT", [Editor(ch, **opts)]), Stage("UPLOAD", [Uploader(ch, **opts)]),
             Stage("REPORT", [AnalyticsManager(ch, **opts)])]
 
 
@@ -1003,7 +1180,9 @@ def reset_today(store, channel_id: str) -> None:
 
 def more_today(ch: dict):
     """One pass of the crew makes one Short. Go round again while the last pass made one and the day's number isn't reached."""
-    return lambda ctx: bool((ctx.get("job") or {}).get("file")) and made_today(ctx["store"], ch) < ch["shorts_per_day"]
+    L = long_of(ch)
+    return lambda ctx: bool((ctx.get("job") or {}).get("file")) and (
+        made_today(ctx["store"], ch, "short") < ch["shorts_per_day"] or (bool(L["enabled"]) and made_today(ctx["store"], ch, "long") < L["per_day"]))
 
 
 def build_agents(options: dict, cfg) -> dict[str, SubAgent]:

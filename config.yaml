@@ -15,6 +15,7 @@ llm:                       # Ask engine + every agent that writes or judges
   cloud_provider: anthropic
   cloud_model: ""                            # e.g. a current Claude model id; needs ANTHROPIC_API_KEY in .env
   writer_model: "openai/gpt-oss-120b"        # story writing (YouTube Manager) on Groq; needs GROQ_API_KEY in .env, else cloud, else local
+  writer_reasoning: low                      # this model otherwise spends its whole answer on hidden reasoning and returns nothing for long requests
 
 # The master switch. List the masters to run and every other one is switched off (shown "ON HOLD", never run):
 #   only_masters: [youtube]            just YouTube Manager
@@ -136,7 +137,7 @@ masters:
     trust: ACT             # makes Shorts and uploads them as unlisted; you make them public (or delete them) on YouTube
     mode: live
     cycle_minutes: 360     # every six hours: follows up on published Shorts and reads new comments
-    run_at: ["05:00"]      # and every morning at five: makes the day's Shorts, uploads them and schedules their release
+    run_at: ["03:00", "05:00"]   # 03:00 makes the day's long video, 05:00 the day's Shorts; each is uploaded and scheduled for release
     options:
       channels:            # one Director (with its own crew) per channel; the director's name must match catalog.json
         - id: confessions
@@ -168,6 +169,12 @@ masters:
           logo: ""                       # path to the channel logo (png); blank = the channel name as the watermark
           music: true                    # a quiet track from assets/bgm/<mood>/ under the narration (fill with: python -m vision bgm)
           music_volume: 0.12             # against the voice at 1.0
+          long:                          # one long video a day beside the Shorts: wide 1920x1080, a classic retold chapter by chapter, with its own cover
+            enabled: true
+            minutes: [6, 9]              # target length
+            publish_time: "20:00"        # its own daily release time; never takes a Short's slot
+            playlist: "Long Stories"
+            create_after: "03:00"        # made in the 03:00 run, apart from the Shorts, so the two don't compete for stock footage
           privacy: scheduled             # scheduled = no review: each Short goes public by itself at the next free publish_times slot | unlisted | public
           publish_times: ["06:00", "12:00", "18:00", "00:00"]   # local time; one Short per slot (6 AM, noon, 6 PM, midnight)
           create_after: "05:00"          # the day's Shorts are not started before this hour (a run earlier in the night only follows up)
