@@ -145,6 +145,7 @@ masters:
           subreddits: [confession, offmychest, TrueOffMyChest]   # needs REDDIT_CLIENT_ID / REDDIT_CLIENT_SECRET; or drop .txt files in inbox/confessions/confessions/
           drive_folder: "Confessions Inbox"   # a folder in the Drive of the Google account you sign in with (the channel's); its Docs and .txt files are copied to the inbox
           seconds: [60, 120]
+          originals: true                # no real story waiting (Drive, inbox, Reddit)? write an original, fictional one from a premise never used before
           ending: hopeful                # hopeful = a heavy story still closes on what was learned or how they moved forward (no invented events) | plain
           voice_engine: edge             # edge (online, exact caption timing) | kokoro (local voices, models/kokoro-v1.0.onnx)
           voice: en-US-GuyNeural         # an edge voice name, or a Kokoro voice id such as am_michael, bm_george, af_heart
@@ -156,7 +157,12 @@ masters:
             warm:     { engine: kokoro, voice: af_bella,  speed: 0.95, pause: 0.32 }
             light:    { engine: kokoro, voice: am_puck,   speed: 1.00, pause: 0.25 }
             dramatic: { engine: kokoro, voice: am_fenrir, speed: 0.95, pause: 0.35 }
-          outro: "Subscribe to our channel for more interesting stories."
+          outro: "Got a confession? Drop it in the comments, it could be our next story. Subscribe for more."   # spoken at the end of every Short
+          cta: "Got a confession of your own? Leave it in the comments. It could be our next story."            # in every description, and posted as the channel's comment
+          viewer_comments: true          # long comments under the channel's own Shorts become stories (screened like any other), ahead of everything else
+          classics: [2776, 2518, 269, 38025]   # Project Gutenberg book ids: O. Henry, Tagore, Saki, Tolstoy (public domain); each story is retold once, with its citation
+          classics_per_day: 1
+          playlists: { classic: "Classic Stories" }   # story kind -> playlist (kinds: classic, original, viewer, real); created on the channel if missing
           logo: ""                       # path to the channel logo (png); blank = the channel name as the watermark
           music: true                    # a quiet track from assets/bgm/<mood>/ under the narration (fill with: python -m vision bgm)
           music_volume: 0.12             # against the voice at 1.0

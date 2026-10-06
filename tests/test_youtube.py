@@ -13,10 +13,14 @@ from vision.agents import AgentResult, Director, Master, Stage, SubAgent
 from vision.bus import EventBus, Store
 from vision.config import Config, LLMConfig
 from vision.masters import shorts_edit, youtube
-from vision.services import bgm, genmedia, oauth, reddit, stock_video
+from vision.services import bgm, genmedia, gutenberg, oauth, reddit, stock_video
 from vision.services.llm import LLM
 
 FFMPEG = pytest.mark.skipif(not shutil.which("ffmpeg"), reason="ffmpeg not installed")
+TALE = "Old Behrman had always meant to paint a masterpiece, and never had. " * 40
+BOOK = ("Title: The Four Million\nAuthor: O. Henry\n\n*** START OF THE PROJECT GUTENBERG EBOOK THE FOUR MILLION ***\n\nCONTENTS\n\nThe Last Leaf\n\n"
+        f"THE LAST LEAF\n\n{TALE}\n\nA SHORT NOTE\n\nToo brief to be a story.\n\nTHE COP AND THE ANTHEM\n\n{TALE}\n\n"
+        "*** END OF THE PROJECT GUTENBERG EBOOK THE FOUR MILLION ***\nlicence text")
 GOOD = ("I have carried this for eleven years and nobody in my family knows. " * 12).strip()
 
 
@@ -28,7 +32,14 @@ class WriterLLM:
         self.prompts.append(prompt)
         if prompt.startswith("You screen"):
             return {"ok": True, "why": ""} if self.safe else None
-        if prompt.startswith("Retell"):
+        if prompt.startswith("Invent premises"):
+            texts = ["A retired teacher kept quiet about the exam she let a struggling pupil pass, until an old letter turned up at a funeral.",
+                     "A delivery driver pocketed a tip meant for a colleague, and a message sent to the wrong person brought it all out.",
+                     "An eldest daughter told the family the shop was thriving while the bank statements said otherwise, until one was left open."]
+            return [{"title": f"Premise {n + 1}", "premise": t} for n, t in enumerate(texts)] + [
+                {"title": "Same again", "premise": texts[0].replace("funeral", "wedding")}, {"title": "Too thin", "premise": "Short."},
+                {"title": "Dark", "premise": "A man planned a murder in a small town and nobody ever found out about it at all."}]
+        if prompt.startswith("Retell") or prompt.startswith("Write an original"):
             sentence = "She kept the letter in a drawer, and every year she almost threw it away. "
             return {"title": "The letter she never sent", "story": " ".join((sentence * 40).split()[:self.story_words]) + ".", "hashtags": ["confession", "#storytime"], "mood": "Sad"}
         return None                                    # keyword list: fall back to plain keywords
@@ -177,6 +188,21 @@ def web(media, posts, yt):
 
     def handler(req):
         u = str(req.url)
+        if "gutenberg.org" in u:
+            return httpx.Response(200, content=BOOK.encode())
+        if "/commentThreads" in u:
+            if req.method == "POST":
+                yt.setdefault("posted", []).append(json.loads(req.content)["snippet"]["topLevelComment"]["snippet"]["textOriginal"])
+                return httpx.Response(200, json={"id": "c9"})
+            return httpx.Response(200, json={"items": [{"snippet": {"topLevelComment": {"id": "cm1", "snippet": {"textOriginal": t}}}} for t in yt.get("comments", [])]})
+        if "/playlists" in u:
+            if req.method == "POST":
+                yt["made_playlist"] = json.loads(req.content)["snippet"]["title"]
+                return httpx.Response(200, json={"id": "PL1"})
+            return httpx.Response(200, json={"items": []})
+        if "/playlistItems" in u:
+            yt.setdefault("playlist_items", []).append(json.loads(req.content)["snippet"])
+            return httpx.Response(200, json={"id": "pi1"})
         if "upload/youtube/v3/videos" in u:
             yt["meta"], yt["auth"] = json.loads(req.content), req.headers["authorization"]
             return httpx.Response(200, headers={"Location": "https://upload.test/session1"})
@@ -226,6 +252,7 @@ def make(tmp_path, monkeypatch, media, posts, llm, yt=None, **ch):
     monkeypatch.setattr(reddit, "_token", None)
     monkeypatch.setattr(oauth, "TOKENS", tmp_path / "tokens.json")      # never the real sign-ins
     monkeypatch.setattr(bgm, "DIR", tmp_path / "assets" / "bgm")        # nor the real music library
+    monkeypatch.setattr(gutenberg, "DIR", tmp_path / "data" / "classics")
     for k in ("REDDIT_CLIENT_ID", "REDDIT_CLIENT_SECRET", "PEXELS_API_KEY"):
         monkeypatch.setenv(k, "x")
     monkeypatch.delenv("PIXABAY_API_KEY", raising=False)
@@ -333,6 +360,71 @@ def test_one_run_makes_shorts_until_the_days_number_is_reached(tmp_path, monkeyp
         store.kv_put(youtube.LOG, v["_key"], {**{k: x for k, x in v.items() if not k.startswith("_")}, "made": v["made"] - 86400})
     asyncio.run(m.cycle(bus, store))
     assert len(store.kv_list(youtube.LOG)) == 3
+
+
+@FFMPEG
+def test_original_stories_fill_the_day_when_no_real_story_is_waiting(tmp_path, monkeypatch, media):
+    async def token(account, provider, client=None):
+        return "tok"
+
+    yt = {}
+    monkeypatch.setattr(oauth, "access_token", token)
+    llm = WriterLLM(story_words=70)
+    m = make(tmp_path, monkeypatch, media, [], llm, yt, originals=True, shorts_per_day=2)
+    monkeypatch.delenv("REDDIT_CLIENT_ID")
+    bus, store = EventBus(), Store(tmp_path / "t.db")
+    report = asyncio.run(m.cycle(bus, store))
+    log = store.kv_list(youtube.LOG)
+    assert len(log) == 2 and all(v["original"] and v["source"]["from"] == "original" for v in log) and "2 made" in report
+    assert len({v["source"]["title"] for v in log} & {"Premise 1", "Premise 2", "Premise 3"}) == 2     # two different premises, each used once
+    bank = store.kv_list(youtube.PREMISES)
+    assert sorted(p["title"] for p in bank) == ["Premise 1", "Premise 2", "Premise 3"] and sum(p["used"] for p in bank) == 2   # thin and unsafe ones never enter
+    assert sum(p.startswith("Invent premises") for p in llm.prompts) == 1 and sum(p.startswith("Write an original") for p in llm.prompts) == 2
+    assert not any(p.startswith("You screen") for p in llm.prompts) and "youtube-source-confessions" not in bus.state["notices"]
+    assert "\n\nThis story is fiction.\n\nFootage: " in yt["meta"]["snippet"]["description"]
+
+
+def test_gutenberg_book_is_cut_into_its_stories():
+    meta, text = gutenberg.body(BOOK)
+    assert meta == {"title": "The Four Million", "author": "O. Henry"} and "licence text" not in text and "START OF" not in text
+    assert [s["title"] for s in gutenberg.stories(text)] == ["The Last Leaf", "The Cop And The Anthem"]      # the contents page and a stub are not stories
+    assert gutenberg.body("Author: graf Leo Tolstoy\nTitle: Fables")[0]["author"] == "Leo Tolstoy"
+
+
+@FFMPEG
+def test_viewer_comment_then_a_classic_with_citation_playlist_and_invitation(tmp_path, monkeypatch, media):
+    async def token(account, provider, client=None):
+        return "tok"
+
+    monkeypatch.setattr(oauth, "access_token", token)
+    monkeypatch.setattr(oauth, "granted", lambda account: "https://www.googleapis.com/auth/youtube.force-ssl")
+    yt = {"comments": ["nice video!", GOOD]}
+    cta = "Got a confession of your own? Leave it in the comments. It could be our next story."
+    m = make(tmp_path, monkeypatch, media, [], WriterLLM(story_words=70), yt, shorts_per_day=2, viewer_comments=True, classics=[2776], cta=cta,
+             playlists={"classic": "Classic Stories"})
+    monkeypatch.delenv("REDDIT_CLIENT_ID")
+    bus, store = EventBus(), Store(tmp_path / "t.db")
+    store.kv_put(youtube.LOG, "old", {"channel": "confessions", "status": "public", "video_id": "old1", "made": 1.0, "title": "Earlier", "seconds": 60})
+    yt["items"] = [{"id": "old1", "status": {"privacyStatus": "public"}, "statistics": {}}, {"id": "vid1", "status": {"privacyStatus": "unlisted"}, "statistics": {}}]
+    asyncio.run(m.cycle(bus, store))
+    by_kind = {v.get("kind"): v for v in store.kv_list(youtube.LOG) if v.get("kind")}
+    assert set(by_kind) == {"viewer", "classic"}                 # the viewer's confession first, then one classic; "nice video!" is too short to be a story
+    assert by_kind["viewer"]["source"]["url"] == "https://www.youtube.com/watch?v=old1&lc=cm1"
+    c = by_kind["classic"]
+    assert c["classic"] == {"title": "The Last Leaf", "author": "O. Henry", "book": "The Four Million", "url": "https://www.gutenberg.org/ebooks/2776"}
+    assert c["screenplay"][-2]["text"].endswith("A retelling of “The Last Leaf”, by O. Henry.") and c["screenplay"][-1]["text"].startswith("Subscribe")
+    desc = yt["meta"]["snippet"]["description"]                  # the last upload was the classic
+    assert f"\n\n{cta}\n\nRetold from “The Last Leaf” by O. Henry, in “The Four Million” (public domain): https://www.gutenberg.org/ebooks/2776" in desc
+    assert yt["made_playlist"] == "Classic Stories" and [i["playlistId"] for i in yt["playlist_items"]] == ["PL1"] and yt["posted"] == [cta, cta]
+    assert store.kv_get(youtube.STATE, "confessions:playlist:Classic Stories") == {"id": "PL1"}
+    assert "in “Classic Stories”" in {a["name"]: a for a in bus.state["masters"]["youtube"]["agents"]}["Uploader"]["summary"]
+
+    monkeypatch.setattr(oauth, "granted", lambda account: "")    # an older sign-in: uploads go on, and one more sign-in is asked for
+    youtube.reset_today(store, "confessions")
+    m.agents[0].members[0].ch["shorts_per_day"] = 1
+    asyncio.run(m.cycle(bus, store))
+    assert "youtube-scope-confessions" in bus.state["notices"] and len(yt["posted"]) == 2
+    assert len([v for v in store.kv_list(youtube.LOG) if v.get("kind") == "classic"]) == 2
 
 
 def test_scout_says_no_without_a_clear_yes_and_asks_for_a_source(tmp_path, monkeypatch, media):

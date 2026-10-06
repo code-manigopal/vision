@@ -51,7 +51,7 @@ vision/
   voice/           TTS (kokoro | piper | macos), STT (mlx-whisper), WakeWord (openWakeWord)
   channels/telegram.py   briefs, alerts, reminders, notices, /commands, approve/reject buttons
   services/        llm.py (LM Studio OpenAI-compatible + Anthropic + a hosted "writer" tier on Groq), oauth.py (Google/Microsoft),
-                   reddit.py (official API, read-only), gdrive.py (Drive folder, read-only), bgm.py (music library from Openverse), stock_video.py (Pexels/Pixabay footage), genmedia.py (AI footage provider slot),
+                   reddit.py (official API, read-only), gdrive.py (Drive folder, read-only), bgm.py (music library from Openverse), gutenberg.py (public-domain story books), stock_video.py (Pexels/Pixabay footage), genmedia.py (AI footage provider slot),
                    mailcal.py (Gmail/GCal/Graph), traffic_api.py (TomTom), news.py (Google News RSS),
                    weather.py (Open-Meteo), markets.py (Yahoo chart, CoinGecko, Bank of Canada FX),
                    fyers.py, kite_mcp.py (Zerodha via hosted Kite MCP, persistent session), wealthsimple.py (CSV),
@@ -200,7 +200,20 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   Docs and .txt files from the channel's Google Drive folder (`drive_folder`, `services/gdrive.py`, read-only, same sign-in
   as YouTube, fetched ids in kv `yt_drive`) into that inbox. Reddit's official API is wired in but asleep: Reddit now makes
   new accounts register for API access before an app can be created, and a monetised channel may be refused;
-  **Quora is out** (no API). A story is screened by rule and by the model (no clear yes = not used), retold in the third
+  **Quora is out** (no API). With `originals: true`, when no real story is waiting the Scout takes a premise from its bank
+  (kv `yt_premises`; refilled in batches by the model from code-picked ingredients THEMES x SETTINGS x TELLERS x TURNS, each
+  premise used once, near-duplicates dropped) and the Writer writes an original, fictional confession-style story: never
+  framed as real or as "someone shared", marked `original` in the log, "This story is fiction." in the description.
+  Other sources, in the Scout's order: long comments under the channel's own Shorts (`viewer_comments`, kind `viewer`) →
+  Drive/inbox/Reddit → one classic a day (`classics`: Project Gutenberg book ids, `services/gutenberg.py` cuts a book at its
+  capitalised headings into `data/classics/<id>/`; retold faithfully with the author's ending, citation spoken as the last
+  line and in the description; used stories in kv `yt_classics`) → originals. Every Short carries the invitation to leave a
+  confession: the spoken `outro`, the `cta` line in the description and the channel's own comment (the API cannot pin it;
+  Mani pins by hand). `playlists` maps a story kind to a playlist (classics → "Classic Stories"), created if missing.
+  Playlists and comments need the `youtube.force-ssl` permission: `can_manage()` checks the sign-in's recorded scope and
+  raises a "sign in again" notice without stopping uploads. VISION never deletes a video.
+  Real stories always go first. **Mani intends to monetise**: YouTube's "inauthentic content" policy is the standing risk
+  for AI-written stories; variety and his review before publishing are the mitigations. A story is screened by rule and by the model (no clear yes = not used), retold in the third
   person with no names or places, and split into beats by code, not by the model. The voice speaks whole sentences
   (fragment-by-fragment sounded like reading) and each sentence's audio is divided between its beats; the real audio sets
   the timeline. The writer names the story's mood (dark, sad, warm, light, dramatic) and the channel's `voices` table maps a

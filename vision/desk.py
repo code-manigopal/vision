@@ -229,7 +229,7 @@ def youtube(store):
                      _rows(("Channel", v.get("channel")), ("Views", stats.get("view") if vid else None), ("Likes", stats.get("like") if vid else None),
                            ("Comments", stats.get("comment") if vid else None), ("Mood", v.get("mood")), ("Voice", v.get("voice")), ("Music", v.get("music")),
                            ("Hashtags", " ".join(v.get("hashtags") or [])),
-                           ("Story from", src.get("from")), ("Footage", "; ".join(v.get("credits") or []))),
+                           ("Story from", "original (fiction)" if v.get("original") else f"{v['classic']['title']} by {v['classic']['author']}" if v.get("classic") else src.get("from")), ("Footage", "; ".join(v.get("credits") or []))),
                      _s(v.get("script")), _links(("Watch", v.get("url")), ("YouTube Studio", f"https://studio.youtube.com/video/{vid}/edit" if vid else None), ("Source", src.get("url"))))
     return stages, _each(_kv(store, "yt_videos", 500), one)
 

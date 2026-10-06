@@ -39,6 +39,7 @@ PROVIDERS = {
         "auth": "https://accounts.google.com/o/oauth2/v2/auth",
         "token": "https://oauth2.googleapis.com/token",
         "scopes": ["https://www.googleapis.com/auth/youtube.upload", "https://www.googleapis.com/auth/youtube.readonly",
+                   "https://www.googleapis.com/auth/youtube.force-ssl",    # playlists, reading and posting comments
                    "https://www.googleapis.com/auth/drive.readonly"],      # Drive: the folder stories are dropped into
         "id": "GOOGLE_CLIENT_ID", "secret": "GOOGLE_CLIENT_SECRET",
         "extra": {"access_type": "offline", "prompt": "consent"},
@@ -110,7 +111,12 @@ async def exchange(provider: str, account: str, code: str, port: int, client: ht
     if "access_token" not in d:
         raise RuntimeError(d.get("error_description") or d.get("error") or "token exchange failed")
     _save(account, {"provider": provider, "access_token": d["access_token"], "refresh_token": d.get("refresh_token"),
-                    "expires_at": time.time() + int(d.get("expires_in", 3600)) - 60})
+                    "expires_at": time.time() + int(d.get("expires_in", 3600)) - 60, "scope": d.get("scope") or ""})
+
+
+def granted(account: str) -> str:
+    """The permissions the account's sign-in was given (empty for a sign-in made before this was recorded)."""
+    return (_all().get("oauth", {}).get(account) or {}).get("scope") or ""
 
 
 async def access_token(account: str, provider: str, client: httpx.AsyncClient | None = None) -> str:

@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import asyncio
 import difflib
+import random
 import re
 import shutil
 import time
@@ -31,19 +32,34 @@ import httpx
 
 from ..agents import AgentResult, Director, Stage, SubAgent
 from ..config import ROOT
-from ..services import bgm, gdrive, genmedia, oauth, reddit, stock_video
+from ..services import bgm, gdrive, genmedia, gutenberg, oauth, reddit, stock_video
 from . import shorts_edit
 
-SEEN, LOG, DRIVE, STATE = "yt_seen", "yt_videos", "yt_drive", "yt_state"
+SEEN, LOG, DRIVE, STATE, PREMISES, CLASSICS = "yt_seen", "yt_videos", "yt_drive", "yt_state", "yt_premises", "yt_classics"
 WPS = 2.5                 # narration pace used for planning; the real audio sets the final timing
 GAP = 0.18                # pause after each beat, seconds
 UPLOAD = "https://www.googleapis.com/upload/youtube/v3/videos"
-VIDEOS = "https://www.googleapis.com/youtube/v3/videos"
+API = "https://www.googleapis.com/youtube/v3"
+VIDEOS = API + "/videos"
 CHANNEL = {"id": "confessions", "name": "Confessions Everywhere", "director": "Confessions Everywhere Director",
            "shorts_per_day": 1, "subreddits": ["confession", "offmychest", "TrueOffMyChest"], "seconds": [60, 120],
            "voice_engine": "edge", "voice": "en-US-GuyNeural", "voice_speed": 0.95, "pause": 0.32, "outro": "Subscribe to our channel for more interesting stories.",
            "outro_query": "city lights at night", "logo": "", "caption_font": "", "generator": {},
-           "privacy": "unlisted", "category": "24", "synthetic_flag": True, "uploads_per_run": 2, "drive_folder": "", "voices": {}, "music": True, "music_volume": 0.12, "ending": "hopeful"}
+           "privacy": "unlisted", "category": "24", "synthetic_flag": True, "uploads_per_run": 2, "drive_folder": "", "voices": {}, "music": True, "music_volume": 0.12, "ending": "hopeful", "originals": False,
+           "classics": [], "classics_per_day": 1, "playlists": {}, "viewer_comments": False, "cta": ""}
+# Original stories: a premise is built from one of each, so no two start from the same place (20 x 12 x 10 x 10 combinations).
+THEMES = ["a family secret", "a betrayal by a close friend", "a lie that grew too big", "a second chance that felt undeserved", "a debt never repaid",
+          "an inheritance dispute", "a workplace mistake hidden for years", "a kindness kept secret", "a marriage on autopilot", "jealousy of a sibling",
+          "a promise made to a dying parent", "taking credit for someone else's work", "walking away from a wedding", "a friendship ended over money",
+          "an apology never sent", "pretending to be successful", "a chance meeting with an ex", "a neighbour badly misjudged",
+          "quitting a job without telling the family", "a small act of revenge, regretted"]
+SETTINGS = ["a small town", "a big-city apartment block", "a family business", "a hospital night shift", "a long-distance bus ride", "a university residence",
+            "a wedding reception", "a gathering after a funeral", "an office after hours", "a village festival", "a first job abroad", "a shared taxi home"]
+TELLERS = ["a woman in her thirties", "a man in his forties", "a young man just out of college", "a grandmother", "a single father", "a newly married woman",
+           "a retired teacher", "a night-shift nurse", "a delivery driver", "an eldest daughter"]
+TURNS = ["a message sent to the wrong person", "an old letter found by accident", "an overheard phone call", "a stranger who knew the truth",
+         "a photograph that should not exist", "a bank statement left open", "a child's innocent question", "a confession at the worst possible moment",
+         "a reunion after ten years", "a diary returned by mistake"]
 MOODS = ("dark", "sad", "warm", "light", "dramatic")
 ENDINGS = {"plain": "End on the outcome or the thought it leaves.",
            "hopeful": "However heavy the story, end on a hopeful, motivating note: what the person learned, or how they found the strength to move "
@@ -72,7 +88,8 @@ def screenplay(story: str, outro: str, max_words: int = 16) -> list[dict]:
     """Split a story into beats short enough for one picture each, with the time each should take; outro last.
     `end` marks the beat that closes a sentence: the voice speaks sentence by sentence, never fragment by fragment."""
     parts: list[list] = []                                          # [text, closes a sentence]
-    for sent in re.split(r"(?<=[.!?…])[\"'”’)\]]*\s+", " ".join(story.split())):
+    # a full stop after an initial or a title ("O. Henry", "Mrs. Dale") does not end a sentence
+    for sent in re.split(r"(?<!\b[A-Z]\.)(?<!\bMr\.)(?<!\bMrs\.)(?<!\bDr\.)(?<!\bSt\.)(?<=[.!?…])[\"'”’)\]]*\s+", " ".join(story.split())):
         if words(sent) <= max_words:
             parts.append([sent, True])
             continue
@@ -165,12 +182,29 @@ def account(ch: dict) -> str:
     return ch.get("account") or f"youtube-{ch['id']}"
 
 
+def can_manage(ctx: dict, ch: dict) -> bool:
+    """Playlists and comments need a wider permission than uploading. Without it, ask for one more sign-in and carry on."""
+    if "youtube.force-ssl" in oauth.granted(account(ch)):
+        ctx["bus"].clear_notice(f"youtube-scope-{ch['id']}")
+        return True
+    port = ctx["cfg"].vision.port if ctx.get("cfg") else 8765
+    ctx["bus"].notice(f"youtube-scope-{ch['id']}", f"Sign in to YouTube again for {ch['name']}: playlists and viewer comments need a wider permission",
+                      f"http://127.0.0.1:{port}/auth/youtube/login?account={account(ch)}")
+    return False
+
+
+def kind(job: dict) -> str:
+    """classic (a public-domain story), original (written from a premise), viewer (a comment on the channel) or real."""
+    return "classic" if job.get("classic") else "original" if job.get("original") else "viewer" if job["source"].get("from") == "viewer comment" else "real"
+
+
 def save_record(store, ch: dict, job: dict) -> None:
     """The log entry for a finished Short: where it came from and everything that went into it."""
     store.kv_put(LOG, job["id"], {
         "channel": ch["id"], "status": "ready", "made": time.time(), "title": job["title"], "hashtags": job["hashtags"],
         "source": job["source"], "script": job["script"], "keywords": job["keywords"], "seconds": job["seconds"], "file": job["file"],
-        "mood": job.get("mood", ""), "voice": job.get("voice", ""), "music": job.get("music", ""),
+        "mood": job.get("mood", ""), "voice": job.get("voice", ""), "music": job.get("music", ""), "original": bool(job.get("original")), "kind": kind(job),
+        "classic": job.get("classic"),
         "screenplay": [{"text": b["text"], "seconds": round(b["dur"], 2), "query": b["query"], "footage": (b.get("visual") or {}).get("page", "")} for b in job["beats"]],
         "credits": sorted({b["visual"]["credit"] for b in job["beats"] if b.get("visual")})})
     store.kv_put(SEEN, job["key"], {"state": "done"})
@@ -258,12 +292,12 @@ class StoryScout(Crew):
         if made >= ch["shorts_per_day"]:
             return AgentResult("idle", "QUOTA MET", f"{made} of {ch['shorts_per_day']} Shorts made today")
         await self._from_drive(ctx)
-        cands = self._inbox()
+        cands = self._inbox() + await self._from_comments(ctx)
         if reddit.configured():
             async with self.client() as c:
                 for sub in ch["subreddits"]:
                     cands += await reddit.top(c, sub)
-        elif not cands:
+        elif not cands and not ch["originals"] and not ch["classics"]:
             bus.notice(f"youtube-source-{ch['id']}", f"{ch['name']} needs a story source: add REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET to .env, "
                                                      f"or drop a .txt into inbox/confessions/{ch['id']}/" + (f" or a document into the Drive folder “{ch['drive_folder']}”" if ch["drive_folder"] else ""))
             return AgentResult("wait", "NEEDS SOURCE", "No story to work from: nothing in the Drive folder or the inbox, and no Reddit keys")
@@ -273,7 +307,7 @@ class StoryScout(Crew):
         for p in sorted(cands, key=lambda p: p["score"], reverse=True):
             key = f"{ch['id']}:{p['id']}"
             seen = store.kv_get(SEEN, key) or {}
-            if seen.get("state") in ("done", "rejected") or seen.get("tries", 0) >= 2 or p["nsfw"] or not 500 <= len(p["text"]) <= 7000:
+            if seen.get("state") in ("done", "rejected") or seen.get("tries", 0) >= 2 or p["nsfw"] or not 300 <= len(p["text"]) <= 7000:
                 continue
             if UNSAFE.search(p["title"] + " " + p["text"]):
                 store.kv_put(SEEN, key, {"state": "rejected", "why": "screened out by rule"})
@@ -299,7 +333,118 @@ class StoryScout(Crew):
             ctx["job"] = {"id": f"{ch['id']}-{p['id']}", "key": key, "channel": ch["id"], "dir": str(work), "raw": p["text"],
                           "source": {"url": p["url"], "title": p["title"], "from": p["sub"], "score": p["score"] if p["sub"] != "inbox" else None}}
             return AgentResult("done", "FOUND", f"Picked “{p['title'][:70]}” from {p['sub']}", {"source": ctx["job"]["source"]})
+        c = await self._classic(ctx)                # then a classic for the playlist, up to the day's number
+        if c:
+            return AgentResult("done", "CLASSIC", f"“{c['title']}” by {c['author']}", {"source": ctx["job"]["source"]})
+        if ch["originals"]:                         # no real story to tell today: an original one, from a premise never used before
+            p = await self._original(ctx)
+            if p:
+                return AgentResult("done", "INVENTED", f"An original story: “{p['title'][:70]}”", {"source": ctx["job"]["source"]})
         return AgentResult("idle", "NOTHING NEW", f"No usable story among {len(cands)} candidates")
+
+    async def _from_comments(self, ctx: dict) -> list[dict]:
+        """Confessions viewers left under the channel's own Shorts: the stories every video asks for."""
+        ch, store = self.ch, ctx["store"]
+        vids = [v for v in store.kv_list(LOG) if v.get("channel") == ch["id"] and v.get("video_id") and v.get("status") in ("public", "unlisted")][:20]
+        if not ch["viewer_comments"] or not vids or not can_manage(ctx, ch):
+            return []
+        try:
+            token = await oauth.access_token(account(ch), "youtube")
+        except oauth.AuthNeeded:
+            return []
+        out = []
+        async with self.client() as c:
+            for v in vids:
+                r = await c.get(API + "/commentThreads", headers={"Authorization": f"Bearer {token}"},
+                                params={"part": "snippet", "videoId": v["video_id"], "maxResults": 50, "order": "time", "textFormat": "plainText"})
+                if r.status_code != 200:              # comments switched off, or the video has gone
+                    continue
+                for item in r.json().get("items", []):
+                    top = item["snippet"]["topLevelComment"]
+                    text = (top["snippet"].get("textOriginal") or top["snippet"].get("textDisplay") or "").strip()
+                    out.append({"id": f"comment-{top['id']}", "title": " ".join(text.split())[:60], "text": text, "score": 2 * 10**9, "nsfw": False,
+                                "sub": "viewer comment", "url": f"https://www.youtube.com/watch?v={v['video_id']}&lc={top['id']}"})
+        return out
+
+    async def _classic(self, ctx: dict) -> dict | None:
+        """The next unused story from the shelf of public-domain books (taking from the least-used book), at most classics_per_day."""
+        ch, store, bus = self.ch, ctx["store"], ctx["bus"]
+        start = max(_midnight(), (store.kv_get(STATE, f"{ch['id']}:quota_reset") or {}).get("at", 0))
+        today = sum(v.get("channel") == ch["id"] and v.get("kind") == "classic" and (v.get("made") or 0) >= start for v in store.kv_list(LOG))
+        if not ch["classics"] or today >= ch["classics_per_day"]:
+            return None
+        used = {v["_key"] for v in store.kv_list(CLASSICS, limit=5000)}
+        for _ in range(6):                            # a story the rules screen out is marked and the next one is tried
+            best = None
+            for bid in ch["classics"]:
+                try:
+                    rows = await gutenberg.shelve(int(bid), self.client() if self.opts.get("client_factory") else None)
+                except (RuntimeError, httpx.HTTPError) as e:
+                    bus.say(f"⚠ {ch['name']} · book {bid} could not be fetched: {e}")
+                    continue
+                free = [r for r in rows if f"{ch['id']}:{bid}:{r['n']}" not in used]
+                if free and (best is None or len(rows) - len(free) < best[0]):
+                    best = (len(rows) - len(free), int(bid), free[0])
+            if not best:
+                return None
+            _, bid, row = best
+            key = f"{ch['id']}:{bid}:{row['n']}"
+            text = gutenberg.read(bid, row["n"])
+            safe = not UNSAFE.search(text)
+            store.kv_put(CLASSICS, key, {"title": row["title"], "used": safe})
+            used.add(key)
+            if not safe:
+                continue
+            slug = re.sub(r"[^a-z0-9]+", "-", row["title"].lower()).strip("-")[:40] or f"{bid}-{row['n']}"
+            work = ROOT / "data" / "shorts" / ch["id"] / f"{time.strftime('%Y%m%d')}-{slug}"
+            work.mkdir(parents=True, exist_ok=True)
+            cite = {"title": row["title"], "author": row["author"], "book": row["book"], "url": gutenberg.page(bid)}
+            ctx["job"] = {"id": f"{ch['id']}-classic-{bid}-{row['n']}", "key": f"{ch['id']}:classic-{bid}-{row['n']}", "channel": ch["id"], "dir": str(work),
+                          "raw": text, "classic": cite, "source": {"url": cite["url"], "title": row["title"], "from": "classic", "score": None}}
+            return cite
+        return None
+
+    async def _premises(self, ctx: dict, bank: list[dict]) -> list[dict]:
+        """Ask the model for a batch of new premises, each from its own mix of ingredients; keep the ones unlike any before."""
+        ch, store = self.ch, ctx["store"]
+        rng = self.opts.get("rng") or random
+        mixes = [(rng.choice(THEMES), rng.choice(SETTINGS), rng.choice(TELLERS), rng.choice(TURNS)) for _ in range(8)]
+        listing = "\n".join(f"{n + 1}. {t}; set in {s}; told about {w}; it comes out through {u}" for n, (t, s, w, u) in enumerate(mixes))
+        got = await ctx["llm"].json(
+            "Invent premises for short confession-style stories: an ordinary adult did or hid something, and it comes into the open. One premise per "
+            "numbered line below, using that line's ingredients. Believable everyday life; adults only; no names or real places; nothing sexual, no "
+            "self-harm, no violent crime. Each premise must be clearly different from the others and from these already used: "
+            + "; ".join(p["title"] for p in bank[:40]) + ".\n"
+            f'Answer as a JSON list of {len(mixes)} objects: {{"title": "under 60 characters", "premise": "2-3 sentences: who, what they did or hid, '
+            f'what forces it out, what is at stake"}}.\n\n{listing}', tier="writer", max_tokens=2500)
+        old = [p["premise"].lower() for p in bank]
+        fresh = []
+        for n, d in enumerate(got if isinstance(got, list) else []):
+            text = " ".join(str((d or {}).get("premise") or "").split()) if isinstance(d, dict) else ""
+            if not 60 <= len(text) <= 700 or UNSAFE.search(text) or any(difflib.SequenceMatcher(None, text.lower(), o).ratio() > 0.75 for o in old):
+                continue
+            rec = {"channel": ch["id"], "title": " ".join(str(d.get("title") or text[:50]).split())[:80], "premise": text, "used": False}
+            key = f"{ch['id']}:{time.time_ns()}-{n}"
+            store.kv_put(PREMISES, key, rec)
+            old.append(text.lower())
+            fresh.append({**rec, "_key": key})
+        return fresh
+
+    async def _original(self, ctx: dict) -> dict | None:
+        ch, store = self.ch, ctx["store"]
+        bank = [p for p in store.kv_list(PREMISES, limit=5000) if p.get("channel") == ch["id"]]
+        fresh = [p for p in bank if not p.get("used")] or await self._premises(ctx, bank)
+        if not fresh:
+            return None
+        p = fresh[-1]
+        store.kv_put(PREMISES, p["_key"], {k: v for k, v in p.items() if not k.startswith("_")} | {"used": True})
+        tail = p["_key"].split(":", 1)[1]
+        slug = re.sub(r"[^a-z0-9]+", "-", p["title"].lower()).strip("-")[:40] or tail
+        work = ROOT / "data" / "shorts" / ch["id"] / f"{time.strftime('%Y%m%d')}-{slug}"
+        work.mkdir(parents=True, exist_ok=True)
+        ctx["job"] = {"id": f"{ch['id']}-orig-{tail}", "key": f"{ch['id']}:orig-{tail}", "channel": ch["id"], "dir": str(work), "raw": p["premise"],
+                      "original": True, "source": {"url": "", "title": p["title"], "from": "original", "score": None}}
+        return p
 
 
 class StoryWriter(Crew):
@@ -310,7 +455,25 @@ class StoryWriter(Crew):
         if not job:
             return self.idle()
         lo, hi = word_range(self.ch)
-        prompt = (f"Retell the confession below as a narrated story for a 1-2 minute video, {lo + 20}-{hi - 20} words.\n"
+        ending = ENDINGS.get(self.ch["ending"], ENDINGS["plain"])
+        prompt = (f"Write an original, fictional confession-style story from the premise below, narrated for a 1-2 minute video, {lo + 20}-{hi - 20} words.\n"
+                  "- Third person, told like something a person carried for years and finally admitted (\"she\", \"he\", \"they\"). Do not claim it is real "
+                  "and do not say anyone shared or sent it.\n"
+                  "- The first sentence is a hook that makes someone stop scrolling.\n"
+                  "- Believable, specific, everyday detail; build the tension step by step to the moment it comes out.\n"
+                  "- Adults only. No personal names at all, and no real city, company or school. Nothing sexual, no self-harm, no violent crime.\n"
+                  f"- Short spoken sentences. {ending} No call to subscribe.\n"
+                  'Answer as {"title": "under 70 characters, no names", "story": "...", "hashtags": ["3 to 5 words, no #"], '
+                  f'"mood": "the one word that fits the story best: {" | ".join(MOODS)}"}}.\n\n'
+                  f"Premise:\n{job['raw']}") if job.get("original") else (
+                  f"Retell the classic short story below for a 1-2 minute video, {lo + 20}-{hi - 20} words.\n"
+                  "- Stay faithful: the same characters, events and the author's own ending. Do not modernise it or add a moral of your own.\n"
+                  "- Third person, in your own plain spoken sentences; do not copy the author's sentences. Character names from the story may stay.\n"
+                  "- The first sentence is a hook that makes someone stop scrolling. No call to subscribe.\n"
+                  f'Answer as {{"title": "under 70 characters, built around the story\'s own title", "story": "...", "hashtags": ["3 to 5 words, no #"], '
+                  f'"mood": "the one word that fits the story best: {" | ".join(MOODS)}"}}.\n\n'
+                  f"“{job['classic']['title']}” by {job['classic']['author']}:\n{job['raw'][:40000]}") if job.get("classic") else (
+                  f"Retell the confession below as a narrated story for a 1-2 minute video, {lo + 20}-{hi - 20} words.\n"
                   "- Third person, as if retelling something shared anonymously (\"a woman\", \"he\", \"they\").\n"
                   "- The first sentence is a hook that makes someone stop scrolling.\n"
                   "- Keep the real events, feelings and outcome. You may add small build-ups and pauses for suspense, but no new events or facts.\n"
@@ -324,6 +487,9 @@ class StoryWriter(Crew):
             d = await ctx["llm"].json(prompt + note, tier="writer", max_tokens=2500)
             story = " ".join(str((d or {}).get("story") or "").split()) if isinstance(d, dict) else ""
             n = words(story)
+            if job.get("original") and UNSAFE.search(story):
+                note = "\n\nYour last story touched something it must not (sexual content, self-harm or violent crime). Write it again without that, as JSON."
+                continue
             if lo <= n <= hi:
                 job["title"] = " ".join(str(d.get("title") or job["source"]["title"]).split())[:90]
                 job["script"] = story
@@ -342,7 +508,10 @@ class ScreenplayWriter(Crew):
         job = ctx.get("job")
         if not job:
             return self.idle()
-        job["beats"] = screenplay(job["script"], self.ch["outro"])
+        told = job["script"]
+        if job.get("classic"):                      # the citation is spoken, as the story's last line
+            told += f" A retelling of “{job['classic']['title']}”, by {job['classic']['author']}."
+        job["beats"] = screenplay(told, self.ch["outro"])
         plan = sum(b["target_s"] for b in job["beats"])
         return AgentResult("done", "TIMED", f"{len(job['beats'])} beats, about {round(plan)} s")
 
@@ -555,7 +724,8 @@ class Uploader(Crew):
         ch = self.ch
         tags = list(dict.fromkeys(rec["hashtags"] + ["#Shorts"]))
         body = {"snippet": {"title": rec["title"][:100], "categoryId": str(ch["category"]), "tags": [t.lstrip("#") for t in tags],
-                            "description": " ".join(tags) + ("\n\nFootage: " + "; ".join(rec["credits"]) if rec.get("credits") else "")
+                            "description": " ".join(tags) + (f"\n\n{ch['cta']}" if ch["cta"] else "") + _about(rec)
+                            + ("\n\nFootage: " + "; ".join(rec["credits"]) if rec.get("credits") else "")
                             + (f"\nMusic: {rec['music']}" if rec.get("music") else "")},
                 "status": {"privacyStatus": ch["privacy"], "selfDeclaredMadeForKids": False, "containsSyntheticMedia": bool(ch["synthetic_flag"])}}
         size = Path(rec["file"]).stat().st_size
@@ -568,6 +738,38 @@ class Uploader(Crew):
         if r.status_code not in (200, 201):
             raise RuntimeError(f"YouTube upload failed ({r.status_code}): {_reason(r)}")
         return r.json()
+
+    async def _extras(self, ctx: dict, c: httpx.AsyncClient, token: str, rec: dict) -> str:
+        """After the upload: the Short joins its playlist and gets the channel's invitation as a comment. Neither can fail the upload."""
+        ch, store = self.ch, ctx["store"]
+        name = (ch["playlists"] or {}).get(rec.get("kind") or "")
+        if not (name or ch["cta"]) or not can_manage(ctx, ch):
+            return ""
+        auth, notes = {"Authorization": f"Bearer {token}"}, []
+        try:
+            if name:
+                slot = f"{ch['id']}:playlist:{name}"
+                pid = (store.kv_get(STATE, slot) or {}).get("id")
+                if not pid:
+                    r = await c.get(API + "/playlists", params={"part": "snippet", "mine": "true", "maxResults": 50}, headers=auth)
+                    pid = next((p["id"] for p in r.json().get("items", []) if p["snippet"]["title"] == name), None) if r.status_code == 200 else None
+                if not pid:
+                    r = await c.post(API + "/playlists", params={"part": "snippet,status"}, headers=auth,
+                                     json={"snippet": {"title": name}, "status": {"privacyStatus": "public"}})
+                    pid = r.json().get("id") if r.status_code == 200 else None
+                if pid:
+                    store.kv_put(STATE, slot, {"id": pid})
+                    r = await c.post(API + "/playlistItems", params={"part": "snippet"}, headers=auth,
+                                     json={"snippet": {"playlistId": pid, "resourceId": {"kind": "youtube#video", "videoId": rec["video_id"]}}})
+                notes.append(f"in “{name}”" if pid and r.status_code == 200 else f"playlist failed: {_reason(r)}")
+            if ch["cta"]:
+                r = await c.post(API + "/commentThreads", params={"part": "snippet"}, headers=auth,
+                                 json={"snippet": {"videoId": rec["video_id"], "topLevelComment": {"snippet": {"textOriginal": ch["cta"]}}}})
+                if r.status_code != 200:
+                    notes.append(f"comment failed: {_reason(r)}")
+        except httpx.HTTPError as e:
+            notes.append(f"extras failed: {e}")
+        return f" ({', '.join(notes)})" if notes else ""
 
     async def run(self, ctx: dict) -> AgentResult:
         ch, store, bus = self.ch, ctx["store"], ctx["bus"]
@@ -591,8 +793,16 @@ class Uploader(Crew):
                 rec.update(status=ch["privacy"], video_id=out["id"], url=f"https://youtu.be/{out['id']}", uploaded=time.time())
                 store.kv_put(LOG, key, rec)
                 review_notice(bus, ch, rec)
-                done.append(rec["title"])
+                done.append(rec["title"] + await self._extras(ctx, c, token, rec))
         return AgentResult("done", "UPLOADED", f"Uploaded as {ch['privacy']}: " + "; ".join(f"“{t}”" for t in done))
+
+
+def _about(rec: dict) -> str:
+    """One line on where the story comes from, for the description."""
+    c = rec.get("classic")
+    if c:
+        return f"\n\nRetold from “{c['title']}” by {c['author']}, in “{c['book']}” (public domain): {c['url']}"
+    return {"original": "\n\nThis story is fiction.", "viewer": "\n\nRetold from a viewer's comment."}.get(rec.get("kind"), "")
 
 
 def review_notice(bus, ch: dict, rec: dict) -> None:
