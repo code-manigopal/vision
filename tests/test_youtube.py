@@ -14,7 +14,7 @@ from vision.agents import AgentResult, Director, Master, Stage, SubAgent
 from vision.bus import EventBus, Store
 from vision.config import Config, LLMConfig
 from vision.masters import shorts_edit, youtube
-from vision.services import bgm, genmedia, gutenberg, oauth, reddit, stock_video
+from vision.services import bgm, fonts, genmedia, gutenberg, oauth, reddit, sfx, stock_video
 from vision.services.llm import LLM
 
 FFMPEG = pytest.mark.skipif(not shutil.which("ffmpeg"), reason="ffmpeg not installed")
@@ -291,10 +291,12 @@ def make(tmp_path, monkeypatch, media, posts, llm, yt=None, **ch):
     monkeypatch.setattr(oauth, "TOKENS", tmp_path / "tokens.json")      # never the real sign-ins
     monkeypatch.setattr(bgm, "DIR", tmp_path / "assets" / "bgm")        # nor the real music library
     monkeypatch.setattr(gutenberg, "DIR", tmp_path / "data" / "classics")
+    monkeypatch.setattr(fonts, "DIR", tmp_path / "assets" / "fonts")    # nor the fonts or the sound effects
+    monkeypatch.setattr(sfx, "DIR", tmp_path / "assets" / "sfx")
     for k in ("REDDIT_CLIENT_ID", "REDDIT_CLIENT_SECRET", "PEXELS_API_KEY"):
         monkeypatch.setenv(k, "x")
     monkeypatch.delenv("PIXABAY_API_KEY", raising=False)
-    c = youtube.channel({"subreddits": ["confession"], "seconds": [20, 60], **ch})
+    c = youtube.channel({"subreddits": ["confession"], "seconds": [20, 60], "quick": {"per_day": 0}, **ch})     # quick Shorts are tested apart
     d = Director(c["director"], youtube.crew(c, client_factory=web(media, posts, yt if yt is not None else {}), synth=tone), reporter="Analytics Manager",
                  again=youtube.more_today(c))
     m = Master("youtube", "YOUTUBE MANAGER", [Stage("CHANNELS", [d])], reporter=c["director"], mode="live")
@@ -671,7 +673,7 @@ def test_seo_strategist_packages_from_real_searches_and_the_channels_best(tmp_pa
     # the channel's own results become what it learns from; a fiction story is never titled "true"; no answer = the writer's title stands
     yt["items"] = [{"id": "vid1", "status": {"privacyStatus": "public"}, "statistics": {"viewCount": "40"}}]
     asyncio.run(m.cycle(bus, store))
-    assert store.kv_get(youtube.STATE, "confessions:insights") == {"top_titles": ["She hid one letter for thirty years"], "views_by_kind": {"real": 40}, "videos": 1}
+    assert store.kv_get(youtube.STATE, "confessions:insights") == {"top_titles": ["She hid one letter for thirty years"], "views_by_kind": {"real": 40}, "videos": 1, "views_by_length": {"regular": 40}}
     strategist = next(a for a in m.agents[0].members if a.name == "SEO Strategist")
     job = {"title": "A quiet lie", "script": "She lied. " * 30, "original": True, "genre": "confession", "source": {"from": "original (confession)", "title": "x"}}
     asyncio.run(strategist.run({"job": job, "store": store, "llm": WriterLLM(seo={**seo, "title": "The true story of a quiet lie"})}))
@@ -772,3 +774,179 @@ def test_only_masters_switches_the_others_off():
     assert cfg.masters["news"].enabled and not cfg.master("news").enabled          # the master's own setting is left as it was
     cfg = Config(only_masters=[], masters={"news": {"enabled": False}})
     assert not cfg.master("news").enabled and cfg.master("traffic").enabled
+
+
+# ---------- editing upgrade, quick format, double down ----------
+
+def library(tmp_path, monkeypatch, kinds=("ding", "whoosh", "riser", "pop"), files=2):
+    monkeypatch.setattr(sfx, "DIR", tmp_path / "sfx")
+    for k in kinds:
+        (tmp_path / "sfx" / k).mkdir(parents=True, exist_ok=True)
+        for n in range(files):
+            (tmp_path / "sfx" / k / f"{k}{n}.wav").write_bytes(b"x")
+    monkeypatch.setattr(shorts_edit, "probe", lambda p: 2.0)
+
+
+def test_sound_effects_only_where_a_line_asks_and_kept_sparse(tmp_path, monkeypatch):
+    library(tmp_path, monkeypatch, kinds=("impact", "riser", "heartbeat", "ding"))
+    name = lambda e: Path(e["path"]).stem.rstrip("01")
+    beats = [{"kind": "story", "shot": i, "dur": 3.0, "text": f"line {i}"} for i in range(10)] + [{"kind": "outro", "shot": 10, "dur": 2.0, "text": "bye", "cue": "ding"}]   # 32 s
+    assert youtube.sfx_plan(beats, volume=0.5) == []                                    # no line asked for a sound: silence
+    beats[2]["cue"], beats[3]["cue"], beats[6]["cue"], beats[9]["cue"] = "impact", "ding", "riser", "coin"
+    plan = youtube.sfx_plan(beats, volume=0.5)
+    # the impact where its line starts; the ding one line later is too close (under 4 s); the riser finishes as its line ends
+    # (2 s long in a 3 s line starting at 18); "coin" has no file; the outro never gets one
+    assert [(e["at"], name(e)) for e in plan] == [(6.0, "impact"), (19.0, "riser")]
+    assert plan[0]["volume"] == 0.45 and plan[1]["volume"] == 0.4
+    for b in beats[:10]:
+        b["cue"] = "heartbeat"                                                          # asked for on every line: still about one per 8 seconds
+    assert [e["at"] for e in youtube.sfx_plan(beats, volume=0.5)] == [0.0, 6.0, 12.0, 18.0]
+    assert len({e["path"] for e in youtube.sfx_plan(beats, volume=0.5)}) == 2           # repeated cues take different files
+
+
+def test_the_model_names_a_sound_only_for_lines_that_need_one(tmp_path, monkeypatch, media):
+    library(tmp_path, monkeypatch, kinds=("impact", "ding"))
+
+    class Cues(WriterLLM):
+        async def json(self, prompt, **kw):
+            if prompt.startswith("This narration will have a few sound effects"):
+                self.prompts.append(prompt)
+                n = int(prompt.split("exactly ")[1].split(" ")[0])
+                return (["none", "IMPACT", "explosion", "ding."] + ["none"] * n)[:n]
+            return await super().json(prompt, **kw)
+
+    llm = Cues()
+    m = make(tmp_path, monkeypatch, media, [], llm)
+    library(tmp_path, monkeypatch, kinds=("impact", "ding"))
+    keywords = next(a for a in m.agents[0].members if a.name == "Keyword Generator")
+    beats = [{"i": i, "shot": i, "kind": "story", "text": f"Line number {i} of the story."} for i in range(6)] + [{"i": 6, "shot": 6, "kind": "outro", "text": "Subscribe."}]
+    job = {"beats": beats}
+    res = asyncio.run(keywords.run({"job": job, "llm": llm}))
+    ask = next(p for p in llm.prompts if p.startswith("This narration"))
+    assert "impact (a shock or a revelation lands); ding (a realisation, an idea, good news)" in ask and "riser" not in ask      # only sounds the library has
+    assert "Most lines need none" in ask and "At most 1 lines" in ask
+    assert [b.get("cue") for b in beats] == [None, "impact", None, "ding", None, None, None] and "2 sound cues" in res.summary  # an unknown sound is ignored
+    keywords.ch["sfx"] = False
+    job2 = {"beats": [{"i": 0, "shot": 0, "kind": "story", "text": "One line."}]}
+    assert "sound cue" not in asyncio.run(keywords.run({"job": job2, "llm": llm})).summary and "cue" not in job2["beats"][0]
+
+
+def edit_job(tmp_path, mood="sad", **extra):
+    work = tmp_path / "work"
+    work.mkdir(exist_ok=True)
+    beats = [{"i": i, "text": f"beat {i}", "kind": "story", "shot": i, "dur": 4.0, "query": "q", "visual": {"credit": "c", "page": "p"}} for i in range(4)]
+    beats[0]["cue"] = "ding"                                   # the one line that asked for a sound
+    beats.append({"i": 4, "text": "Subscribe", "kind": "outro", "shot": 4, "dur": 2.0, "query": "q"})
+    return {"id": "confessions-x", "key": "confessions:x", "dir": str(work), "title": "T", "hashtags": [], "source": {"title": "t"}, "script": "s", "keywords": [],
+            "mood": mood, "original": True, "genre": "confession", "beats": beats, **extra}
+
+
+def test_editor_passes_motion_caption_look_and_effects_to_assemble(tmp_path, monkeypatch, media):
+    library(tmp_path, monkeypatch)
+    seen = {}
+
+    def fake(work, beats, **kw):
+        seen.update(kw)
+        return {"file": str(work / "final.mp4"), "seconds": 18.0, "captions": 7, "shots": 5, "sfx": len(kw["sfx"] or [])}
+
+    monkeypatch.setattr(shorts_edit, "assemble", fake)
+    m = make(tmp_path, monkeypatch, media, [], WriterLLM(), music=False)
+    monkeypatch.setattr(sfx, "DIR", tmp_path / "sfx")                     # make() points it at an empty folder; use the small library
+    editor, store = next(a for a in m.agents[0].members if a.name == "Editor"), Store(tmp_path / "t.db")
+    job = edit_job(tmp_path)
+    res = asyncio.run(editor.run({"job": job, "store": store, "bus": EventBus()}))
+    look = fonts.style_for("sad", "original", 0)
+    assert seen["motion"] is True and seen["style"]["fill"] == look["fill"] and seen["style"]["highlight"] == look["highlight"] and seen["style"]["position"] == "center"
+    assert "font_name" not in seen["style"] and seen["sfx"] and all(set(e) == {"at", "path", "volume"} for e in seen["sfx"]) and seen["sfx"][0]["volume"] == 0.28 and len(seen["sfx"]) == 1
+    rec = store.kv_list(youtube.LOG)[0]
+    assert rec["caption"].startswith(look["font_name"]) and look["fill"] in rec["caption"] and rec["sfx"] == len(seen["sfx"]) and rec["quick"] is False
+    assert f"in {look['font_name']}" in res.summary and f"{rec['sfx']} sound effects" in res.summary
+    # a long video keeps its captions low; each mood's look moves on as the channel makes more of that mood
+    job = edit_job(tmp_path, format="long", classic={"title": "x", "author": "y"})
+    asyncio.run(editor.run({"job": job, "store": store, "bus": EventBus()}))
+    assert seen["wide"] is True and seen["style"]["position"] == "lower"
+    # switched off: no style, no effects, no motion
+    off = make(tmp_path, monkeypatch, media, [], WriterLLM(), music=False, caption_styles=False, sfx=False, motion=False)
+    editor = next(a for a in off.agents[0].members if a.name == "Editor")
+    job = edit_job(tmp_path)
+    asyncio.run(editor.run({"job": job, "store": Store(tmp_path / "t2.db"), "bus": EventBus()}))
+    assert seen["style"] is None and seen["sfx"] is None and seen["motion"] is False and job["caption"] == ""
+
+
+def test_quick_format_is_an_original_story_once_a_day_with_its_own_length_and_outro(tmp_path, monkeypatch, media):
+    llm = WriterLLM(story_words=55)
+    m = make(tmp_path, monkeypatch, media, [], llm, originals=True, shorts_per_day=3, quick={"per_day": 1})
+    monkeypatch.delenv("REDDIT_CLIENT_ID")
+    scout, writer, shaper = (next(a for a in m.agents[0].members if a.name == n) for n in ("Story Scout", "Story Writer", "Screenplay Writer"))
+    ch, store, bus = scout.ch, Store(tmp_path / "t.db"), EventBus()
+    assert youtube.quick_of(ch) == {"per_day": 1, "seconds": [20, 35], "outro": "Your story could be next. Comment it."}
+    assert youtube.quick_of({"quick": {"per_day": 0}})["per_day"] == 0 and youtube.word_range(ch, True) == (43, 65) and youtube.word_range(ch) == (42, 127)
+    ctx = {"store": store, "bus": bus, "llm": llm, "cfg": Config(), "master": "youtube"}
+    res = asyncio.run(scout.run(ctx))
+    assert ctx["job"]["quick"] is True and "a quick one" in res.summary
+    asyncio.run(writer.run(ctx))
+    prompt = next(p for p in llm.prompts if p.startswith("Write an original"))
+    assert "narrated for a 20-35 second video, 46-62 words" in prompt and "1-2 minute" not in prompt
+    assert "Keep them listening" in prompt and "No personal names" in prompt                       # the rest of the rules stand
+    asyncio.run(shaper.run(ctx))
+    assert ctx["job"]["beats"][-1]["text"] == "Your story could be next. Comment it."
+    job = ctx["job"]
+    job.update(title="T", hashtags=[], keywords=[], seconds=25.0, file="f.mp4")
+    for b in job["beats"]:
+        b.update(dur=1.0, query="q")
+    youtube.save_record(store, ch, job)
+    assert store.kv_list(youtube.LOG)[0]["quick"] is True and youtube.made_today(store, ch, quick=True) == 1
+    ctx2 = {"store": store, "bus": bus, "llm": llm, "cfg": Config(), "master": "youtube"}
+    res2 = asyncio.run(scout.run(ctx2))                                                          # the day's quick one is made: the next is a regular Short
+    assert not ctx2["job"].get("quick") and "quick" not in res2.summary
+    regular = WriterLLM(story_words=100)
+    asyncio.run(writer.run({"job": ctx2["job"], "llm": regular}))                                # a regular story keeps the regular length
+    assert "a 1-2 minute video, 62-107 words" in regular.prompts[0]
+
+
+def test_choose_leans_to_what_performs_and_keeps_trying_the_rest():
+    choose = youtube.choose
+    assert choose(["a", "b"], {"a": 5, "b": 5}, {"a": 900, "b": 100}, 0.15) == "a"            # the better performer is told more
+    assert choose(["a", "b"], {"a": 9, "b": 1}, {"a": 900, "b": 100}, 0.15) == "b"            # but the weaker keeps its floor: 10% told is under 22%
+    assert choose(["a", "b", "c"], {"a": 3, "b": 3}, {"a": 100, "b": 100}, 0.15) == "c"       # untested counts as the mean, and is behind
+    assert choose(["a", "b"], {"a": 0, "b": 0}, {"a": 1, "b": 1}, 0.1) == "a"                 # a tie goes to the earlier
+    assert choose(["a", "b"], {"a": 1, "b": 0}, {}, 0.1) == "b" and choose(["a", "b"], {"a": 0, "b": 4}, {"b": 0}, 0.1) == "a"    # no views: least told
+    assert choose(["a", "b"], {"a": 0, "b": 4}, {"a": 100, "b": 1}, 0.5) == "a"              # a floor that takes the whole share: least told
+
+
+def test_double_down_takes_over_from_least_told_once_there_are_results(tmp_path, monkeypatch, media):
+    llm = WriterLLM(story_words=70)
+    m = make(tmp_path, monkeypatch, media, [], llm, originals=True, original_genres=["confession", "motivational"], quick={"per_day": 0})
+    monkeypatch.delenv("REDDIT_CLIENT_ID")
+    scout, store, bus = m.agents[0].members[0], Store(tmp_path / "t.db"), EventBus()
+    ctx = lambda: {"store": store, "bus": bus, "llm": llm, "cfg": Config(), "master": "youtube"}
+    insights = {"top_titles": [], "views_by_kind": {"original": 10, "motivational": 1000}, "videos": 11}
+    store.kv_put(youtube.STATE, "confessions:insights", insights)
+    c = ctx()
+    asyncio.run(scout.run(c))
+    assert c["job"]["genre"] == "confession"                                                  # too few results yet: least told, as before
+    store.kv_put(youtube.STATE, "confessions:insights", {**insights, "videos": 12})
+    for key in [p["_key"] for p in store.kv_list(youtube.PREMISES)]:
+        store.kv_delete(youtube.PREMISES, key)
+    c = ctx()
+    asyncio.run(scout.run(c))
+    assert c["job"]["genre"] == "motivational"                                                # enough: the one that gets views
+    # the learning pattern: same switch
+    s = youtube.StoryScout(youtube.channel({"original_genres": ["science"], "quick": {"per_day": 0}}))
+    assert s._lean(list(youtube.STRUCTURES), {k: 0 for k in youtube.STRUCTURES}, {"belief_flip": 900, "unless": 50}) == "belief_flip"
+
+
+def test_analytics_compares_quick_and_regular_shorts(tmp_path, monkeypatch, media):
+    m = make(tmp_path, monkeypatch, media, [], WriterLLM())
+    analytics, store = next(a for a in m.agents[0].members if a.name == "Analytics Manager"), Store(tmp_path / "t.db")
+    row = lambda k, views, **kw: store.kv_put(youtube.LOG, k, {"channel": "confessions", "status": "public", "title": k, "seconds": 20, "made": 1, "stats": {"view": views}, **kw})
+    asyncio.run(analytics.run({"store": store, "bus": EventBus()}))
+    assert store.kv_get(youtube.STATE, "confessions:insights") is None                      # nothing made: nothing saved
+    row("a", 100, quick=True), row("b", 300, quick=True), row("c", 50), row("d", 70, quick=False), row("e", 9999, format="long")
+    asyncio.run(analytics.run({"store": store, "bus": EventBus()}))
+    assert store.kv_get(youtube.STATE, "confessions:insights")["views_by_length"] == {"quick": 200, "regular": 60}       # long videos are not compared
+    for k in "abcde":
+        store.kv_delete(youtube.LOG, k)
+    row("z", 0)
+    asyncio.run(analytics.run({"store": store, "bus": EventBus()}))
+    assert "views_by_length" not in store.kv_get(youtube.STATE, "confessions:insights")      # no views, no data

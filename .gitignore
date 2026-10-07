@@ -11,3 +11,5 @@ models/*.bin
 dashboard/fonts/
 .pytest_cache/
 assets/bgm/
+assets/fonts/
+assets/sfx/

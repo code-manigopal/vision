@@ -33,7 +33,7 @@ import httpx
 
 from ..agents import AgentResult, Director, Stage, SubAgent
 from ..config import ROOT
-from ..services import bgm, gdrive, genmedia, gutenberg, oauth, reddit, stock_video, yt_suggest
+from ..services import bgm, fonts, gdrive, genmedia, gutenberg, oauth, reddit, sfx, stock_video, yt_suggest
 from . import shorts_edit
 
 SEEN, LOG, DRIVE, STATE, PREMISES, CLASSICS = "yt_seen", "yt_videos", "yt_drive", "yt_state", "yt_premises", "yt_classics"
@@ -48,7 +48,9 @@ CHANNEL = {"id": "confessions", "name": "Confessions Everywhere", "director": "C
            "outro_query": "city lights at night", "logo": "", "caption_font": "", "generator": {},
            "privacy": "unlisted", "category": "24", "synthetic_flag": True, "uploads_per_run": 4, "drive_folder": "", "voices": {}, "music": True, "music_volume": 0.12, "ending": "hopeful", "originals": False, "original_genres": ["confession"],
            "publish_times": ["06:00", "12:00", "18:00", "00:00"], "create_after": "",
-           "classics": [], "classics_per_day": 1, "playlists": {}, "viewer_comments": False, "cta": "", "long": {}}
+           "classics": [], "classics_per_day": 1, "playlists": {}, "viewer_comments": False, "cta": "", "long": {},
+           "motion": True, "caption_styles": True, "sfx": True, "sfx_volume": 0.35, "quick": {},
+           "double_down": True, "double_down_after": 12, "explore": 0.15}
 # Original stories: a premise is built from one of each, so no two start from the same place (20 x 12 x 10 x 10 combinations).
 THEMES = ["a family secret", "a betrayal by a close friend", "a lie that grew too big", "a second chance that felt undeserved", "a debt never repaid",
           "an inheritance dispute", "a workplace mistake hidden for years", "a kindness kept secret", "a marriage on autopilot", "jealousy of a sibling",
@@ -166,6 +168,8 @@ MOODS = ("dark", "sad", "warm", "light", "dramatic")
 # A long video (wide, several minutes) beside the Shorts: channel option `long`, these are its defaults.
 LONG = {"enabled": False, "per_day": 1, "minutes": [6, 9], "publish_time": "20:00", "playlist": "Long Stories", "create_after": "03:00",
         "min_source_words": 1600, "shot_seconds": 8}
+# A quick Short (20-35 s) beside the regular ones: only an original story can be one; channel option `quick`.
+QUICK = {"per_day": 1, "seconds": [20, 35], "outro": "Your story could be next. Comment it."}
 OLD_WORDS = ("The original is old: never repeat a slur or a dated word for a race, nationality, religion or disability; describe the person plainly "
              "(\"a musician\", \"a man on the ferry\") or leave the detail out.")
 ENDINGS = {"plain": "End on the outcome or the thought it leaves.",
@@ -183,6 +187,10 @@ def channel(raw: dict | None) -> dict:
 
 def long_of(ch: dict) -> dict:
     return {**LONG, **(ch.get("long") or {})}
+
+
+def quick_of(ch: dict) -> dict:
+    return {**QUICK, **(ch.get("quick") or {})}
 
 
 def parts(text: str, n: int) -> list[str]:
@@ -208,10 +216,63 @@ def words(text: str) -> int:
     return len(text.split())
 
 
-def word_range(ch: dict) -> tuple[int, int]:
-    lo, hi = ch["seconds"]
-    out = words(ch["outro"])
+def word_range(ch: dict, quick: bool = False) -> tuple[int, int]:
+    q = quick_of(ch)
+    lo, hi = q["seconds"] if quick else ch["seconds"]
+    out = words(q["outro"] if quick else ch["outro"])
     return int(lo * WPS) - out, int(hi * WPS) - out - 15
+
+
+def choose(options: list[str], told: dict[str, int], views: dict[str, float], floor: float) -> str:
+    """Double down on what performs without starving the rest: every option keeps a share of `floor`, and the remainder
+    follows average views (an option with no views yet counts as the mean of the known ones, so it keeps being tried).
+    The option told furthest below its target share is next; a tie goes to the earlier. No views, or a floor that
+    leaves nothing to share -> the least told."""
+    n, total = len(options), sum(told.get(o, 0) for o in options)
+    known = [views[o] for o in options if o in views]
+    if floor * n >= 1 or not known or sum(known) <= 0:
+        return min(options, key=lambda o: told.get(o, 0))
+    mean = sum(known) / len(known)
+    seen = {o: views.get(o, mean) for o in options}
+    gap = lambda o: round(floor + (1 - floor * n) * seen[o] / sum(seen.values()) - (told.get(o, 0) / total if total else 0), 9)
+    return max(options, key=gap)
+
+
+# Sound effects are cues a line asks for, never decoration: the model names one only where the moment calls for it.
+CUES = {"riser": "tension building just before something happens", "impact": "a shock or a revelation lands", "heartbeat": "fear, dread, a held breath",
+        "drone": "unease, something is wrong", "tick": "waiting, time running out", "ding": "a realisation, an idea, good news",
+        "whoosh": "a jump in time or place", "pop": "something light or funny", "coin": "money gained, paid or lost", "notification": "a message or a call arrives"}
+CUE_LEVEL = {"impact": 0.9, "riser": 0.8, "heartbeat": 0.8, "ding": 0.8, "notification": 0.8, "pop": 0.7, "coin": 0.7, "drone": 0.6, "tick": 0.6, "whoosh": 0.6}
+
+
+def sfx_plan(beats: list[dict], *, volume: float, turn: int = 0) -> list[dict]:
+    """Where the sound effects go: only on a line that asked for one (`cue` on a beat), at the moment it is spoken; a riser is
+    timed to finish as its line ends. Kept sparse whatever was asked: at least 4 seconds apart and about one per 8 seconds
+    of video. A cue whose kind has no file in the library is left out. Times follow the beats' own lengths."""
+    starts, t = [], 0.0
+    for b in beats:
+        starts.append(t)
+        t += b["dur"]
+    out, used, last = [], {}, -99.0
+    for i, b in enumerate(beats):
+        cue = b.get("cue")
+        if cue not in CUES or b["kind"] == "outro" or len(out) >= max(2, int(t // 8)):
+            continue
+        path = sfx.pick(cue, turn + used.get(cue, 0))
+        if not path:
+            continue
+        at = starts[i]
+        if cue == "riser":
+            try:
+                at = max(at, starts[i] + b["dur"] - shorts_edit.probe(str(path)))
+            except RuntimeError:                       # a file that will not decode is no use
+                continue
+        if at - last < 4:
+            continue
+        used[cue] = used.get(cue, 0) + 1
+        last = at
+        out.append({"at": round(at, 2), "path": str(path), "volume": round(volume * CUE_LEVEL[cue], 3)})
+    return out
 
 
 def screenplay(story: str, outro: str, max_words: int = 16) -> list[dict]:
@@ -337,9 +398,11 @@ def save_record(store, ch: dict, job: dict) -> None:
         "source": job["source"], "script": job["script"], "keywords": job["keywords"], "seconds": job["seconds"], "file": job["file"],
         "mood": job.get("mood", ""), "voice": job.get("voice", ""), "music": job.get("music", ""), "original": bool(job.get("original")), "kind": kind(job),
         "classic": job.get("classic"), "seo": job.get("seo"), "structure": job.get("structure", ""), "format": job.get("format", "short"), "summary": job.get("summary", ""),
+        "caption": job.get("caption", ""), "sfx": job.get("sfx", 0), "quick": bool(job.get("quick")),
         "thumb": job.get("thumb", ""), "thumb_text": job.get("thumb_text", ""),
         "chapters": [{"t": round(sum(x["dur"] for x in job["beats"][:n])), "heading": b["heading"]} for n, b in enumerate(job["beats"]) if b.get("heading")],
-        "screenplay": [{"text": b["text"], "seconds": round(b["dur"], 2), "query": b["query"], "footage": (b.get("visual") or {}).get("page", "")} for b in job["beats"]],
+        "screenplay": [{"text": b["text"], "seconds": round(b["dur"], 2), "query": b["query"], "footage": (b.get("visual") or {}).get("page", ""),
+                        **({"cue": b["cue"]} if b.get("cue") else {})} for b in job["beats"]],
         "credits": sorted({b["visual"]["credit"] for b in job["beats"] if b.get("visual")})})
     store.kv_put(SEEN, job["key"], {"state": "done"})
 
@@ -362,11 +425,11 @@ def next_slot(store, ch: dict, now: float | None = None, fmt: str = "short") -> 
     return after + 86400
 
 
-def made_today(store, ch: dict, fmt: str | None = None) -> int:
+def made_today(store, ch: dict, fmt: str | None = None, quick: bool = False) -> int:
     # by the day it was made (a later status or stats update re-saves the record); a reset starts the day's count again
     start = max(_midnight(), (store.kv_get(STATE, f"{ch['id']}:quota_reset") or {}).get("at", 0))
     return sum(v.get("channel") == ch["id"] and (v.get("made") or 0) >= start and (fmt is None or (v.get("format") == "long") == (fmt == "long"))
-               for v in store.kv_list(LOG))
+               and (not quick or bool(v.get("quick"))) for v in store.kv_list(LOG))
 
 
 def _midnight() -> float:
@@ -515,7 +578,7 @@ class StoryScout(Crew):
         if ch["originals"]:                         # no real story to tell today: an original one, from a premise never used before
             p = await self._original(ctx)
             if p:
-                return AgentResult("done", "INVENTED", f"An original {ctx['job']['genre']} story: “{p['title'][:70]}”", {"source": ctx["job"]["source"]})
+                return AgentResult("done", "INVENTED", f"An original {ctx['job']['genre']} story" + (" (a quick one)" if ctx["job"].get("quick") else "") + f": “{p['title'][:70]}”", {"source": ctx["job"]["source"]})
         return AgentResult("idle", "NOTHING NEW", f"No usable story among {len(cands)} candidates")
 
     async def _from_comments(self, ctx: dict) -> list[dict]:
@@ -627,12 +690,23 @@ class StoryScout(Crew):
             fresh.append({**rec, "_key": key})
         return fresh
 
+    def _lean(self, options: list[str], told: dict[str, int], views: dict[str, float]) -> str:
+        # the floor is held to 70% of the whole, so a long list (seven patterns) still leaves something to lean on
+        return choose(options, told, views, min(self.ch["explore"], 0.7 / len(options)))
+
     async def _original(self, ctx: dict) -> dict | None:
         ch, store = self.ch, ctx["store"]
         everything = [p for p in store.kv_list(PREMISES, limit=5000) if p.get("channel") == ch["id"]]
         genres = [g for g in ch["original_genres"] if g in GENRE_ASK] or ["confession"]
         told = {g: sum(p.get("used") and p.get("genre", "confession") == g for p in everything) for g in genres}
-        genre = min(genres, key=lambda g: told[g])                 # the kind told least so far, so the kinds take turns
+        log = [v for v in store.kv_list(LOG) if v.get("channel") == ch["id"]]
+        insights = store.kv_get(STATE, f"{ch['id']}:insights") or {}
+        learned = ch["double_down"] and insights.get("videos", 0) >= ch["double_down_after"]       # enough results to lean on
+        if learned:
+            by_kind = insights.get("views_by_kind") or {}
+            genre = self._lean(genres, told, {g: by_kind["original" if g == "confession" else g] for g in genres if ("original" if g == "confession" else g) in by_kind})
+        else:
+            genre = min(genres, key=lambda g: told[g])             # the kind told least so far, so the kinds take turns
         bank = [p for p in everything if p.get("genre", "confession") == genre]
         fresh = [p for p in bank if not p.get("used")] or await self._premises(ctx, bank, genre)
         if not fresh:
@@ -646,8 +720,13 @@ class StoryScout(Crew):
         ctx["job"] = {"id": f"{ch['id']}-orig-{tail}", "key": f"{ch['id']}:orig-{tail}", "channel": ch["id"], "dir": str(work), "raw": p["premise"],
                       "original": True, "genre": genre, "source": {"url": "", "title": p["title"], "from": f"original ({genre})", "score": None}}
         if genre in ("money", "science"):            # a learning video follows one of the watch-to-the-end patterns, the least used so far
-            used = [v.get("structure") for v in store.kv_list(LOG) if v.get("channel") == ch["id"]]
-            ctx["job"]["structure"] = min(STRUCTURES, key=used.count)
+            used = [v.get("structure") for v in log]
+            shapes = list(STRUCTURES)
+            ctx["job"]["structure"] = (self._lean(shapes, {k: used.count(k) for k in shapes}, insights.get("views_by_structure") or {})
+                                       if learned else min(shapes, key=used.count))
+        Q = quick_of(ch)
+        if Q["per_day"] and made_today(store, ch, quick=True) < Q["per_day"]:      # a short, sharp one among the day's Shorts
+            ctx["job"]["quick"] = True
         return p
 
 
@@ -710,20 +789,23 @@ class StoryWriter(Crew):
             return self.idle()
         if job.get("format") == "long":
             return await self._long(ctx, job)
-        lo, hi = word_range(self.ch)
+        quick = bool(job.get("quick"))
+        lo, hi = word_range(self.ch, quick)
+        pad = 3 if quick else 20                                 # a quick story's range is narrow: keep its target inside it
+        length = f"a {'-'.join(str(x) for x in quick_of(self.ch)['seconds'])} second video" if quick else "a 1-2 minute video"
         ending = ENDINGS.get(self.ch["ending"], ENDINGS["plain"])
         head, rules = GENRE_WRITE.get(job.get("genre") or "confession", GENRE_WRITE["confession"])
         science, learning = job.get("genre") == "science", job.get("structure") in STRUCTURES
         shape = f"- Build it exactly like this: {STRUCTURES[job['structure']]}\n- {HOLD_BACK}\n" if learning else f"- {RETAIN_STORY}\n"
         close = ("End on the one thing to remember or do." if job.get("genre") == "money" else "End on what it means for us, or the wonder of it." if science else ending)
-        prompt = (f"{head}, narrated for a 1-2 minute video, {lo + 20}-{hi - 20} words.\n"
+        prompt = (f"{head}, narrated for {length}, {lo + pad}-{hi - pad} words.\n"
                   "- The first sentence is a hook that makes someone stop scrolling (never say \"stop scrolling\" or speak to the scrolling itself).\n"
                   + shape + rules + "- It will be read aloud: no brackets, no labels such as \"Step 1:\"; say \"first\", \"then\", \"and the most useful one\".\n" +
                   "- Short spoken sentences. " + close + " No call to subscribe.\n"
                   'Answer as {"title": "under 70 characters, no names", "story": "...", "hashtags": ["3 to 5 words, no #"], '
                   f'"mood": "the one word that fits the story best: {" | ".join(MOODS)}"}}.\n\n'
                   f"Premise:\n{job['raw']}") if job.get("original") else (
-                  f"Retell the classic short story below for a 1-2 minute video, {lo + 20}-{hi - 20} words.\n"
+                  f"Retell the classic short story below for {length}, {lo + pad}-{hi - pad} words.\n"
                   "- Stay faithful: the same characters, events and the author's own ending. Do not modernise it or add a moral of your own.\n"
                   "- Third person, in your own plain spoken sentences; do not copy the author's sentences. Character names from the story may stay.\n"
                   f"- {OLD_WORDS}\n"
@@ -731,7 +813,7 @@ class StoryWriter(Crew):
                   f'Answer as {{"title": "under 70 characters, built around the story\'s own title", "story": "...", "hashtags": ["3 to 5 words, no #"], '
                   f'"mood": "the one word that fits the story best: {" | ".join(MOODS)}"}}.\n\n'
                   f"“{job['classic']['title']}” by {job['classic']['author']}:\n{job['raw'][:40000]}") if job.get("classic") else (
-                  f"Retell the confession below as a narrated story for a 1-2 minute video, {lo + 20}-{hi - 20} words.\n"
+                  f"Retell the confession below as a narrated story for {length}, {lo + pad}-{hi - pad} words.\n"
                   "- Third person, as if retelling something shared anonymously (\"a woman\", \"he\", \"they\").\n"
                   "- The first sentence is a hook that makes someone stop scrolling.\n"
                   "- Keep the real events, feelings and outcome. You may add small build-ups and pauses for suspense, but no new events or facts.\n"
@@ -791,7 +873,7 @@ class ScreenplayWriter(Crew):
         told = job["script"]
         if job.get("classic"):                      # the citation is spoken, as the story's last line
             told += f" A retelling of “{job['classic']['title']}”, by {job['classic']['author']}."
-        job["beats"] = screenplay(told, self.ch["outro"])
+        job["beats"] = screenplay(told, quick_of(self.ch)["outro"] if job.get("quick") else self.ch["outro"])
         for b in job["beats"]:
             b["shot"] = b["i"]                      # in a Short every beat has its own picture
         plan = sum(b["target_s"] for b in job["beats"])
@@ -830,7 +912,36 @@ class KeywordGenerator(Crew):
         for b in job["beats"]:
             b.setdefault("query", self.ch["outro_query"])
         job["keywords"] = [b["query"] for b in job["beats"]]
-        return AgentResult("done", "DONE", f"{len(shots) + 1} searches" + ("" if modelled else " (plain keywords where the model gave none)"))
+        cues = await self._cues(ctx, shots) if self.ch["sfx"] else 0
+        return AgentResult("done", "DONE", f"{len(shots) + 1} searches" + ("" if modelled else " (plain keywords where the model gave none)")
+                           + (f", {cues} sound cue{'s' if cues != 1 else ''}" if self.ch["sfx"] else ""))
+
+    async def _cues(self, ctx: dict, shots: list[list[dict]]) -> int:
+        """Ask which lines call for a sound, and which one. Most get none; a line gets a sound only if the moment needs it."""
+        kinds = [k for k in CUES if sfx.tracks(k)]              # only sounds the library actually has
+        if not kinds:
+            return 0
+        given = 0
+        for at in range(0, len(shots), 35):
+            batch = shots[at:at + 35]
+            listing = "\n".join(f"{n + 1}. {' '.join(x['text'] for x in g)[:260]}" for n, g in enumerate(batch))
+            got = None
+            try:
+                got = await ctx["llm"].json(
+                    "This narration will have a few sound effects. For each numbered line name the one sound the moment truly calls for, or \"none\". "
+                    f"Most lines need none: a sound belongs only where it makes a listener feel that moment more. At most {max(1, len(batch) // 5)} "
+                    "lines in all, and never two lines in a row. Choose only from: " + "; ".join(f"{k} ({CUES[k]})" for k in kinds) + ". "
+                    f'Answer as a JSON list of exactly {len(batch)} strings, in order.\n\n{listing}', tier="writer", max_tokens=1200)
+            except Exception:
+                pass                              # no model: no sound effects, which is always safe
+            if not (isinstance(got, list) and len(got) == len(batch)):
+                continue
+            for g, cue in zip(batch, got):
+                cue = re.sub(r"[^a-z]", "", str(cue).lower())
+                if cue in kinds:
+                    g[0]["cue"] = cue
+                    given += 1
+        return given
 
 
 class SEOStrategist(Crew):
@@ -883,6 +994,7 @@ class SEOStrategist(Crew):
         if not isinstance(d, dict):
             return AgentResult("done", "KEPT", f"No packaging from the model; the writer's title stands: “{before}”")
         title = " ".join(str(d.get("title") or "").split()).strip("\"“” ")
+        title = title[:1].upper() + title[1:]          # sentence case still starts with a capital
         if 15 <= len(title) <= 70 and not (job.get("original") and re.search(r"\btrue\b", title, re.I)) and not (kind(job) == "money" and promises(title)):
             job["title"] = title
         tags, size = [], 0
@@ -1072,17 +1184,25 @@ class Editor(Crew):
             track = bgm.pick(job["mood"], used)
         job["music"] = (bgm.line(track[1]) or track[0].name) if track else ""
         wide = job.get("format") == "long"
+        turn = sum(v.get("mood") == job.get("mood") and v.get("channel") == self.ch["id"] for v in ctx["store"].kv_list(LOG))   # moves the look and the effects on, as the music
+        look = fonts.style_for(job.get("mood") or "", kind(job), turn) if self.ch["caption_styles"] else None
+        if look and wide:
+            look["position"] = "lower"                  # a wide frame keeps its captions low
+        job["caption"] = " · ".join(x for x in (look["font_name"], look["fill"], look["highlight"]) if x) if look else ""
+        plan = sfx_plan(job["beats"], volume=float(self.ch["sfx_volume"]), turn=turn) if self.ch["sfx"] else None
         out = await asyncio.to_thread(shorts_edit.assemble, Path(job["dir"]), job["beats"], channel=self.ch["name"],
                                       logo=self.ch["logo"] or None, font_path=self.ch["caption_font"] or None,
-                                      music=str(track[0]) if track else None, music_volume=float(self.ch["music_volume"]), wide=wide)
-        job["file"], job["seconds"] = out["file"], out["seconds"]
+                                      music=str(track[0]) if track else None, music_volume=float(self.ch["music_volume"]), wide=wide,
+                                      motion=bool(self.ch["motion"]), style={k: v for k, v in look.items() if k != "font_name"} if look else None, sfx=plan)
+        job["file"], job["seconds"], job["sfx"] = out["file"], out["seconds"], out.get("sfx", 0)
         if wide:
             job["thumb"] = await self._thumbnail(job)
         for part in ("build", "footage", "audio"):            # the downloads and working files are large; the log keeps their sources
             shutil.rmtree(Path(job["dir"]) / part, ignore_errors=True)
         save_record(ctx["store"], self.ch, job)
         what = f"{clock(out['seconds'])} long video, {out['shots']} shots" + (", thumbnail made" if job.get("thumb") else ", no thumbnail") if wide else f"{out['seconds']} s Short"
-        return AgentResult("done", "CUT", f"{what}, {out['captions']} captions" + (", with music" if track else ", no music"))
+        font = f" in {look['font_name']}" if look else ""
+        return AgentResult("done", "CUT", f"{what}, {out['captions']} captions{font}, {job['sfx']} sound effects" + (", with music" if track else ", no music"))
 
     async def _thumbnail(self, job: dict) -> str:
         """The cover for a long video: a photo for the story (else a frame of the video itself) with the writer's few words on it."""
@@ -1333,10 +1453,16 @@ class AnalyticsManager(Crew):
         for v in seen:
             if v.get("structure"):
                 by_shape.setdefault(v["structure"], []).append(v["stats"]["view"])
+        by_len: dict[str, list[int]] = {}
+        for v in seen:
+            if v.get("format") != "long":
+                by_len.setdefault("quick" if v.get("quick") else "regular", []).append(v["stats"]["view"])
         insights = {"top_titles": [v["title"] for v in sorted(seen, key=lambda v: v["stats"]["view"], reverse=True)[:5]],
                     "views_by_kind": {k: round(sum(x) / len(x)) for k, x in by_kind.items()}, "videos": len(seen)}
         if by_shape:
             insights["views_by_structure"] = {k: round(sum(x) / len(x)) for k, x in by_shape.items()}
+        if by_len:
+            insights["views_by_length"] = {k: round(sum(x) / len(x)) for k, x in by_len.items()}
         ctx["store"].kv_put(STATE, f"{ch['id']}:insights", insights)
         latest = log[0]
         return AgentResult("done", "LOGGED", f"{ch['name']}: {', '.join(parts)}; latest “{latest['title']}” ({round(latest['seconds'])} s)",

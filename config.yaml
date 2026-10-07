@@ -169,6 +169,13 @@ masters:
           logo: ""                       # path to the channel logo (png); blank = the channel name as the watermark
           music: true                    # a quiet track from assets/bgm/<mood>/ under the narration (fill with: python -m vision bgm)
           music_volume: 0.12             # against the voice at 1.0
+          motion: true                   # a slow zoom on stock clips so a still-looking clip moves
+          caption_styles: true           # caption font and colours follow the story's mood (ten fonts: python -m vision fonts)
+          sfx: true                      # a sound effect only on a line that needs one, chosen by that line's mood (riser, impact, heartbeat, ding...); most lines get none (python -m vision sfx)
+          sfx_volume: 0.35               # against the voice at 1.0
+          quick:                         # a 20-35 second Short among the day's Shorts; original stories only
+            per_day: 1                   # 0 = off
+          double_down: true              # once 12 videos have views, the story kinds and lesson patterns that get more views are made more often (explore: 0.15 keeps the rest alive)
           long:                          # one long video a day beside the Shorts: wide 1920x1080, a classic retold chapter by chapter, with its own cover
             enabled: true
             minutes: [6, 9]              # target length

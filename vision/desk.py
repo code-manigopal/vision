@@ -228,7 +228,7 @@ def youtube(store):
         return _item("short:" + _s(v.get("_key")), st, v.get("title"), f"{round(v.get('seconds') or 0)} s · {v.get('status')}", v.get("uploaded") or v.get("made") or v.get("_ts"),
                      _rows(("Channel", v.get("channel")), ("Format", "long video" if v.get("format") == "long" else "Short"), ("Kind", v.get("kind")), ("Pattern", (v.get("structure") or "").replace("_", " ")),
                            ("Goes public", time.strftime("%a %d %b %H:%M", time.localtime(v["publish_at"])) if v.get("publish_at") and v.get("status") == "scheduled" else None), ("Views", stats.get("view") if vid else None), ("Likes", stats.get("like") if vid else None),
-                           ("Comments", stats.get("comment") if vid else None), ("Mood", v.get("mood")), ("Voice", v.get("voice")), ("Music", v.get("music")), ("Search tags", ", ".join((v.get("seo") or {}).get("tags") or [])),
+                           ("Comments", stats.get("comment") if vid else None), ("Mood", v.get("mood")), ("Voice", v.get("voice")), ("Music", v.get("music")), ("Captions", v.get("caption")), ("Sound effects", v.get("sfx") if "sfx" in v else None), ("Quick", "yes" if v.get("quick") else None), ("Search tags", ", ".join((v.get("seo") or {}).get("tags") or [])),
                            ("Writer's title", (v.get("seo") or {}).get("title_before") if (v.get("seo") or {}).get("title_before") != v.get("title") else None),
                            ("Hashtags", " ".join(v.get("hashtags") or [])),
                            ("Story from", "original (fiction)" if v.get("original") else f"{v['classic']['title']} by {v['classic']['author']}" if v.get("classic") else src.get("from")), ("Footage", "; ".join(v.get("credits") or []))),

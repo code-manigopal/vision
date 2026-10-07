@@ -31,6 +31,8 @@ bash scripts/setup.sh                     # venv + deps + .env from template + c
 .venv/bin/python -m vision check          # config, which keys are set, LM Studio reachable
 .venv/bin/python -m vision traffic "Windsor"
 .venv/bin/python -m vision bgm            # add 3 background tracks per mood to assets/bgm/ (or: bgm sad 5)
+.venv/bin/python -m vision fonts          # fetch the ten caption fonts + write the sample sheet data/shorts/_sample/caption-fonts.png
+.venv/bin/python -m vision sfx            # add 3 sound effects per kind to assets/sfx/ (or: sfx whoosh 5)
 .venv/bin/python -m pytest -q             # 27 tests, all external services mocked
 bash scripts/install_launchagent.sh       # auto-start at login + restart on crash
 tail -f logs/vision.log
@@ -263,6 +265,19 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   **Mani wants no caption drift**; "base" skips words, don't use it). `align()` maps heard words onto the script's words.
   `shorts_per_day` (5) is the daily number; one run keeps making Shorts until it is reached (`Director(again=...)`).
   The day's count goes by each record's `made` time; `youtube.reset_today(store, channel_id)` starts it again (kv `yt_state`). One clip or photo per beat, ranked by its own description.
+  Editing: clips get a slow zoom (`motion`). Captions take a look by mood from ten fonts (`services/fonts.py`, `style_for(mood, kind, turn)`;
+  `python -m vision fonts`, sample sheet `data/shorts/_sample/caption-fonts.png`; money/science have their own; the spoken word is highlighted;
+  long videos keep captions low; `caption_styles`). Sound effects (`services/sfx.py`, CC0 only, `python -m vision sfx`, `assets/sfx/<kind>/`):
+  **Mani's rule: a sound effect only where the sentence needs it, chosen by that sentence's mood.** The Keyword Generator
+  asks the model, line by line, for one cue from `CUES` (riser, impact, heartbeat, drone, tick, ding, whoosh, pop, coin,
+  notification; only kinds the library holds) or "none", most lines none; `sfx_plan` places each at its line, keeps them at
+  least 4 s apart and about one per 8 s, and never adds any on its own (`sfx`, `sfx_volume`). No model answer = no effects. The record keeps `caption` and `sfx`; both show on the desk.
+  **Quick Shorts** (`quick`, `QUICK`: 20-35 s, ends on its own outro, `per_day` 1, 0 = off): only an original story can be one (Scout sets
+  `job["quick"]`), counted among the day's Shorts; `word_range(ch, quick=True)`; insights keep `views_by_length` (quick vs regular).
+  **Double down** (`double_down`, `double_down_after` 12, `explore` 0.15): `choose(options, told, views, floor)` gives each option a floor share
+  and the rest by average views; the Scout uses it for the original kind (`views_by_kind`, a confession counts as "original") and the learning
+  pattern (`views_by_structure`) once insights have enough public videos, else the least-told as before; the floor is held to 70%/options so
+  seven patterns still lean.
   Background music is a library on disk, `assets/bgm/<mood>/` (git-ignored), filled by `python -m vision bgm [mood] [count]`
   from Openverse (`services/bgm.py`: CC0 / public domain / CC BY only, tagged instrumental, never sung) or by Mani dropping
   files in; each fetched track has a `.json` credit. The Editor takes the next track for the story's mood, levels it

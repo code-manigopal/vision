@@ -2,6 +2,8 @@
 Quick checks:   python -m vision check      (validates config and keys, no server)
                 python -m vision traffic "Toronto"
                 python -m vision bgm [mood] [count]   (fetch background music into assets/bgm/)
+                python -m vision fonts                (fetch the ten caption fonts into assets/fonts/)
+                python -m vision sfx [kind] [count]   (fetch sound effects into assets/sfx/)
 """
 
 import asyncio
@@ -57,6 +59,19 @@ def main() -> int:
         except TrafficError as e:
             print(f"[{e.status}] {e}", file=sys.stderr)
             return 1
+    if args[:1] == ["fonts"]:    # python -m vision fonts: download the caption fonts to assets/fonts/
+        from .services import fonts
+        for n in asyncio.run(fonts.fetch()):
+            print(f"  saved {n}")
+        print(", ".join(f"{f['name']}: {'yes' if fonts.path(f['name']) else 'MISSING'}" for f in fonts.FONTS))
+        return 0
+    if args[:1] == ["sfx"]:      # python -m vision sfx [kind] [count]: add sound effects to assets/sfx/<kind>/
+        from .services import sfx
+        for kind in ([args[1]] if len(args) > 1 else list(sfx.KINDS)):
+            for c in asyncio.run(sfx.fetch(kind, int(args[2]) if len(args) > 2 else 3)):
+                print(f"  {kind:<7} {c['title']} ({c['seconds']} s, {c['license']})")
+            print(f"{kind}: {len(sfx.tracks(kind))} in {sfx.DIR / kind}")
+        return 0
     if args[:1] == ["bgm"]:      # python -m vision bgm [mood] [count]: add background tracks to assets/bgm/<mood>/
         from .services import bgm
         moods = [args[1]] if len(args) > 1 else list(bgm.QUERIES)

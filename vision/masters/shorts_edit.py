@@ -47,10 +47,10 @@ def speed(clip_s: float, beat_s: float) -> float:
     return 1.0 if f > 1.5 else max(0.6, round(f, 3))
 
 
-def chunks(beats: list[dict], max_chars: int = 16, max_words: int = 3) -> list[tuple[float, float, str]]:
-    """Caption chunks (start, end, text) on the video's clock. Uses the voice's word timings when it gave them,
-    otherwise spreads a beat's words over its speech by length."""
-    out: list[tuple[float, float, str]] = []
+def timed_chunks(beats: list[dict], max_chars: int = 16, max_words: int = 3) -> list[tuple[float, float, str, list[tuple[str, float, float]]]]:
+    """Caption chunks (start, end, text, words) on the video's clock; each word is (word, start, end) and stays inside its chunk.
+    Uses the voice's word timings when it gave them, otherwise spreads a beat's words over its speech by length."""
+    out: list[tuple[float, float, str, list]] = []
     for b in beats:
         t0, speech = b["start"], b.get("speech") or b["dur"]
         words = [(w, t0 + a, t0 + z) for w, a, z in b.get("words") or []]
@@ -66,15 +66,21 @@ def chunks(beats: list[dict], max_chars: int = 16, max_words: int = 3) -> list[t
         mine: list[list] = []
         for w in words:
             if group and (len(group) >= max_words or len(" ".join(x[0] for x in group)) + 1 + len(w[0]) > max_chars):
-                mine.append([group[0][1], group[-1][2], " ".join(x[0] for x in group)])
+                mine.append([group[0][1], group[-1][2], " ".join(x[0] for x in group), group])
                 group = []
             group.append(w)
         if group:
-            mine.append([group[0][1], group[-1][2], " ".join(x[0] for x in group)])
+            mine.append([group[0][1], group[-1][2], " ".join(x[0] for x in group), group])
         for i, c in enumerate(mine):       # hold each chunk until the next one, so captions don't flicker
             c[1] = mine[i + 1][0] if i + 1 < len(mine) else min(c[1] + 0.15, t0 + b["dur"])
-        out += [(a, z, t) for a, z, t in mine if z > a]
+            c[3] = [(w, max(a, c[0]), min(z, c[1])) for w, a, z in c[3]]      # a word never leaves its chunk
+        out += [(a, z, t, ws) for a, z, t, ws in mine if z > a]
     return out
+
+
+def chunks(beats: list[dict], max_chars: int = 16, max_words: int = 3) -> list[tuple[float, float, str]]:
+    """Caption chunks (start, end, text) on the video's clock."""
+    return [(a, z, t) for a, z, t, _ in timed_chunks(beats, max_chars, max_words)]
 
 
 def font(size: int, path: str | None = None):
@@ -91,8 +97,29 @@ def plain(text: str) -> str:
     return text.translate({0x2010: "-", 0x2011: "-", 0x2012: "-", 0x00AD: None, 0x00A0: " ", 0x202F: " ", 0x2009: " "})
 
 
-def caption_png(text: str, out: Path, font_path: str | None = None, L: dict = UPRIGHT) -> None:
+def rgba(hexcolor: str | None, default: tuple) -> tuple:
+    try:
+        h = (hexcolor or "").lstrip("#")
+        if len(h) == 3:
+            h = "".join(c * 2 for c in h)
+        return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16), 255)
+    except ValueError:
+        return default
+
+
+def cap_top(L: dict, style: dict | None) -> int:
+    """Top edge of the caption strip: the lower third as before, or centred a little below the middle of the frame."""
+    if (style or {}).get("position") == "center":
+        return int((L["h"] - L["cap_h"]) / 2 + L["h"] * 0.06)
+    return L["cap_y"]
+
+
+def caption_png(text: str, out: Path, font_path: str | None = None, L: dict = UPRIGHT, style: dict | None = None, hl: int | None = None) -> None:
+    """`style`: font, fill, highlight, stroke (see assemble). `hl` = index of the word to draw in the highlight colour."""
+    style = style or {}
     W, CAP_H = L["w"], L["cap_h"]
+    font_path = style.get("font") or font_path
+    fill, stroke = rgba(style.get("fill"), (255, 255, 255, 255)), rgba(style.get("stroke"), (0, 0, 0, 255))
     text = plain(text)
     img = Image.new("RGBA", (W, CAP_H), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
@@ -111,8 +138,20 @@ def caption_png(text: str, out: Path, font_path: str | None = None, L: dict = UP
         if (len(lines) <= 2 and all(d.textlength(l, font=f) <= W - 100 for l in lines)) or size <= 48:
             break
         size -= 8
-    d.multiline_text((W / 2, CAP_H / 2), "\n".join(lines), font=f, fill=(255, 255, 255, 255), anchor="mm", align="center",
-                     stroke_width=max(6, size // 11), stroke_fill=(0, 0, 0, 255), spacing=10)
+    sw = max(6, size // 11)
+    if hl is None or not style.get("highlight"):
+        d.multiline_text((W / 2, CAP_H / 2), "\n".join(lines), font=f, fill=fill, anchor="mm", align="center",
+                         stroke_width=sw, stroke_fill=stroke, spacing=10)
+    else:                                    # word by word, so the spoken one can wear the highlight colour
+        hi, n = rgba(style["highlight"], fill), 0
+        asc, desc = f.getmetrics()
+        lh, sp = asc + desc + 10, d.textlength(" ", font=f)
+        for li, line in enumerate(lines):
+            x, y = (W - d.textlength(line, font=f)) / 2, CAP_H / 2 + (li - (len(lines) - 1) / 2) * lh
+            for w in line.split():
+                d.text((x, y), w, font=f, fill=hi if n == hl else fill, anchor="lm", stroke_width=sw, stroke_fill=stroke)
+                x += d.textlength(w, font=f) + sp
+                n += 1
     img.save(out)
 
 
@@ -138,7 +177,7 @@ def subscribe_png(out: Path) -> None:
     img.save(out)
 
 
-def segment(visual: dict | None, frames: int, out: Path, i: int, L: dict = UPRIGHT) -> None:
+def segment(visual: dict | None, frames: int, out: Path, i: int, L: dict = UPRIGHT, motion: bool = False) -> None:
     """One shot's picture, `frames` long, no sound."""
     W, H = L["w"], L["h"]
     # every segment leaves in the same pixel format and colour range: a change mid-video resets the overlays
@@ -154,7 +193,12 @@ def segment(visual: dict | None, frames: int, out: Path, i: int, L: dict = UPRIG
         run(["ffmpeg", "-y", "-v", "error", "-loop", "1", "-framerate", str(FPS), "-i", visual["path"], "-vf", vf, *enc])
     else:
         f = speed(visual.get("duration") or probe(visual["path"]), dur)
-        vf = f"setpts=PTS/{f},scale={W}:{H}:force_original_aspect_ratio=increase:out_range=limited,format=yuv420p,crop={W}:{H},fps={FPS},setsar=1,setparams=range=limited"
+        if motion:     # slow centred push-in / pull-out; frames are scaled up 1.5x first so the crop stays sharp, d=1 keeps one frame out per frame in
+            z = ("1+0.08*on/{n}", "1.08-0.08*on/{n}")[i % 2]
+            vf = (f"setpts=PTS/{f},scale={W * 3 // 2}:{H * 3 // 2}:force_original_aspect_ratio=increase:out_range=limited,format=yuv420p,crop={W * 3 // 2}:{H * 3 // 2},fps={FPS},"
+                  f"zoompan=z='{z}':x='iw/2-iw/zoom/2':y='ih/2-ih/zoom/2':d=1:s={W}x{H}:fps={FPS},setsar=1,setparams=range=limited").replace("{n}", str(max(frames, 1)))
+        else:
+            vf = f"setpts=PTS/{f},scale={W}:{H}:force_original_aspect_ratio=increase:out_range=limited,format=yuv420p,crop={W}:{H},fps={FPS},setsar=1,setparams=range=limited"
         run(["ffmpeg", "-y", "-v", "error", "-stream_loop", "-1", "-i", visual["path"], "-vf", vf, *enc])
 
 
@@ -207,10 +251,12 @@ def thumbnail(out: Path, photo: Path | str, text: str, channel: str = "", font_p
 
 
 def assemble(work: Path, beats: list[dict], *, channel: str, logo: str | None = None, font_path: str | None = None,
-             music: str | None = None, music_volume: float = 0.12, wide: bool = False) -> dict:
-    """beats: [{text, audio, dur, speech?, words?, visual?, kind}] in order -> work/final.mp4."""
+             music: str | None = None, music_volume: float = 0.12, wide: bool = False,
+             motion: bool = True, style: dict | None = None, sfx: list[dict] | None = None) -> dict:
+    """beats: [{text, audio, dur, speech?, words?, visual?, kind}] in order -> work/final.mp4.
+    style: {font, fill, highlight, stroke, position: "lower"|"center"}; sfx: [{at, path, volume=0.5}]; motion: slow zoom on video clips."""
     L = WIDE if wide else UPRIGHT
-    W, CAP_H, CAP_Y = L["w"], L["cap_h"], L["cap_y"]
+    W, CAP_H, CAP_Y = L["w"], L["cap_h"], cap_top(L, style)
     build = work / "build"
     build.mkdir(parents=True, exist_ok=True)
     t = 0.0
@@ -235,22 +281,26 @@ def assemble(work: Path, beats: list[dict], *, channel: str, logo: str | None = 
     segs = []
     for i, (visual, a, z) in enumerate(shots):
         frames = max(1, round((z["start"] + z["dur"]) * FPS) - round(a["start"] * FPS))
-        segment(visual, frames, build / f"seg{i:03d}.mp4", i, L)
+        segment(visual, frames, build / f"seg{i:03d}.mp4", i, L, motion)
         segs.append((f"seg{i:03d}.mp4", None))
     _concat_list(build / "video.ffconcat", segs)
     run(["ffmpeg", "-y", "-v", "error", "-f", "concat", "-safe", "0", "-i", str(build / "video.ffconcat"), "-c", "copy", str(build / "base.mp4")])
 
     Image.new("RGBA", (W, CAP_H), (0, 0, 0, 0)).save(build / "cap_blank.png")
-    caps, entries, at = chunks(beats, L["cap_chars"], L["cap_words"]), [], 0.0
-    for n, (a, z, text) in enumerate(caps):
-        if a - at > 0.02:
-            entries.append(("cap_blank.png", a - at))
-            at = a
-        if z - at < 0.04:
-            continue
-        caption_png(text, build / f"cap{n:04d}.png", font_path, L)
-        entries.append((f"cap{n:04d}.png", z - at))
-        at = z
+    hl = bool((style or {}).get("highlight"))
+    caps, entries, at = timed_chunks(beats, L["cap_chars"], L["cap_words"]), [], 0.0
+    for n, (a, z, text, words) in enumerate(caps):
+        # one image per chunk, or with a highlight one per word, each shown from that word's start to the next word's (the last to the chunk's end)
+        spans = [(a if k == 0 else words[k][1], words[k + 1][1] if k + 1 < len(words) else z, k) for k in range(len(words))] if hl else [(a, z, None)]
+        for m, (sa, sz, k) in enumerate(spans):
+            if sa - at > 0.02:
+                entries.append(("cap_blank.png", sa - at))
+                at = sa
+            if sz - at < 0.04:
+                continue
+            caption_png(text, build / f"cap{n:04d}_{m:02d}.png", font_path, L, style, k)
+            entries.append((f"cap{n:04d}_{m:02d}.png", sz - at))
+            at = sz
     entries += [("cap_blank.png", max(total - at, 0.04)), ("cap_blank.png", None)]
     _concat_list(build / "caps.ffconcat", entries)
     watermark_png(build / "watermark.png", channel, logo)
@@ -264,14 +314,30 @@ def assemble(work: Path, beats: list[dict], *, channel: str, logo: str | None = 
                   f":enable='gte(t,{outro:.3f})'[v]")
     out = work / "final.mp4"
     extra, sound = [], "2:a"
+    nin = 5
     if music:              # the track loops under the whole Short at an even level, well below the voice, and fades out at the end
         extra = ["-stream_loop", "-1", "-i", str(music)]
+        nin = 6
         graph += (f";[5:a]loudnorm=I=-16:TP=-1.5:LRA=11,aresample=44100,volume={music_volume},afade=t=in:d=0.8,"
-                  f"afade=t=out:st={max(total - 1.6, 0):.3f}:d=1.6[m];[2:a][m]amix=inputs=2:duration=first:normalize=0[a]")
+                  f"afade=t=out:st={max(total - 1.6, 0):.3f}:d=1.6[m]")
+    fx = []                # sound effects: skipped when the file is missing or unreadable
+    for e in sfx or []:
+        try:
+            if Path(e["path"]).is_file() and probe(e["path"]) > 0:
+                fx.append(e)
+        except (RuntimeError, KeyError, TypeError):
+            continue
+    for k, e in enumerate(fx):
+        ms = max(0, round(float(e.get("at", 0)) * 1000))
+        extra += ["-i", str(e["path"])]
+        graph += f";[{nin + k}:a]aresample=44100,volume={float(e.get('volume', 0.5))},adelay={ms}:all=1[x{k}]"
+    ins = ["[2:a]"] + (["[m]"] if music else []) + [f"[x{k}]" for k in range(len(fx))]
+    if len(ins) > 1:       # normalize=0 keeps the narration at its own level; the limiter only catches a pile-up of peaks
+        graph += f";{''.join(ins)}amix=inputs={len(ins)}:duration=first:normalize=0" + (",alimiter=limit=0.97" if fx else "") + "[a]"
         sound = "[a]"
     run(["ffmpeg", "-y", "-v", "error", "-reinit_filter", "0", "-i", str(build / "base.mp4"), "-f", "concat", "-safe", "0", "-i", str(build / "caps.ffconcat"),
          "-i", str(build / "narration.wav"), "-loop", "1", "-i", str(build / "watermark.png"), "-loop", "1", "-i", str(build / "subscribe.png"), *extra,
          "-filter_complex", graph, "-map", "[v]" if outro is not None else "[w]", "-map", sound, "-t", f"{total:.3f}",
          "-c:v", "libx264", "-preset", "medium", "-crf", "22", "-pix_fmt", "yuv420p", "-r", str(FPS),
          "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", str(out)])
-    return {"file": str(out), "seconds": round(total, 1), "captions": len(caps), "shots": len(shots)}
+    return {"file": str(out), "seconds": round(total, 1), "captions": len(caps), "shots": len(shots), "sfx": len(fx)}
