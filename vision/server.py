@@ -27,6 +27,7 @@ from .channels.telegram import TelegramChannel
 from .services import fyers, kite_mcp, mailcal, oauth, sysmon, traffic_api, weather
 from .services.llm import LLMUnavailable
 from .masters.email import accounts as email_accounts
+from .masters import visa
 
 log = logging.getLogger("vision")
 DASH = ROOT / "dashboard"
@@ -328,6 +329,84 @@ def create_app(*, boot_on_start: bool = True, schedules: bool = True, telegram_o
         if mime != "application/pdf":   # Chrome's own PDF viewer won't render a sandboxed response; everything else stays locked down
             headers["Content-Security-Policy"] = "sandbox"
         return Response(data, media_type=mime or "application/octet-stream", headers=headers)
+
+    # ---------- Visa Watch accounts (the dashboard's form; a password is optional, comes in once, is encrypted, and is never sent back) ----------
+    signing: dict[str, asyncio.Task] = {}
+
+    async def _visa_sign_in(acc: dict) -> None:
+        try:
+            await visa.sign_in(app.state.store, acc)
+            if acc["status"] == "active" and not app.state.orch.asleep and "visa" in app.state.orch.by_id:
+                await app.state.orch.run_master("visa", "manual")      # first look straight after the sign-in
+        finally:
+            signing.pop(acc["id"], None)
+
+    def _visa(request: Request, acc_id: str | None = None) -> dict | None:
+        origin = request.headers.get("origin")
+        if origin and origin.split("//")[-1].split(":")[0] not in ("127.0.0.1", "localhost"):
+            raise HTTPException(403, "Only the dashboard on this Mac may change accounts")
+        if acc_id is None:
+            return None
+        acc = next((a for a in visa.accounts(app.state.store) if a["id"] == acc_id), None)
+        if not acc:
+            raise HTTPException(404, "No such account")
+        return acc
+
+    def _visa_list() -> dict:
+        return {"accounts": [{**visa.public(a), "signing": a["id"] in signing} for a in visa.accounts(app.state.store)]}
+
+    def _cities(v) -> list[str]:
+        return [c.strip() for c in (v.split(",") if isinstance(v, str) else v or []) if str(c).strip()]
+
+    @app.get("/api/visa/accounts")
+    async def visa_accounts():
+        return _visa_list()
+
+    @app.post("/api/visa/accounts")
+    async def visa_add(request: Request):
+        _visa(request)
+        b = await request.json()
+        name, email, cities = (b.get("name") or "").strip(), (b.get("email") or "").strip(), _cities(b.get("cities"))
+        if not (name and email and cities):
+            raise HTTPException(400, "Name, sign-in email and at least one city are needed")
+        try:
+            visa.add_account(app.state.store, name, email, cities, (b.get("booked") or "").strip(), password=b.get("password") or None,
+                             not_before=(b.get("not_before") or "").strip() or None, skip=b.get("skip"))
+        except ValueError:
+            raise HTTPException(400, "Dates must look like 2027-04-22; dates to skip like 2027-03-10, 2027-04-01..2027-04-07")
+        return _visa_list()
+
+    @app.post("/api/visa/accounts/{acc_id}")
+    async def visa_update(acc_id: str, request: Request):
+        acc = _visa(request, acc_id)
+        b = await request.json()
+        action = b.get("action")
+        try:
+            if action in ("pause", "resume"):
+                visa.set_status(app.state.store, acc, "paused" if action == "pause" else "active")
+            elif action == "signin":             # opens a window on this Mac; the person signs in, VISION keeps the session
+                if acc["id"] not in signing:
+                    signing[acc["id"]] = asyncio.create_task(_visa_sign_in(acc))
+            elif action == "check":              # due now; the master still keeps its gap between checks
+                acc["next_due"] = 0
+                visa.save(app.state.store, acc)
+                if not app.state.orch.asleep and "visa" in app.state.orch.by_id:
+                    asyncio.create_task(app.state.orch.run_master("visa", "manual"))
+            else:
+                visa.update_account(app.state.store, acc, cities=_cities(b.get("cities")) or None, booked=(b.get("booked") or "").strip() or None,
+                                    password=b.get("password") or None, forget=action == "forget",
+                                    not_before=b["not_before"].strip() if isinstance(b.get("not_before"), str) else None, skip=b.get("skip"))
+        except ValueError:
+            raise HTTPException(400, "Dates must look like 2027-04-22; dates to skip like 2027-03-10, 2027-04-01..2027-04-07")
+        return _visa_list()
+
+    @app.delete("/api/visa/accounts/{acc_id}")
+    async def visa_remove(acc_id: str, request: Request):
+        acc = _visa(request, acc_id)
+        visa.remove_account(app.state.store, acc["id"])
+        for key in (f"visa:slot:{acc['id']}", f"visa:paused:{acc['id']}", f"visa:signin:{acc['id']}"):
+            app.state.bus.clear_notice(key)
+        return _visa_list()
 
     @app.get("/api/desk/{master_id}")
     async def desk_view(master_id: str):

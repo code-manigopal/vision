@@ -4,6 +4,7 @@ Quick checks:   python -m vision check      (validates config and keys, no serve
                 python -m vision bgm [mood] [count]   (fetch background music into assets/bgm/)
                 python -m vision fonts                (fetch the ten caption fonts into assets/fonts/)
                 python -m vision sfx [kind] [count]   (fetch sound effects into assets/sfx/)
+                python -m vision visa add|list|update|pause|resume|remove|check   (Visa Watch accounts)
 """
 
 import asyncio
@@ -59,6 +60,10 @@ def main() -> int:
         except TrafficError as e:
             print(f"[{e.status}] {e}", file=sys.stderr)
             return 1
+    if args[:1] == ["visa"]:     # python -m vision visa add|list|...: the accounts Visa Watch looks at
+        from .masters import visa
+        load_config()
+        return visa.cli(args[1:])
     if args[:1] == ["fonts"]:    # python -m vision fonts: download the caption fonts to assets/fonts/
         from .services import fonts
         for n in asyncio.run(fonts.fetch()):

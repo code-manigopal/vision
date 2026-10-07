@@ -12,3 +12,6 @@ python-docx>=1.1
 psutil>=5.9
 Pillow>=10
 edge-tts>=7        # narration with word timings (YouTube Manager); falls back to the local voice
+selenium>=4.20     # Visa Watch: opens Chrome for you to sign in to the portal (the hourly look itself is plain httpx)
+cryptography>=42   # Visa Watch: the saved portal session is encrypted on disk
+keyring>=25        # Visa Watch: the encryption key lives in the macOS Keychain

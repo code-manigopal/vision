@@ -32,7 +32,7 @@ def store(tmp_path):
 
 
 def test_catalog_matches_dashboard():
-    assert len(CATALOG["order"]) == 10
+    assert len(CATALOG["order"]) == 11
     for mid, spec in CATALOG["masters"].items():
         names = [a["name"] for a in spec["agents"]]
         staged = [n for s in spec["stages"] for n in s["agents"]]
@@ -111,7 +111,7 @@ def test_server_ws_and_api(tmp_path, monkeypatch):
         assert c.get("/").status_code == 200
         assert "x-dc" in c.get("/dashboard/Main.dc.html").text
         st = c.get("/api/state").json()
-        assert len(st["masters"]) == 10
+        assert len(st["masters"]) == 11
         with c.websocket_connect("/ws") as ws:
             snap = ws.receive_json()
             assert snap["type"] == "snapshot"

@@ -21,8 +21,8 @@ llm:                       # Ask engine + every agent that writes or judges
 #   only_masters: [youtube]            just YouTube Manager
 #   only_masters: [youtube, news]      those two
 #   only_masters: []                   no override: each master's own `enabled:` below decides
-# ids: email, calendar, trading, invest, news, web, jobs, world, traffic, youtube. Restart VISION after a change.
-only_masters: [youtube]
+# ids: email, calendar, trading, invest, news, web, jobs, world, traffic, youtube, visa. Restart VISION after a change.
+only_masters: [youtube, visa]
 
 # mode: stub = demo agents until that master is built · live = real agents
 # trust: OBSERVE | SUGGEST | ACT | HOLD
@@ -132,6 +132,16 @@ masters:
     cycle_minutes: 10
     options:
       watch_cities: ["Leamington, ON", "Windsor, ON"]
+  visa:
+    enabled: true
+    trust: OBSERVE         # only looks at the dates on offer and tells you; you book by hand
+    mode: live
+    cycle_minutes: 10      # how often it asks "is an account due?"; an account is looked at about once an hour
+    options:
+      interval_minutes: 60 # one look per account per hour...
+      jitter_minutes: 10   # ...give or take this much
+      quiet: []            # e.g. ["01:00", "05:00"] = no checks between those times
+      test_mode: false     # true = no 5-minute wait between checks, so "Check now" always runs at once; set back to false after testing
   youtube:
     enabled: true
     trust: ACT             # makes Shorts and uploads them as unlisted; you make them public (or delete them) on YouTube

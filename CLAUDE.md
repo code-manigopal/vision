@@ -11,7 +11,7 @@ The goal is the best result for the fewest usage credits and tokens.
    and ask them to return conclusions, not file dumps.
 
 VISION is Mani's personal assistant: one always-on Python service on a **Mac mini M1 (16 GB)** that runs
-**10 master agents**, each with its own sub-agents, a red/gold HUD dashboard, Telegram briefs/alerts,
+**11 master agents**, each with its own sub-agents, a red/gold HUD dashboard, Telegram briefs/alerts,
 an AI "Ask" engine (LM Studio local model + optional cloud), and optional local voice.
 Phases 1–7 are built and unit-tested with mocked services. **No real external API has been exercised yet**;
 first real runs happen on Mani's Mac.
@@ -33,6 +33,7 @@ bash scripts/setup.sh                     # venv + deps + .env from template + c
 .venv/bin/python -m vision bgm            # add 3 background tracks per mood to assets/bgm/ (or: bgm sad 5)
 .venv/bin/python -m vision fonts          # fetch the ten caption fonts + write the sample sheet data/shorts/_sample/caption-fonts.png
 .venv/bin/python -m vision sfx            # add 3 sound effects per kind to assets/sfx/ (or: sfx whoosh 5)
+.venv/bin/python -m vision visa list      # Visa Watch accounts: add | list | update | pause | resume | remove | check <id>
 .venv/bin/python -m pytest -q             # 27 tests, all external services mocked
 bash scripts/install_launchagent.sh       # auto-start at login + restart on crash
 tail -f logs/vision.log
@@ -57,7 +58,8 @@ vision/
                    mailcal.py (Gmail/GCal/Graph), traffic_api.py (TomTom), news.py (Google News RSS),
                    weather.py (Open-Meteo), markets.py (Yahoo chart, CoinGecko, Bank of Canada FX),
                    fyers.py, kite_mcp.py (Zerodha via hosted Kite MCP, persistent session), wealthsimple.py (CSV),
-                   sysmon.py (Instruments: CPU/memory via psutil, GPU via ioreg or nvidia-smi)
+                   sysmon.py (Instruments: CPU/memory via psutil, GPU via ioreg or nvidia-smi),
+                   visa_portal.py (US visa portal for Canada, read-only: Selenium for the person's own sign-in, httpx GETs after), keyvault.py (Fernet key in the macOS Keychain)
   masters/         catalog.json (shared with the dashboard) + one module per live master
 dashboard/
   Main.dc.html     the HUD (canvas "design" format: {{holes}}, <sc-for>, <sc-if>, logic class)
@@ -72,7 +74,7 @@ tests/             test_core, test_telegram, test_phase34, test_phase567
    `AgentResult.summary` (+ `data`) becomes the master report. Briefs use master reports only.
    Reporters: email=Summarizer, calendar=Scheduler, trading=Portfolio Manager, invest=Daily P&L Reporter,
    news=News Summarizer, web=Proposal Drafter, jobs=Application Tracker, world=Flight Tracker,
-   traffic=Incident Scout, youtube=Confessions Everywhere Director (its crew reports to it through Analytics Manager).
+   traffic=Incident Scout, visa=Slot Watcher, youtube=Confessions Everywhere Director (its crew reports to it through Analytics Manager).
 2. **Errors skip the chain**: a failing agent turns red, alerts the master log (Telegram once/30 min),
    and blocks later stages — unless the agent sets `blocking = False` (sync/data agents do).
 3. **Side effects need approval** (the YOU gate): sending email, booking meetings, job packages,
@@ -95,6 +97,7 @@ Tests: mock HTTP with `httpx.MockTransport`; use `FakeLLM` from tests/test_phase
 · `GET/POST /api/approvals` · `POST /api/approvals/{id}/{approved|rejected}` · `POST /api/ask {text, session}`
 · `GET /api/issues` · `POST /api/issues/explain {master, agent}` → `{text, source}` · `GET /api/approvals/{id}/email` (full body + attachments) · `GET /api/approvals/{id}/attachments/{att}` (streamed, never stored)
 · `GET /api/desk/{master}` (read-only pipeline: stages + items + artifacts) · `GET /api/files/{path}` (only `data/sites`, `data/applications`)
+· `GET/POST /api/visa/accounts`, `POST /api/visa/accounts/{id}` (`{cities, booked, password?}` or `{action: signin|pause|resume|check|forget}`), `DELETE /api/visa/accounts/{id}` (a password is never returned; a request from another origin is refused)
 · `POST /api/tts {text, voice?}` → wav · `GET /api/voices` (Kokoro's English voices) · `POST /api/stt` (raw audio body) → `{text}` · `GET /api/traffic?city=` · `GET /api/weather/grid` (globe weather, ~100 points, cached 1 h)
 · `/auth/{google|microsoft|youtube}/login?account=` + `/callback` · `/auth/fyers/login` + `/callback` · `WS /ws`
 
@@ -143,7 +146,7 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
 - Design system: palette #FBCA03 gold, #B97D10 bronze, #AA0505 red, #6A0C0B dark red, #67C7EB blue
   (sparingly), bg #07080A. Fonts: **Michroma** headings, **Pixelywave** body (`dashboard/fonts/pixelywave.otf`, freeware non-commercial, kept out of git), **JetBrains Mono** numbers.
   Rounded corners 8–14 px. Subtle starfield background. No scrollbars (lists fit or page themselves).
-  Center: Mani's triangle emblem (`dashboard/core.webp`, pulsing; swells with the voice) with 10 gold diamond icons on one ring (glass hover cards). Mani reverted
+  Center: Mani's triangle emblem (`dashboard/core.webp`, pulsing; swells with the voice) with 11 gold diamond icons on one ring (glass hover cards). Mani reverted
   a "sun" core and solar-system orbits — don't reintroduce them.
 
 ## Decisions log
@@ -190,6 +193,36 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
 - Weather Agent belongs to News Desk; World Watch is flights only (the globe's weather icons are a plain data endpoint, not an agent).
   World Watch shows `near_slots` (10) flights nearest home first, the rest spread worldwide; a route lookup is spent only on callsigns not yet known.
 - Traffic Desk is read-only (no approval gate).
+- Visa Watch (`masters/visa.py`, the 11th master; Mani and family only, **notify only, Mani books by hand**): about once an
+  hour per account (`interval_minutes` 60 ± `jitter_minutes` 10; the master cycles every 10 min and looks at one due account
+  per run, never two within 5 min unless `test_mode: true`) it reads the dates the Canada portal (ais.usvisa-info.com) offers
+  for the chosen cities; a date strictly earlier than the booked one raises a notice (dashboard + Mani's Telegram), once per
+  city + date per 24 h. Built the way the open-source kcajc/usvisa-ca works (**Mani's choice: Selenium, not Playwright**),
+  minus its rescheduling. Sign-in is a visible Chrome window Selenium opens. Default: the account holder signs in themselves
+  ("Sign in" on the desk, or `python -m vision visa signin <id>`; VISION types nothing, no password kept). **Mani's choice
+  (2026-10-07): an account may carry a password (optional field, Fernet-encrypted, never returned by the API), and then
+  VISION signs in itself as the repo does**, once per expired session and at most `MAX_SIGN_INS` (8) a day; a refusal, a
+  lock message or a CAPTCHA pauses the account and nothing retries (an automated attempt that day got sign-in locked for
+  an hour). The
+  session (cookies, that browser's user agent, the schedule number) is kept Fernet-encrypted in `data/visa/*.session`, key
+  in the macOS Keychain (`services/keyvault.py`). The hourly look is plain httpx with those cookies and that user agent
+  (Mani's choice), GET only (`_only_get`), no browser: one request per city to the portal's days list (consulate numbers
+  in `FACILITIES`). A session that has run out puts the account in status `signin` with a notice; it is not a failure.
+  A CAPTCHA page in an answer pauses at once, three failures in a row pause, no retries, no proxies.
+  Accounts are in kv `visa_accounts`. usvisascheduling.com (India) is parked: add it to `visa.PORTALS` and `visa.SIGNERS`.
+  Nothing has run signed in yet; how long the portal keeps a session is unknown.
+  Dashboard: "Desk ›" on Visa Watch opens the accounts panel (`openVisa`, `visaOn`): list with Sign in / Check now / Pause /
+  Edit / Remove (asks first) and an add form (name, sign-in email, optional password, cities, the date to beat).
+  Each account has an accepted range agreed with its owner up front and editable any time: `not_before` (optional) up to
+  `booked` ("alert if earlier than": a booked appointment's date, or any target date when nothing is booked yet), minus
+  `skip` (days or ranges never to offer, typed as `2027-03-10, 2027-04-01..2027-04-07`). `earlier()` passes over an
+  unacceptable date and takes the next one. An empty list from the portal is reported as "portal lists no dates" (it can
+  mean nothing on offer, a finished application, or the portal holding back). **Planned, not built: Approve on Telegram →
+  VISION books that exact date (re-checked first, approval expires); to be written in dry-run first and only tried on an
+  account with an open application. With it, a per-account "book by itself if in range" checkbox (Mani, 2026-10-07: some
+  owners give full authority over dates), off by default: on = the first acceptable date is booked without asking, once,
+  then the account stops looking and Mani is told; off = Approve / Reject as above.** The portal
+  only lists dates for an account with an open application (a schedule number); Mani's own June 2026 appointment is done.
 - YouTube Manager (`masters/youtube.py`, took the Film Studio slot) has three levels: master → one Director per channel
   (`options.channels`) → that channel's crew. `Director` (agents.py) runs its crew like a master runs sub-agents; crew
   agent events carry `director`. Crew for Confessions Everywhere: Story Scout → Story Writer → Screenplay Writer →
@@ -301,6 +334,7 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
 | World Watch | live | optional OPENSKY creds |
 | Trading Desk | live | OANDA practice token + account |
 | YouTube Manager | live (upload mocked only, never run against YouTube) | GROQ_API_KEY, PEXELS_API_KEY (the .env line has no usable value), REDDIT_CLIENT_ID/SECRET or .txt stories in inbox/confessions/confessions; GOOGLE_CLIENT_ID/SECRET with YouTube Data API v3 and Google Drive API enabled and redirect `http://127.0.0.1:8765/auth/youtube/callback`, then the YouTube sign-in |
+| Visa Watch | live (never run signed in) | add the account on its desk, then sign in to the portal himself in the window it opens (again whenever the session runs out); the Keychain prompt allowed once |
 | Telegram | live | TELEGRAM_BOT_TOKEN, then /start → TELEGRAM_CHAT_ID |
 | Ask engine | live | LM Studio server + llm.local_model (optional ANTHROPIC_API_KEY + llm.cloud_model) |
 

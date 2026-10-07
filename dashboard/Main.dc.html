@@ -62,6 +62,7 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
 .holo-cone{position:absolute;left:50%;bottom:92px;top:70px;width:620px;margin-left:-310px;z-index:1;pointer-events:none;background:linear-gradient(to top,rgba(var(--h),.26),rgba(var(--h),.05) 60%,transparent);clip-path:polygon(47% 100%,53% 100%,100% 0,0 0);filter:blur(5px);animation:holobeam 3.2s ease-in-out infinite}
 .blink{animation:vblink 1.4s ease-in-out infinite}
 .tab{border-radius:8px;background:transparent;border:1px solid #3A3222;color:#B97D10;font-family:'Michroma',sans-serif;font-size:11px;letter-spacing:2px;padding:0 18px;height:44px;cursor:pointer}
+.gtabs .tab,.gtabs .tab-on{padding:0 11px;letter-spacing:1px}
 .tab-on{border-radius:8px;background:#2A2210;border:1px solid #FBCA03;color:#FBCA03;font-family:'Michroma',sans-serif;font-size:11px;letter-spacing:2px;padding:0 18px;height:44px;cursor:pointer;box-shadow:0 0 12px rgba(251,202,3,.35)}
 .mst{border-radius:8px;display:flex;align-items:center;gap:10px;width:100%;min-height:34px;background:#101217;border:1px solid #262A33;color:#EDE6D6;font-family:'Pixelywave',sans-serif;font-size:14px;font-weight:600;padding:0 12px;cursor:pointer;text-align:left}
 .mst-on{border-radius:8px;display:flex;align-items:center;gap:10px;width:100%;min-height:34px;background:#1E1A10;border:1px solid #FBCA03;color:#FBCA03;font-family:'Pixelywave',sans-serif;font-size:14px;font-weight:600;padding:0 12px;cursor:pointer;text-align:left}
@@ -71,6 +72,10 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
 .d-wait{width:9px;height:9px;border-radius:50%;background:#AA0505;box-shadow:0 0 8px #AA0505}
 .d-idle{width:9px;height:9px;border-radius:50%;background:#4A4F5A}
 .qa{border-radius:8px;background:#101217;border:1px solid #3A3222;color:#E8D5A8;font-family:'Pixelywave',sans-serif;font-size:14px;font-weight:600;height:44px;padding:0 16px;cursor:pointer}
+.vin{box-sizing:border-box;width:100%;height:38px;border-radius:8px;background:#07080A;border:1px solid #3A3222;color:#EDE6D6;font-family:'Pixelywave',sans-serif;font-size:14px;padding:0 12px;outline:none;color-scheme:dark}
+.vin:focus{border-color:#FBCA03}
+.vlb{display:flex;flex-direction:column;gap:5px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:1px;color:#9A8F76}
+.vbt{border-radius:8px;background:#101217;border:1px solid #3A3222;color:#E8D5A8;font-family:'Pixelywave',sans-serif;font-size:13px;height:30px;padding:0 10px;cursor:pointer;white-space:nowrap}
 .qa:hover,.mst:hover,.tab:hover{border-color:#FBCA03}
 @keyframes vhue{0%,100%{filter:hue-rotate(-18deg) brightness(1)}50%{filter:hue-rotate(14deg) brightness(1.25)}}
 @keyframes vstroke{0%,100%{stroke:#FBCA03}50%{stroke:#AA0505}}
@@ -886,7 +891,7 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
   </div>
   <!-- AGENT GRAPH (slide 2) -->
   <div ref="{{graphRef}}" style="width: 50%; height: 100%; flex-shrink: 0; position: relative; padding: 16px 28px 24px 56px; box-sizing: border-box; display: flex; flex-direction: column; gap: 12px">
-    <div style="display: flex; align-items: center; gap: 16px">
+    <div class="gtabs" style="display: flex; align-items: center; gap: 8px">
       <div style="font-family: 'Michroma', sans-serif; font-size: 14px; letter-spacing: 4px; color: #FBCA03">AGENT GRAPH</div>
       <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #9A8F76">{{graphMasterName}} · lit = working now · red = waiting on you</div>
       <div style="flex-grow: 1"></div>
@@ -996,6 +1001,71 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
     <button class="qa" onClick="{{powerOn}}" style="margin-top: 10px; background: #AA0505; border-color: #AA0505; color: #FFF4D6">Power on</button>
   </div>
   </sc-if>
+  <sc-if value="{{visaOn}}" hint-placeholder-val="{{ false }}">
+  <div style="position: absolute; left: 0; top: 0; width: 100%; height: 100%; z-index: 58; background: rgba(5,6,8,0.78); display: flex; align-items: center; justify-content: center">
+    <div role="dialog" aria-label="Visa Watch accounts" style="width: 980px; box-sizing: border-box; padding: 22px 24px; display: flex; flex-direction: column; gap: 14px; background: #0D0F14; border: 1px solid #B97D10; border-radius: 14px; box-shadow: 0 0 30px rgba(251,202,3,0.18)">
+      <div style="display: flex; align-items: center; gap: 14px">
+        <div style="font-family: 'Michroma', sans-serif; font-size: 14px; letter-spacing: 3px; color: #FBCA03">VISA WATCH · ACCOUNTS</div>
+        <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #9A8F76">{{visaNote}}</div>
+        <div style="flex-grow: 1"></div>
+        <button class="vbt" onClick="{{visaClose}}">Close</button>
+      </div>
+      <sc-for list="{{visaRows}}" as="va" hint-placeholder-count="2">
+        <div style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; background: #101217; border: 1px solid #262A33; border-radius: 10px">
+          <div style="width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: {{va.dot}}"></div>
+          <div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px">
+            <div style="font-size: 15px; color: #EDE6D6">{{va.name}} <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #9A8F76">{{va.email}}</span></div>
+            <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #C9C0AC; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{va.line}}</div>
+            <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: {{va.stColor}}; line-height: 1.5">{{va.state}}</div>
+          </div>
+          <sc-if value="{{va.asking}}" hint-placeholder-val="{{ false }}">
+            <div style="font-size: 13px; color: #FF8A73">Remove this account and its saved sign-in?</div>
+            <button class="vbt" onClick="{{va.yes}}" style="background: #AA0505; border-color: #AA0505; color: #FFF4D6">Remove</button>
+            <button class="vbt" onClick="{{va.no}}">Keep</button>
+          </sc-if>
+          <sc-if value="{{va.plain}}" hint-placeholder-val="{{ true }}">
+            <button class="vbt" onClick="{{va.signin}}" style="border-color: {{va.signColor}}; color: {{va.signText}}">{{va.signLabel}}</button>
+            <button class="vbt" onClick="{{va.check}}">Check now</button>
+            <button class="vbt" onClick="{{va.toggle}}">{{va.toggleLabel}}</button>
+            <button class="vbt" onClick="{{va.edit}}">Edit</button>
+            <button class="vbt" onClick="{{va.ask}}">Remove</button>
+          </sc-if>
+        </div>
+      </sc-for>
+      <sc-if value="{{visaEmpty}}" hint-placeholder-val="{{ false }}">
+        <div style="font-size: 14px; color: #9A8F76; padding: 6px 2px">{{visaEmptyText}}</div>
+      </sc-if>
+      <sc-if value="{{visaCanEdit}}" hint-placeholder-val="{{ true }}">
+      <div style="display: flex; flex-direction: column; gap: 10px; padding-top: 12px; border-top: 1px solid #262A33">
+        <div style="font-family: 'Michroma', sans-serif; font-size: 11px; letter-spacing: 2px; color: #B97D10">{{visaFormTitle}}</div>
+        <div style="display: flex; gap: 12px; align-items: flex-end">
+          <sc-if value="{{visaNew}}" hint-placeholder-val="{{ true }}">
+            <label class="vlb" style="width: 150px">NAME<input class="vin" value="{{vfName}}" onChange="{{vfSetName}}" placeholder="Priya" /></label>
+            <label class="vlb" style="width: 220px">PORTAL SIGN-IN EMAIL<input class="vin" value="{{vfEmail}}" onChange="{{vfSetEmail}}" placeholder="name@example.com" autocomplete="off" /></label>
+          </sc-if>
+          <label class="vlb" style="width: 200px">{{vfPassLabel}}<input class="vin" type="password" value="{{vfPass}}" onChange="{{vfSetPass}}" autocomplete="new-password" /></label>
+          <label class="vlb" style="flex-grow: 1">CITIES (COMMA SEPARATED)<input class="vin" value="{{vfCities}}" onChange="{{vfSetCities}}" placeholder="Toronto, Ottawa" /></label>
+          <label class="vlb" style="width: 160px">ALERT IF EARLIER THAN<input class="vin" type="date" value="{{vfBooked}}" onChange="{{vfSetBooked}}" /></label>
+        </div>
+        <div style="display: flex; gap: 12px; align-items: flex-end">
+          <label class="vlb" style="width: 160px">NOT BEFORE (OPTIONAL)<input class="vin" type="date" value="{{vfFrom}}" onChange="{{vfSetFrom}}" /></label>
+          <label class="vlb" style="flex-grow: 1">DATES TO SKIP (OPTIONAL) · A DAY, OR A RANGE WITH TWO DOTS<input class="vin" value="{{vfSkip}}" onChange="{{vfSetSkip}}" placeholder="2027-03-10, 2027-04-01..2027-04-07" /></label>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px">
+          <div style="font-size: 13px; color: {{visaMsgColor}}; flex-grow: 1">{{visaMsg}}</div>
+          <sc-if value="{{visaCanForget}}" hint-placeholder-val="{{ false }}">
+            <button class="vbt" onClick="{{visaForget}}" style="height: 38px; padding: 0 16px">Forget password</button>
+          </sc-if>
+          <sc-if value="{{visaEditing}}" hint-placeholder-val="{{ false }}">
+            <button class="vbt" onClick="{{visaCancel}}" style="height: 38px; padding: 0 16px">Cancel</button>
+          </sc-if>
+          <button class="vbt" onClick="{{visaSave}}" style="height: 38px; padding: 0 18px; background: #2A2210; border-color: #FBCA03; color: #FBCA03">{{visaSaveLabel}}</button>
+        </div>
+      </div>
+      </sc-if>
+    </div>
+  </div>
+  </sc-if>
   <sc-if value="{{confirmOn}}" hint-placeholder-val="{{ false }}">
   <div style="position: absolute; left: 0; top: 0; width: 100%; height: 100%; z-index: 60; background: rgba(5,6,8,0.72); display: flex; align-items: center; justify-content: center">
     <div role="dialog" aria-label="Shut down VISION" style="width: 420px; box-sizing: border-box; padding: 22px 24px; display: flex; flex-direction: column; gap: 12px; background: #0D0F14; border: 1px solid #AA0505; border-radius: 14px; box-shadow: 0 0 30px rgba(170,5,5,0.35)">
@@ -1087,6 +1157,7 @@ class Component extends DCLogic {
       }
       if (e.key !== 'Escape') return;
       const s = this.state;
+      if (s.visaOn) { this.setState({ visaOn: false, visaForm: this.visaBlank() }); return; }
       if (Component.DECK.test(s.mode)) { this.stopSpeech(); this.setState({ deckTalk: false, prev: null }); }
       if (s.page === 1) this.scrollToTop();
       else if (s.mind) this.setState({ mind: false });
@@ -1329,7 +1400,7 @@ class Component extends DCLogic {
   // Preview: rule-based intent parser. Real build: the local LLM router (LM Studio, tool calling)
   // returns the same {kind, ...entities} list, and the same plan UI runs on the real agent results.
   static REPORTERS = { email: 'Summarizer', calendar: 'Scheduler', trading: 'Portfolio Manager', invest: 'Daily P&L Reporter',
-    news: 'News Summarizer', web: 'Proposal Drafter', jobs: 'Application Tracker', world: 'Flight Tracker', traffic: 'Incident Scout', youtube: 'Confessions Everywhere Director' };
+    news: 'News Summarizer', web: 'Proposal Drafter', jobs: 'Application Tracker', world: 'Flight Tracker', traffic: 'Incident Scout', youtube: 'Confessions Everywhere Director', visa: 'Slot Watcher' };
   static HOLD = null;   // a master kept on hold (greyed out, skipped at boot); none right now
   titleCase(x) { return x.trim().replace(/\s+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()); }
   parseDay(q) {
@@ -1572,7 +1643,7 @@ class Component extends DCLogic {
       this.say('Mind closed.');
     } else if (this.pickMaster(t) || t.includes('agent') || t.includes('pipeline') || t.includes('slave')) {
       const mk = this.pickMaster(t);
-      const names = { youtube: 'YouTube Manager', trading: 'Trading Desk', jobs: 'Job Hunt', web: 'Web Designer', invest: 'Investments', news: 'News Desk', world: 'World Watch', email: 'Email Manager', calendar: 'Calendar Manager', traffic: 'Traffic Desk' };
+      const names = { youtube: 'YouTube Manager', trading: 'Trading Desk', jobs: 'Job Hunt', web: 'Web Designer', invest: 'Investments', news: 'News Desk', world: 'World Watch', email: 'Email Manager', calendar: 'Calendar Manager', traffic: 'Traffic Desk', visa: 'Visa Watch' };
       if (mk) this.setState({ master: mk });
       this.say('Showing ' + names[mk || this.state.master] + ' agents.');
       setTimeout(() => this.scrollToGraph(), 60);
@@ -1589,6 +1660,7 @@ class Component extends DCLogic {
     if (t.includes('web') || t.includes('site') || t.includes('design')) return 'web';
     if (t.includes('news') || t.includes('cricket') || t.includes('politic') || t.includes('headline')) return 'news';
     if (t.includes('traffic')) return 'traffic';
+    if (t.includes('visa')) return 'visa';
     if (t.includes('calendar') || t.includes('meeting')) return 'calendar';
     if (t.includes('email') || t.includes('mail') || t.includes('inbox')) return 'email';
     if (t.includes('invest') || t.includes('portfolio') || t.includes('zerodha') || t.includes('wealth') || t.includes('crypto')) return 'invest';
@@ -1739,9 +1811,46 @@ class Component extends DCLogic {
     this.setState({ mode: 'decide', mind: false, page: 0, deckI: 0, deckTalk: false, prev: null });
     setTimeout(() => { const i = Math.max(0, (this.deck || []).findIndex((c) => c.key === 'ap:' + id)); this.deckIdx = i; this.setState({ deckI: i }); }, 80);
   }
+  // Visa Watch accounts. A password is optional: with one, VISION signs in to the portal itself; without, "Sign in"
+  // opens the portal in a window on the Mac and the person signs in there. A typed password goes to
+  // /api/visa/accounts once, is encrypted there, never comes back, and the field is cleared as soon as it is sent.
+  visaBlank() { return { id: null, name: '', email: '', password: '', cities: '', booked: '', not_before: '', skip: '' }; }
+  openVisa() {
+    this.stopSpeech();
+    this.setState({ visaOn: true, master: 'visa', visaForm: this.visaBlank(), visaMsg: null, visaAsk: null });
+    if (this.state.liveUp) this.visaCall('GET', '');
+    clearInterval(this.visaPoll);      // a check takes a while: keep the list current while the panel is open
+    this.visaPoll = setInterval(() => { if (!this.state.visaOn || this.dead) clearInterval(this.visaPoll); else if (this.state.liveUp) this.visaCall('GET', ''); }, 5000);
+  }
+  async visaCall(method, path, body, done) {
+    let j = null, err = null;
+    try {
+      const r = await fetch('/api/visa/accounts' + path, body ? { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : { method });
+      j = await r.json().catch(() => null);
+      if (!r.ok) err = (j && j.detail) || 'VISION could not save that.';
+    } catch (e) { err = 'VISION is not answering.'; }
+    if (err) { this.setState({ visaMsg: { bad: true, text: err } }); return false; }
+    this.setState(Object.assign({ visaAccs: (j && j.accounts) || [] }, method === 'GET' ? {} : { visaAsk: null }, done ? { visaMsg: { text: done }, visaForm: this.visaBlank() } : {}));
+    return true;
+  }
+  visaSave() {
+    const f = this.state.visaForm || this.visaBlank();
+    if (!this.state.liveUp) return;
+    if (f.id) {
+      const body = { cities: f.cities, booked: f.booked, not_before: f.not_before || '', skip: f.skip || '' }; if (f.password) body.password = f.password;
+      this.setState({ visaForm: Object.assign({}, f, { password: '' }) });
+      this.visaCall('POST', '/' + encodeURIComponent(f.id), body, 'Saved.');
+    } else {
+      if (!(f.name.trim() && f.email.trim() && f.cities.trim() && f.booked)) { this.setState({ visaMsg: { bad: true, text: 'Fill in name, sign-in email, cities and the date. The password is optional.' } }); return; }
+      const body = { name: f.name, email: f.email, cities: f.cities, booked: f.booked, not_before: f.not_before || '', skip: f.skip || '' }; if (f.password) body.password = f.password;
+      this.setState({ visaForm: Object.assign({}, f, { password: '' }) });
+      this.visaCall('POST', '', body, f.password ? 'Added. VISION signs in by itself at the first look, within about ten minutes.' : 'Added. Now press Sign in on that account and sign in to the portal yourself.');
+    }
+  }
   async openDesk(master, stage) {
     // a master's records and artifacts (leads, pitches, job packages, drafts, trades...), one card each
     const m = master || this.state.master;
+    if (m === 'visa') { this.openVisa(); return; }
     this.stopSpeech();
     this.setState({ mode: 'desk', mind: false, page: 0, master: m, deskFor: m, deskStage: stage || null, deckI: 0, deckTalk: false, prev: null });
     this.deckIdx = 0;
@@ -1964,7 +2073,9 @@ class Component extends DCLogic {
         ['Calendar Reader','done','SYNCED'],['Conflict Checker','done','NO CLASH'],['Scheduler','wait','CONFIRM'],
         ['Reminder Agent','work','ARMED'],['Email Liaison','work','LINKED']] },
       traffic: { name: 'TRAFFIC DESK', dot: 'd-work', agents: [
-        ['City Geocoder', 'done', 'MAPPED'], ['Traffic Poller', 'work', 'POLLING'], ['Incident Scout', 'work', 'SCANNING']] }
+        ['City Geocoder', 'done', 'MAPPED'], ['Traffic Poller', 'work', 'POLLING'], ['Incident Scout', 'work', 'SCANNING']] },
+      visa: { name: 'VISA WATCH', dot: 'd-done', agents: [
+        ['Canada Checker', 'done', 'CHECKED'], ['Slot Watcher', 'done', 'WATCHING']] }
     };
     const LV = s.live;
     if (LV && LV.masters) Object.keys(LV.masters).forEach((m) => {
@@ -1979,12 +2090,12 @@ class Component extends DCLogic {
       Object.keys(data).forEach((m) => { if (m !== Component.HOLD && !((LM[m] || {}).agents || []).length) data[m].agents = data[m].agents.map((a) => [a[0], 'idle', 'WAITING', a[3]]); });
       ((LM[s.master] || {}).agents || []).forEach((a) => { liveSum[a.name] = a.summary || ''; });
     }
-    const masters = ['email','calendar','trading','invest','news','web','jobs','world','traffic','youtube'].map((id) => ({
+    const masters = ['email','calendar','trading','invest','news','web','jobs','world','traffic','youtube','visa'].map((id) => ({
       name: data[id].name.charAt(0) + data[id].name.slice(1).toLowerCase().replace(/ (\w)/, (m) => m.toUpperCase()).replace('Youtube', 'YouTube'),
       dot: data[id].dot,
       count: data[id].agents.length,
-      trust: ({ traffic: 'OBSERVE', calendar: 'SUGGEST', email: 'SUGGEST', trading: 'OBSERVE', invest: 'OBSERVE', news: 'OBSERVE', web: 'SUGGEST', jobs: 'ACT', world: 'OBSERVE', youtube: 'ACT' })[id],
-      trustColor: ({ traffic: '#67C7EB', calendar: '#FBCA03', email: '#FBCA03', trading: '#67C7EB', invest: '#67C7EB', news: '#67C7EB', web: '#FBCA03', jobs: '#67C7EB', world: '#67C7EB', youtube: '#67C7EB' })[id],
+      trust: ({ traffic: 'OBSERVE', calendar: 'SUGGEST', email: 'SUGGEST', trading: 'OBSERVE', invest: 'OBSERVE', news: 'OBSERVE', web: 'SUGGEST', jobs: 'ACT', world: 'OBSERVE', youtube: 'ACT', visa: 'OBSERVE' })[id],
+      trustColor: ({ traffic: '#67C7EB', calendar: '#FBCA03', email: '#FBCA03', trading: '#67C7EB', invest: '#67C7EB', news: '#67C7EB', web: '#FBCA03', jobs: '#67C7EB', world: '#67C7EB', youtube: '#67C7EB', visa: '#67C7EB' })[id],
       cls: s.master === id ? 'mst-on' : 'mst',
       pick: () => { if (this.state.mode === 'desk') this.openDesk(id); else this.setState({ master: id }); }
     }));
@@ -2016,7 +2127,7 @@ class Component extends DCLogic {
       'All masters online. RAM is running high.'
     ];
     // ---- Orbit markers: one per master, hover = glass status card ----
-    const orbOrder = ['email','calendar','trading','invest','news','web','jobs','world','traffic','youtube'];
+    const orbOrder = ['email','calendar','trading','invest','news','web','jobs','world','traffic','youtube','visa'];
     const SC = 430 / 440;
     const orbMarks = orbOrder.map((m, k) => {
       const an = (-90 + k * 360 / orbOrder.length) * Math.PI / 180 + s.orbA;
@@ -2129,6 +2240,7 @@ class Component extends DCLogic {
       jobs: { loop: true, stages: [['SCOUT',['Job Scout']],['TAILOR',['Resume Tailor','Cover Letter Writer']],['APPROVAL',['YOU']],['REACH OUT',['Outreach']],['TRACK',['Application Tracker']],['PREPARE',['Interview Prep']]] },
       invest: { loop: false, stages: [['SYNC',['Zerodha Sync','Fyers Sync','Wealthsimple Sync']],['CONSOLIDATE',['Portfolio Aggregator']],['ANALYZE',['Allocation Analyst','Risk Monitor','Market Watcher','Tax & Records Keeper']],['MARKET PULSE',['Index Tracker','Bitcoin Tracker']],['REPORT',['Daily P&L Reporter']]] },
       traffic: { loop: true, stages: [['LOCATION', ['City Geocoder']], ['POLL', ['Traffic Poller']], ['INCIDENTS', ['Incident Scout']]] },
+      visa: { loop: false, stages: [['CHECK', ['Canada Checker']], ['COMPARE', ['Slot Watcher']]] },
       calendar: { loop: false, stages: [['SYNC',['Calendar Reader']],['CHECK',['Conflict Checker']],['PLAN',['Scheduler','Reminder Agent']],['COORDINATE',['Email Liaison']],['APPROVAL',['YOU']],['HANDOFF',['Email Manager']]], xnote: { stage: 5, text: 'invites go out via Email Sender' } },
       email: { xnote: { stage: 1, text: 'meeting requests → Calendar Manager' }, loop: false, stages: [['READ',['Reader']],['SORT',['Categorizer']],['SUMMARIZE',['Summarizer']],['DRAFT',['Writer']],['APPROVAL',['YOU']],['SEND',['Sender']]] },
       world: { loop: false, stages: [['TRACK',['Flight Tracker']],['VIEW',['Globe View']]] },
@@ -2263,7 +2375,7 @@ class Component extends DCLogic {
     if (RD.invest && RD.invest.mkts && RD.invest.mkts.length) bMkts = RD.invest.mkts.map((m) => m.pct == null ? noRow(m.name) : mk(m.name, m.pct));
     else if (bLive) bMkts = [noRow(RD.invest ? 'Markets unavailable' : 'Waiting for Investments')];
     // ---- Boot sequence: every agent reports in to VISION ----
-    const order = ['email','calendar','trading','invest','news','web','jobs','world','traffic','youtube'];
+    const order = ['email','calendar','trading','invest','news','web','jobs','world','traffic','youtube','visa'];
     const flat = [];
     order.forEach((m) => data[m].agents.forEach((a2) => flat.push([m, a2[0]])));
     const total = flat.length;
@@ -2766,7 +2878,29 @@ class Component extends DCLogic {
     const masterCardX = '50%', gMasterName = sel.name;
     const workingNames = data[s.master].agents.filter((a2) => a2[1] === 'work').map((a2) => a2[0]);
     const waitingNames = data[s.master].agents.filter((a2) => a2[1] === 'wait').map((a2) => a2[0]);
-    const gtabs = [['email','Email'],['calendar','Calendar'],['traffic','Traffic'],['trading','Trading'],['invest','Invest'],['news','News'],['web','Web'],['jobs','Jobs'],['world','World'],['youtube','YouTube']].map(([id, label]) => ({
+    // ---- Visa Watch accounts panel (connected only; the preview shows no accounts) ----
+    const vf = s.visaForm || this.visaBlank();
+    const vset = (k) => (ev) => this.setState({ visaForm: Object.assign({}, this.state.visaForm || this.visaBlank(), { [k]: ev.target.value }), visaMsg: null });
+    const vWhen = (t) => { if (!t) return 'not checked yet'; const d = new Date(t * 1000); return 'checked ' + d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }) + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
+    const visaRows = (CON && s.visaOn ? s.visaAccs || [] : []).map((a) => {
+      const early = a.slots || [], skipTxt = (a.skip || []).map((r) => r[0] === r[1] ? r[0] : r[0] + '..' + r[1]).join(', ');
+      const paused = a.status === 'paused', failed = a.last_result === 'fail', need = a.status === 'signin';
+      return { name: a.name, email: a.email, line: (a.cities || []).join(', ') + ' · ' + (a.not_before ? a.not_before + ' → before ' : 'before ') + a.booked + (skipTxt ? ' · skipping ' + skipTxt : '') + ' · ' + (a.auto ? 'signs in by itself' : 'you sign in'),
+        state: a.signing ? 'SIGN-IN WINDOW OPEN on this Mac · sign in there yourself; it closes by itself' : need ? 'NEEDS SIGN-IN · ' + (a.error || 'no saved sign-in') + ' · press Sign in'
+          : paused ? 'PAUSED' + (a.error ? ' · ' + a.error : ' by you') : early.length ? 'EARLIER SLOT · ' + early.map((x) => x[0] + ' ' + x[1]).join(', ') + ' · ' + vWhen(a.last_check)
+          : failed ? 'last check failed · ' + vWhen(a.last_check) + ' · ' + (a.error || '') : (!a.dates ? 'no successful check yet' : Object.values(a.dates).some((d) => d && d.length) ? 'nothing earlier · ' + vWhen(a.last_check)
+            : 'the portal lists no dates' + (a.empties >= 3 ? ' (' + a.empties + ' looks in a row)' : '') + ' · ' + vWhen(a.last_check)),
+        stColor: a.signing ? '#67C7EB' : need || paused || failed ? '#FF8A73' : early.length ? '#FBCA03' : '#9A8F76', dot: need || paused ? '#AA0505' : early.length ? '#FBCA03' : '#67C7EB',
+        signLabel: need ? 'Sign in' : 'Sign in again', signColor: need && !a.signing ? '#FBCA03' : '#3A3222', signText: need && !a.signing ? '#FBCA03' : '#E8D5A8',
+        signin: () => { this.setState({ visaMsg: { text: 'A browser window is opening on this Mac. Sign in to the portal there yourself; VISION types nothing.' } }); this.visaCall('POST', '/' + encodeURIComponent(a.id), { action: 'signin' }); },
+        asking: s.visaAsk === a.id, plain: s.visaAsk !== a.id, toggleLabel: paused ? 'Resume' : 'Pause',
+        check: () => { this.setState({ visaMsg: { text: 'Check asked for ' + a.name + '. It runs now unless another check ran in the last five minutes.' } }); this.visaCall('POST', '/' + encodeURIComponent(a.id), { action: 'check' }); },
+        toggle: () => this.visaCall('POST', '/' + encodeURIComponent(a.id), { action: paused ? 'resume' : 'pause' }),
+        edit: () => this.setState({ visaForm: { id: a.id, name: a.name, email: a.email, password: '', cities: (a.cities || []).join(', '), booked: a.booked, not_before: a.not_before || '', skip: skipTxt }, visaMsg: null }),
+        ask: () => this.setState({ visaAsk: a.id }), no: () => this.setState({ visaAsk: null }),
+        yes: () => this.visaCall('DELETE', '/' + encodeURIComponent(a.id)) };
+    });
+    const gtabs = [['email','Email'],['calendar','Calendar'],['traffic','Traffic'],['trading','Trading'],['invest','Invest'],['news','News'],['web','Web'],['jobs','Jobs'],['world','World'],['youtube','YouTube'],['visa','Visa']].map(([id, label]) => ({
       label, cls: s.master === id ? 'tab-on' : 'tab', pick: () => this.setState({ master: id })
     }));
 
@@ -2875,6 +3009,18 @@ class Component extends DCLogic {
       nodes, edgePath, hotPath, crossPath,
       selKind: selNode.kind, selLabel: selNode.label, selLinks: links.join(', '),
       graphStats: raw.length + ' nodes · ' + (edges.length + cross.length) + ' links · demo vault',
+      visaOn: !!s.visaOn, visaRows, visaEmpty: !visaRows.length, visaCanEdit: CON, visaNew: !vf.id, visaEditing: !!vf.id,
+      visaEmptyText: CON ? 'No accounts yet. Add the first one below.' : 'Accounts are managed on the Mac VISION runs on. Nothing is shown in the preview.',
+      visaNote: 'looks about once an hour · tells you on Telegram · never books',
+      visaFormTitle: vf.id ? 'EDIT ' + String(vf.name || vf.id).toUpperCase() : 'ADD AN ACCOUNT', vfPassLabel: vf.id ? 'NEW PASSWORD (BLANK = KEEP)' : 'PASSWORD (OPTIONAL)',
+      vfName: vf.name, vfEmail: vf.email, vfPass: vf.password, vfCities: vf.cities, vfBooked: vf.booked, vfFrom: vf.not_before, vfSkip: vf.skip, vfSetFrom: vset('not_before'), vfSetSkip: vset('skip'),
+      vfSetName: vset('name'), vfSetEmail: vset('email'), vfSetPass: vset('password'), vfSetCities: vset('cities'), vfSetBooked: vset('booked'),
+      visaCanForget: !!(vf.id && (s.visaAccs || []).some((a) => a.id === vf.id && a.auto)),
+      visaForget: () => this.visaCall('POST', '/' + encodeURIComponent(vf.id), { action: 'forget' }, 'Password forgotten. Sign in by hand from now on.'),
+      visaMsg: s.visaMsg ? s.visaMsg.text : (vf.id ? '' : 'With a password VISION signs in by itself (encrypted on this Mac, never shown again). Without one, you sign in yourself in a window it opens.'), visaMsgColor: s.visaMsg && s.visaMsg.bad ? '#FF8A73' : '#9A8F76',
+      visaSaveLabel: vf.id ? 'Save changes' : 'Add account', visaSave: () => this.visaSave(),
+      visaCancel: () => this.setState({ visaForm: this.visaBlank(), visaMsg: null }),
+      visaClose: () => this.setState({ visaOn: false, visaForm: this.visaBlank(), visaMsg: null }),
       cmd: s.cmd,
       onCmd: (ev) => this.setState({ cmd: ev.target.value }),
       onCmdKey: (ev) => { if (ev.key === 'Enter') { this.runCommand(this.state.cmd); this.setState({ cmd: '' }); } },

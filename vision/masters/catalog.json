@@ -9,7 +9,8 @@
   "jobs",
   "world",
   "traffic",
-  "youtube"
+  "youtube",
+  "visa"
  ],
  "masters": {
   "email": {
@@ -981,6 +982,45 @@
    "reporter": "Confessions Everywhere Director",
    "demo_report": "Confessions Everywhere: 1 unlisted for your review",
    "loop": true
+  },
+  "visa": {
+   "id": "visa",
+   "name": "VISA WATCH",
+   "agents": [
+    {
+     "name": "Canada Checker",
+     "status": "done",
+     "label": "CHECKED",
+     "tier": "API",
+     "note": "ais.usvisa-info.com · read-only"
+    },
+    {
+     "name": "Slot Watcher",
+     "status": "done",
+     "label": "WATCHING",
+     "tier": "NONE",
+     "note": "earlier than booked?"
+    }
+   ],
+   "stages": [
+    {
+     "title": "CHECK",
+     "agents": [
+      "Canada Checker"
+     ],
+     "parallel": false
+    },
+    {
+     "title": "COMPARE",
+     "agents": [
+      "Slot Watcher"
+     ],
+     "parallel": false
+    }
+   ],
+   "reporter": "Slot Watcher",
+   "demo_report": "Nothing earlier than the booked date",
+   "loop": false
   }
  }
 }
