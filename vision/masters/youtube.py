@@ -33,7 +33,7 @@ import httpx
 
 from ..agents import AgentResult, Director, Stage, SubAgent
 from ..config import ROOT
-from ..services import bgm, gdrive, genmedia, gutenberg, oauth, reddit, stock_video
+from ..services import bgm, gdrive, genmedia, gutenberg, oauth, reddit, stock_video, yt_suggest
 from . import shorts_edit
 
 SEEN, LOG, DRIVE, STATE, PREMISES, CLASSICS = "yt_seen", "yt_videos", "yt_drive", "yt_state", "yt_premises", "yt_classics"
@@ -78,6 +78,48 @@ SCIENCE = {
     "oceans": ["what happens when a whale dies and sinks", "life around deep-sea vents", "how coral reefs are built", "the great ocean currents", "why some sea creatures glow",
                "what causes the tides", "why the sea is salty", "the midnight zone of the deep sea", "how sea turtles find their way home", "how tiny plankton make the air we breathe",
                "the hidden forests of kelp", "how an octopus thinks and hides"]}
+MONEY = ["how compound interest really grows money", "why an emergency fund comes before investing", "what an index fund is", "how a credit score is built",
+         "what a credit card's minimum payment really costs", "the 50/30/20 budget", "paying off debt: smallest balance first or highest interest first",
+         "what passive income costs before it pays", "how creators actually get paid for ads", "what it takes for a channel to be monetised",
+         "how affiliate marketing pays, and when it doesn't", "the real margins of selling other people's products online", "pricing your first freelance job",
+         "why lifestyle creep eats every raise", "what inflation does to savings", "the true cost of owning a car", "what an employer's pension match is worth",
+         "how to ask for a raise", "auditing your subscriptions", "opportunity cost: what a purchase really costs", "why spreading money across investments lowers risk",
+         "risk and return: why they travel together", "investing the same amount every month", "how banks make money from your deposit", "how insurance works",
+         "the signs of a get-rich-quick scam", "why several small incomes take years to build", "skills that keep paying for decades", "renting or buying: what to compare",
+         "saving for a known cost a little each month", "what a recession is", "why most small businesses run out of cash, not customers"]
+# How a learning video keeps people to the end (Mani's table): each opens a question the viewer stays to have answered.
+STRUCTURES = {
+    "result_first": "Open with the end result in one sentence. Then say what was done to get it. Then give the lesson as plain steps, promising early that the "
+                    "most useful step comes last, and keep it for last.",
+    "belief_flip": "Open by stating something most people believe. Contradict it in the very next sentence. Spend the rest on why, and hold the full reason "
+                   "until the end.",
+    "better_best": "Open with a way that is better than what most people do. Then say there is a best way and that it is coming, to hook again. Deliver the "
+                   "best way last.",
+    "unless": "Open by saying the usual way will not work unless one thing is done. Do not name it at once: first show why the usual way fails, then give "
+              "the one thing and exactly how to do it.",
+    "only_if": "Open with the goal. Give the simple answer early, then at once add that it only works if it is done in one specific way. Keep that "
+               "specific way for the end, and build towards it.",
+    "not_a_not_b": "Open with the goal. Name a first thing people try and say plainly why it was not the answer. Name a second and why that was not it "
+                   "either. Then give the third, the one that actually pays off, and why.",
+    "most_do_least": "Open with the goal. Say what most people do for it, and that it gets the least results. Ask why. Answer the why last, with what to "
+                     "do instead.",
+}
+# The pattern that loses viewers (first row of Mani's second table): the whole answer in the middle and nothing left to wait for.
+HOLD_BACK = ("Never hand over the whole answer before the final third: every part must leave one question open, and the last part closes it.")
+RETAIN_STORY = ("Keep them listening: the first sentence opens a question the listener needs answered; around the middle, one line raises the stakes again "
+                "(\"and that was not the worst of it\"); the answer comes only at the end.")
+PROMISE = re.compile(r"\b(guarantee\w*|get rich|rich quick|overnight|risk[- ]free|easy money|secret (trick|method)|in \d+ (days?|hours?|weeks?))\b|"
+                     r"[$€£₹]\s?\d[\d,.]*\s?k?\s*(a|per|every|/)\s*(day|week|month|hour)\b", re.I)
+# In the lesson itself, the thing never said is a promise made to the viewer (a myth being examined may be named freely).
+TOLD_PROMISE = re.compile(r"\byou(?:'ll| will| can| could)?\s+(?:easily\s+|quickly\s+)?(?:make|earn|get|bank)\b[^.?!]{0,40}[$€£₹]\s?\d|"
+                          r"\bguaranteed\s+(?:income|returns?|profits?|money|results?)\b|\b(?:will|is going to) make you rich\b", re.I)
+
+
+def promises(title: str) -> bool:
+    """A title that states an amount, a speed or a certainty of earning. Asked as an open question it explores the claim, which is allowed."""
+    return bool(PROMISE.search(title)) and not title.strip().endswith("?")
+
+
 ANGLES = ["as a journey followed from start to finish", "as a mystery that people slowly solved", "as a day in the life of one creature or thing",
           "as the answer to a question a child might ask", "as a story of something happening right now, unseen"]
 GENRE_ASK = {
@@ -87,6 +129,10 @@ GENRE_ASK = {
     "motivational": ("Invent premises for short motivational stories: an ordinary adult faces a real difficulty and gets through it by their own effort, a step at a "
                      "time, with no luck, miracle or sudden riches. One premise per numbered line below, using that line's ingredients. Believable everyday life; "
                      "no names or real places; no self-harm.", "2-3 sentences: who, what they are up against, the low point, what they do about it"),
+    "money": ("Plan short lessons about money that teach one thing well and honestly. One plan per numbered line below, on that line's subject. Use only "
+              "established facts and principles that any standard personal-finance textbook gives; show what the thing costs or risks as well as what it "
+              "gives; no promise of earnings, no income figures, no named shares, coins or products, nothing speculative.",
+              "the question it answers, then the 3-4 established points it will make, in order, ending on the most useful one"),
     "science": ("Plan short science stories that teach one thing well. One plan per numbered line below, on that line's subject and told the way it says. Use only "
                 "well-established facts of the kind found in a school textbook or an encyclopedia; no numbers or dates unless they are famous and certain; nothing "
                 "speculative.", "the question it answers, then the 3-4 established facts it will tell, in order")}
@@ -100,6 +146,14 @@ GENRE_WRITE = {
                      "- Third person (\"she\", \"he\", \"they\"). Do not claim it is real.\n"
                      "- Show the difficulty honestly, then the small, concrete steps that got them through; earned by effort, never by luck.\n"
                      "- No personal names, no real city, company or school. No self-harm. No preaching and no list of tips: the story carries the lesson.\n"),
+    "money": ("Write a short, honest lesson about money from the plan below",
+              "- Speak to the viewer as \"you\", plainly, like a friend who knows the subject. Explain any term the moment you use it.\n"
+              "- Only established facts and principles. Never promise or suggest an amount, a speed or a certainty of earning; say what it costs, how long "
+              "it takes and what can go wrong. No named shares, coins, apps or products, and no advice to buy or sell anything.\n"
+              "- One idea, taught well, with one concrete everyday example using small round numbers that are clearly only an illustration.\n"
+              "- Explore, do not promise: ask \"how can we...\", \"can you really...\", \"what does it take to...\"; say \"can\" and \"may\", never "
+              "\"will\"; be plain that it may or may not work for the viewer, and say what decides it.\n"
+              "- The title is an open question in that same spirit.\n"),
     "science": ("Write a true science story from the plan below",
                 "- Every statement must be established science, as a good encyclopedia would give it. If you are not certain of a number or a date, leave it out. "
                 "Nothing speculative, no myths presented as fact.\n"
@@ -272,7 +326,7 @@ def can_manage(ctx: dict, ch: dict) -> bool:
 def kind(job: dict) -> str:
     """classic (a public-domain story), original / motivational / science (written from a premise), viewer (a comment on the channel) or real."""
     if job.get("original"):
-        return job["genre"] if job.get("genre") in ("motivational", "science") else "original"
+        return job["genre"] if job.get("genre") in ("motivational", "science", "money") else "original"
     return "classic" if job.get("classic") else "viewer" if job["source"].get("from") == "viewer comment" else "real"
 
 
@@ -282,7 +336,7 @@ def save_record(store, ch: dict, job: dict) -> None:
         "channel": ch["id"], "status": "ready", "made": time.time(), "title": job["title"], "hashtags": job["hashtags"],
         "source": job["source"], "script": job["script"], "keywords": job["keywords"], "seconds": job["seconds"], "file": job["file"],
         "mood": job.get("mood", ""), "voice": job.get("voice", ""), "music": job.get("music", ""), "original": bool(job.get("original")), "kind": kind(job),
-        "classic": job.get("classic"), "format": job.get("format", "short"), "summary": job.get("summary", ""),
+        "classic": job.get("classic"), "seo": job.get("seo"), "structure": job.get("structure", ""), "format": job.get("format", "short"), "summary": job.get("summary", ""),
         "thumb": job.get("thumb", ""), "thumb_text": job.get("thumb_text", ""),
         "chapters": [{"t": round(sum(x["dur"] for x in job["beats"][:n])), "heading": b["heading"]} for n, b in enumerate(job["beats"]) if b.get("heading")],
         "screenplay": [{"text": b["text"], "seconds": round(b["dur"], 2), "query": b["query"], "footage": (b.get("visual") or {}).get("page", "")} for b in job["beats"]],
@@ -538,6 +592,10 @@ class StoryScout(Crew):
             subjects = [(d, t) for d, ts in SCIENCE.items() for t in ts]
             pool = [x for x in subjects if f"{x[0]}: {x[1]}" not in taken] or subjects
             return [(f"{d}: {t}", f"{d}: {t}; told {rng.choice(ANGLES)}") for d, t in rng.sample(pool, min(8, len(pool)))]
+        if genre == "money":
+            taken = {p.get("seed") for p in bank}
+            pool = [t for t in MONEY if t not in taken] or MONEY
+            return [(t, t) for t in rng.sample(pool, min(8, len(pool)))]
         if genre == "motivational":
             return [("", f"{rng.choice(STRUGGLES)}; about {rng.choice(TELLERS)}; in {rng.choice(SETTINGS)}; it turns on {rng.choice(LIFTS)}") for _ in range(8)]
         return [("", f"{rng.choice(THEMES)}; set in {rng.choice(SETTINGS)}; told about {rng.choice(TELLERS)}; it comes out through {rng.choice(TURNS)}") for _ in range(8)]
@@ -587,6 +645,9 @@ class StoryScout(Crew):
         work.mkdir(parents=True, exist_ok=True)
         ctx["job"] = {"id": f"{ch['id']}-orig-{tail}", "key": f"{ch['id']}:orig-{tail}", "channel": ch["id"], "dir": str(work), "raw": p["premise"],
                       "original": True, "genre": genre, "source": {"url": "", "title": p["title"], "from": f"original ({genre})", "score": None}}
+        if genre in ("money", "science"):            # a learning video follows one of the watch-to-the-end patterns, the least used so far
+            used = [v.get("structure") for v in store.kv_list(LOG) if v.get("channel") == ch["id"]]
+            ctx["job"]["structure"] = min(STRUCTURES, key=used.count)
         return p
 
 
@@ -652,10 +713,13 @@ class StoryWriter(Crew):
         lo, hi = word_range(self.ch)
         ending = ENDINGS.get(self.ch["ending"], ENDINGS["plain"])
         head, rules = GENRE_WRITE.get(job.get("genre") or "confession", GENRE_WRITE["confession"])
-        science = job.get("genre") == "science"
+        science, learning = job.get("genre") == "science", job.get("structure") in STRUCTURES
+        shape = f"- Build it exactly like this: {STRUCTURES[job['structure']]}\n- {HOLD_BACK}\n" if learning else f"- {RETAIN_STORY}\n"
+        close = ("End on the one thing to remember or do." if job.get("genre") == "money" else "End on what it means for us, or the wonder of it." if science else ending)
         prompt = (f"{head}, narrated for a 1-2 minute video, {lo + 20}-{hi - 20} words.\n"
-                  "- The first sentence is a hook that makes someone stop scrolling.\n" + rules +
-                  "- Short spoken sentences. " + ("End on what it means for us, or the wonder of it." if science else ending) + " No call to subscribe.\n"
+                  "- The first sentence is a hook that makes someone stop scrolling (never say \"stop scrolling\" or speak to the scrolling itself).\n"
+                  + shape + rules + "- It will be read aloud: no brackets, no labels such as \"Step 1:\"; say \"first\", \"then\", \"and the most useful one\".\n" +
+                  "- Short spoken sentences. " + close + " No call to subscribe.\n"
                   'Answer as {"title": "under 70 characters, no names", "story": "...", "hashtags": ["3 to 5 words, no #"], '
                   f'"mood": "the one word that fits the story best: {" | ".join(MOODS)}"}}.\n\n'
                   f"Premise:\n{job['raw']}") if job.get("original") else (
@@ -681,6 +745,10 @@ class StoryWriter(Crew):
             d = await ctx["llm"].json(prompt + note, tier="writer", max_tokens=2500)
             story = " ".join(str((d or {}).get("story") or "").split()) if isinstance(d, dict) else ""
             n = words(story)
+            if job.get("genre") == "money" and (TOLD_PROMISE.search(story) or promises(str((d or {}).get("title") or ""))):
+                note = ("\n\nYour last answer promised or suggested an amount, a speed or a certainty of earning. Write it again with no such promise: "
+                        "what it costs, how long it takes and what can go wrong, as JSON.")
+                continue
             if job.get("original") and UNSAFE.search(story):
                 note = "\n\nYour last story touched something it must not (sexual content, self-harm or violent crime). Write it again without that, as JSON."
                 continue
@@ -763,6 +831,80 @@ class KeywordGenerator(Crew):
             b.setdefault("query", self.ch["outro_query"])
         job["keywords"] = [b["query"] for b in job["beats"]]
         return AgentResult("done", "DONE", f"{len(shots) + 1} searches" + ("" if modelled else " (plain keywords where the model gave none)"))
+
+
+class SEOStrategist(Crew):
+    """Packages a video so it can be found and gets the click: the title, the first lines of the description and the
+    search tags. It starts from what people really type into YouTube's search box and from the titles that have done
+    best on this channel so far, and it never promises what the story doesn't deliver. If it fails, the writer's own
+    title stands and the video is made all the same."""
+    name, tier, note, blocking = "SEO Strategist", "CLOUD", "title, description and tags from real searches", False
+
+    def seeds(self, job: dict) -> list[str]:
+        what = {"science": "science explained", "money": "personal finance tips", "motivational": "motivational story", "classic": "short story", "viewer": "confession story",
+                "real": "confession story", "original": "confession story"}[kind(job)]
+        mine = " ".join(w for w in re.findall(r"[A-Za-z]{4,}", job.get("title", "")) if w.lower() not in STOP)
+        out = [what, " ".join(mine.split()[:3])]
+        if job.get("classic"):
+            out.append(f"{job['classic']['title']} {job['classic']['author']}")
+        if job.get("genre") in ("science", "money"):
+            out.append(" ".join(job["source"]["title"].split()[:4]))
+        return [x for x in dict.fromkeys(out) if x.strip()]
+
+    async def run(self, ctx: dict) -> AgentResult:
+        job = ctx.get("job")
+        if not job:
+            return self.idle()
+        ch, before = self.ch, job["title"]
+        searched: list[str] = []
+        async with self.client() as c:
+            for phrase in self.seeds(job)[:3]:
+                searched += await yt_suggest.suggest(c, phrase)
+        searched = list(dict.fromkeys(searched))[:24]
+        learned = (ctx["store"].kv_get(STATE, f"{ch['id']}:insights") or {}).get("top_titles") or []
+        fixed = (f" It retells “{job['classic']['title']}” by {job['classic']['author']}: the story's title and the author's name must be in the title."
+                 if job.get("classic") else "")
+        d = await ctx["llm"].json(
+            f"You package a {'long video' if job.get('format') == 'long' else 'YouTube Short'} for the channel “{ch['name']}” so that it is found in "
+            f"search and people choose to watch it.{fixed}\n"
+            "- title: under 60 characters, the strongest words first, plain sentence case, honest: it may only promise what the story delivers. No "
+            "capitals for emphasis, no emoji, no \"you won't believe\", and never call fiction true.\n"
+            + ("- This is a lesson: the title is an open question that the video explores and does not answer in the title (\"How can we make money "
+               "from this?\", \"Can you really live on one income?\", \"Everybody makes money, but at what cost?\"). It asks; it never states an "
+               "amount, a speed or a certainty of earning.\n" if job.get("structure") else "") +
+            "- lead: one or two sentences for the top of the description that say what the video is, using the main search phrase early and naturally.\n"
+            "- tags: 8 to 12 search phrases of 2-4 words that someone looking for exactly this video would type, the most specific first. Leave out any "
+            "that describe a different video: another language, \"for kids\", \"animated\", \"official\", and \"real life\" or \"true\" for fiction.\n"
+            "- hashtags: exactly 3 single words, no #.\n"
+            + ("Phrases people are typing into YouTube's search right now (use the ones that truly fit, ignore the rest): " + "; ".join(searched) + "\n" if searched else "")
+            + ("Titles that have done best on this channel so far (learn their shape, do not copy them): " + "; ".join(learned[:5]) + "\n" if learned else "")
+            + 'Answer as {"title": "...", "lead": "...", "tags": ["..."], "hashtags": ["..."]}.\n\n'
+            f"Working title: {before}\nKind: {kind(job)}\nHow it opens:\n{' '.join(job['script'].split()[:150])}", tier="writer", max_tokens=900)
+        if not isinstance(d, dict):
+            return AgentResult("done", "KEPT", f"No packaging from the model; the writer's title stands: “{before}”")
+        title = " ".join(str(d.get("title") or "").split()).strip("\"“” ")
+        if 15 <= len(title) <= 70 and not (job.get("original") and re.search(r"\btrue\b", title, re.I)) and not (kind(job) == "money" and promises(title)):
+            job["title"] = title
+        tags, size = [], 0
+        wrong = r"\b(for kids|animated|official|in (hindi|tamil|telugu|urdu|nepali|tagalog|malayalam|punjabi|spanish))\b" + (
+            r"|\b(real life|true)\b" if kind(job) in ("original", "motivational") else "") + (
+            r"|\b(get rich|rich quick|overnight|guarantee\w*|easy money|free money)\b" if kind(job) == "money" else "")
+        wrong += r"|\b(usa|uk|india|canada|australia|philippines)\b"
+        mine = set(re.findall(r"[a-z]{4,}", (job["title"] + " " + job["script"]).lower())) - STOP
+        seeds = {x.lower() for x in self.seeds(job)}
+        for t in d.get("tags") or []:                 # YouTube allows about 500 characters of tags in all
+            t = " ".join(re.sub(r"[<>#,]", " ", str(t)).split())
+            if not (t.lower() in seeds or mine & set(re.findall(r"[a-z]{4,}", t.lower()))):
+                continue                              # a phrase with nothing in common with the video is someone else's search
+            if t and len(t) <= 40 and not re.search(wrong, t, re.I) and size + len(t) + 3 <= 430 and t.lower() not in (x.lower() for x in tags):
+                tags.append(t)
+                size += len(t) + 3
+        hashtags = ["#" + re.sub(r"\W", "", str(h)) for h in (d.get("hashtags") or []) if re.sub(r"\W", "", str(h))][:3]
+        if len(hashtags) == 3:
+            job["hashtags"] = hashtags
+        job["seo"] = {"lead": " ".join(str(d.get("lead") or "").split())[:300], "tags": tags, "searched": searched[:12], "title_before": before}
+        return AgentResult("done", "PACKAGED", f"“{job['title']}” · {len(tags)} search tags · from {len(searched)} real searches"
+                           + (f", {len(learned[:5])} of our best titles" if learned else ""))
 
 
 class VoiceArtist(Crew):
@@ -983,8 +1125,10 @@ class Uploader(Crew):
         when = next_slot(ctx["store"], ch, fmt="long" if long else "short") if ch["privacy"] == "scheduled" else None     # private now, public by itself at its slot
         marks = rec.get("chapters") or []           # YouTube shows chapters from three or more timestamps starting at 0:00
         chapters = "\n\n" + "\n".join(f"{clock(m['t'])} {m['heading']}" for m in marks) if long and len(marks) >= 3 and marks[0]["t"] == 0 else ""
-        body = {"snippet": {"title": rec["title"][:100], "categoryId": str(ch["category"]), "tags": [t.lstrip("#") for t in tags],
-                            "description": (rec["summary"] + "\n\n" if long and rec.get("summary") else "") + " ".join(tags) + (f"\n\n{ch['cta']}" if ch["cta"] else "")
+        seo = rec.get("seo") or {}                  # the strategist's search tags and opening lines, when it gave them
+        body = {"snippet": {"title": rec["title"][:100], "categoryId": str(ch["category"]), "tags": seo.get("tags") or [t.lstrip("#") for t in tags],
+                            "description": (seo["lead"] + "\n\n" if seo.get("lead") else "") + (rec["summary"] + "\n\n" if long and rec.get("summary") else "")
+                            + " ".join(tags) + (f"\n\n{ch['cta']}" if ch["cta"] else "")
                             + _about(rec) + chapters
                             + ("\n\nFootage: " + "; ".join(rec["credits"]) if rec.get("credits") else "")
                             + (f"\nMusic: {rec['music']}" if rec.get("music") else "")},
@@ -1103,6 +1247,7 @@ def _about(rec: dict) -> str:
     if c:
         return f"\n\nRetold from “{c['title']}” by {c['author']}, in “{c['book']}” (public domain): {c['url']}"
     return {"original": "\n\nThis story is fiction.", "motivational": "\n\nThis story is fiction.",
+            "money": "\n\nFor education only. This is not financial advice.",
             "viewer": "\n\nRetold from a viewer's comment."}.get(rec.get("kind"), "")
 
 
@@ -1180,6 +1325,19 @@ class AnalyticsManager(Crew):
             parts.append(f"{n['public']} public with {views:,} views")
         if n["deleted"]:
             parts.append(f"{n['deleted']} deleted")
+        seen = [v for v in log if v["status"] == "public" and (v.get("stats") or {}).get("view", 0) > 0]      # what the channel's own results teach
+        by_kind: dict[str, list[int]] = {}
+        for v in seen:
+            by_kind.setdefault(v.get("kind") or "real", []).append(v["stats"]["view"])
+        by_shape: dict[str, list[int]] = {}
+        for v in seen:
+            if v.get("structure"):
+                by_shape.setdefault(v["structure"], []).append(v["stats"]["view"])
+        insights = {"top_titles": [v["title"] for v in sorted(seen, key=lambda v: v["stats"]["view"], reverse=True)[:5]],
+                    "views_by_kind": {k: round(sum(x) / len(x)) for k, x in by_kind.items()}, "videos": len(seen)}
+        if by_shape:
+            insights["views_by_structure"] = {k: round(sum(x) / len(x)) for k, x in by_shape.items()}
+        ctx["store"].kv_put(STATE, f"{ch['id']}:insights", insights)
         latest = log[0]
         return AgentResult("done", "LOGGED", f"{ch['name']}: {', '.join(parts)}; latest “{latest['title']}” ({round(latest['seconds'])} s)",
                            {"channel": ch["id"], "made": len(log), **n, "views": views,
@@ -1188,7 +1346,7 @@ class AnalyticsManager(Crew):
 
 def crew(ch: dict, **opts: Any) -> list[Stage]:
     return [Stage("SOURCE", [StoryScout(ch, **opts)]), Stage("STORY", [StoryWriter(ch)]), Stage("SCREENPLAY", [ScreenplayWriter(ch)]),
-            Stage("PREP", [KeywordGenerator(ch), VoiceArtist(ch, **opts)]), Stage("FOOTAGE", [FootageCollector(ch, **opts)]),
+            Stage("PREP", [KeywordGenerator(ch), VoiceArtist(ch, **opts), SEOStrategist(ch, **opts)]), Stage("FOOTAGE", [FootageCollector(ch, **opts)]),
             Stage("GENERATE", [FootageGenerator(ch, **opts)]), Stage("EDIT", [Editor(ch, **opts)]), Stage("UPLOAD", [Uploader(ch, **opts)]),
             Stage("REPORT", [AnalyticsManager(ch, **opts)])]
 

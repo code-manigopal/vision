@@ -878,6 +878,11 @@
        "note": "narrates each beat"
       },
       {
+       "name": "SEO Strategist",
+       "tier": "CLOUD",
+       "note": "title, description and tags from real searches"
+      },
+      {
        "name": "Footage Collector",
        "tier": "API",
        "note": "free stock clips and photos"
@@ -926,7 +931,8 @@
        "PREP",
        [
         "Keyword Generator",
-        "Voice Artist"
+        "Voice Artist",
+        "SEO Strategist"
        ]
       ],
       [

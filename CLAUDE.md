@@ -191,7 +191,7 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
 - YouTube Manager (`masters/youtube.py`, took the Film Studio slot) has three levels: master → one Director per channel
   (`options.channels`) → that channel's crew. `Director` (agents.py) runs its crew like a master runs sub-agents; crew
   agent events carry `director`. Crew for Confessions Everywhere: Story Scout → Story Writer → Screenplay Writer →
-  Keyword Generator + Voice Artist → Footage Collector → Footage Generator → Editor → Uploader → Analytics Manager.
+  Keyword Generator + Voice Artist + SEO Strategist → Footage Collector → Footage Generator → Editor → Uploader → Analytics Manager.
   **Mani's choice (2026-10-06): no review at all for Confessions Everywhere.** `privacy: scheduled` uploads each Short as
   private with a publishing time: the first `publish_times` slot after the last release already scheduled (`next_slot`;
   the releases are one queue in upload order, never filled into an earlier gap; the Uploader first refreshes every
@@ -228,6 +228,13 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   Uploader sets it, adds chapter timestamps to the description and puts the video in `long.playlist`. Long videos have
   their own release queue (`next_slot(fmt="long")`, daily at `long.publish_time`) and are made in the 03:00 run
   (`long.create_after`), apart from the Shorts, to stay inside Pexels' 200 requests an hour.
+  **SEO Strategist** (crew, PREP stage, `blocking = False`): packages each video before upload. It asks YouTube's own
+  search-suggestion endpoint (`services/yt_suggest.py`, unofficial, no key) what people type for the video's subject, adds
+  the channel's best-performing titles (kv `yt_state` `<channel>:insights`, written by the Analytics Manager from public
+  videos' views), and has the model give a title under 60 characters, the description's opening lines, 8-12 search tags
+  and 3 hashtags. Guard rails in code: fiction is never titled "true", tags for a different video (other languages, "for
+  kids", "official") are dropped, tags stay under YouTube's 500 characters. No answer = the writer's title stands.
+  **Reach is YouTube's decision (clicks and watch time); nothing here buys or fakes engagement, and nothing should.**
   YouTube caps uploads per channel per rolling day (hit on 2026-10-06 after about ten in 24 hours, deleted ones included;
   error `uploadLimitExceeded`). The Uploader treats it as a wait, not a fault: a notice, the Shorts stay `ready` and go up on
   a later run; and the Scout makes no new Shorts while `shorts_per_day` or more are waiting (label BACKLOG).
@@ -235,6 +242,16 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   space, earth, forests, oceans in `SCIENCE`; a subject isn't repeated while others are unused). Each kind has its own
   premise request and writing rules (`GENRE_ASK`, `GENRE_WRITE`); science must stay with established facts and leaves
   out any number it isn't sure of, but **nothing checks its facts**. Kinds `science` and `motivational` have their own playlists.
+  A fourth kind, `money` (honest money lessons, 32 subjects in `MONEY`, playlist "Money Lessons", "not financial advice" in
+  the description): established principles only, what a thing costs and risks as well as what it gives, **never a promise
+  of an amount, a speed or a certainty of earning** (Mani's rule: explore, don't promise: "how can we make...", "can you really...", said as
+  may-or-may-not. `promises(title)` refuses a title that states such a thing but allows it asked as an open question, so
+  "Get Monetized in 3 Days" is refused and "Can you get monetized in 3 days?" passes; `TOLD_PROMISE` refuses a lesson
+  that promises the viewer money, while a myth being examined may be named). Learning videos
+  (money, science) are built on one of Mani's four watch-to-the-end patterns (`STRUCTURES`, from his two tables: result first, belief
+  contradicted, better then best, won't work unless, only if done one way, not A / not B / C pays off, most do this and get
+  least; plus `HOLD_BACK`: never the whole answer before the final third), the least used so far, saved as `structure` and compared in
+  insights (`views_by_structure`); stories get the `RETAIN_STORY` rule (open a question, raise the stakes mid-way, answer last).
   Groq's free allowance is 8,000 tokens a minute and 1,000 requests a day; `llm.py` waits and retries on a 429.
   Real stories always go first. **Mani intends to monetise**: YouTube's "inauthentic content" policy is the standing risk
   for AI-written stories; variety and his review before publishing are the mitigations. A story is screened by rule and by the model (no clear yes = not used), retold in the third

@@ -1933,7 +1933,7 @@ class Component extends DCLogic {
       youtube: { name: 'YOUTUBE MANAGER', dot: 'd-work', agents: [   // a Director per channel, then its crew (4th value = the crew's director)
         ['Confessions Everywhere Director','work','DIRECTING'],
         ['Story Scout','done','FOUND','d'],['Story Writer','done','WRITTEN','d'],['Screenplay Writer','done','TIMED','d'],
-        ['Keyword Generator','done','DONE','d'],['Voice Artist','work','RECORDING','d'],['Footage Collector','work','COLLECTING','d'],
+        ['Keyword Generator','done','DONE','d'],['Voice Artist','work','RECORDING','d'],['SEO Strategist','done','PACKAGED','d'],['Footage Collector','work','COLLECTING','d'],
         ['Footage Generator','off','OFF','d'],['Editor','idle','QUEUED','d'],['Uploader','idle','QUEUED','d'],['Analytics Manager','idle','QUEUED','d']] },
       trading: { name: 'TRADING DESK', dot: 'd-wait', agents: [
         ['Market Analyst','work','ANALYZING'],['Sentiment Analyst','done','DONE'],['News Analyst','off','OFF'],['Macro Analyst','done','DONE'],
@@ -2114,7 +2114,7 @@ class Component extends DCLogic {
 
     // ---- Agent graph: stage columns, stacked cards, debates (reference layout) ----
     const flows = {
-      youtube: { loop: true, stages: [['SOURCE',['Story Scout']],['WRITE',['Story Writer','Screenplay Writer']],['PREP',['Keyword Generator','Voice Artist']],
+      youtube: { loop: true, stages: [['SOURCE',['Story Scout']],['WRITE',['Story Writer','Screenplay Writer']],['PREP',['Keyword Generator','Voice Artist','SEO Strategist']],
         ['FOOTAGE',['Footage Collector','Footage Generator']],['EDIT',['Editor']],['UPLOAD',['Uploader']],['REPORT',['Analytics Manager']],['DIRECTOR',['Confessions Everywhere Director']]] },
       trading: { loop: false, stages: [
         ['ANALYSTS',['Market Analyst','Sentiment Analyst','News Analyst','Macro Analyst']],
@@ -2137,7 +2137,7 @@ class Component extends DCLogic {
     };
     const meta = {
       'Confessions Everywhere Director': ['DEEP','runs the channel crew'], 'Story Scout': ['API','Drive folder · inbox'], 'Story Writer': ['CLOUD','last: 201 words'],
-      'Screenplay Writer': ['QUICK','last: 19 beats'], 'Keyword Generator': ['CLOUD','one search per beat'], 'Voice Artist': ['API','sentence by sentence'],
+      'Screenplay Writer': ['QUICK','last: 19 beats'], 'Keyword Generator': ['CLOUD','one search per beat'], 'Voice Artist': ['API','sentence by sentence'], 'SEO Strategist': ['CLOUD','titles from real searches'],
       'Footage Collector': ['API','Pexels · Pixabay'], 'Footage Generator': ['CLOUD','no AI provider set'], 'Editor': ['LOCAL','captions · watermark'],
       'Uploader': ['API','uploads as unlisted'], 'Analytics Manager': ['API','views · likes · status'],
       'Market Analyst': ['QUICK','last EURUSD trend'], 'Sentiment Analyst': ['QUICK','last USDJPY 216w'], 'News Analyst': ['QUICK','OFF for this run'],

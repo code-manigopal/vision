@@ -147,7 +147,7 @@ masters:
           subreddits: [confession, offmychest, TrueOffMyChest]   # needs REDDIT_CLIENT_ID / REDDIT_CLIENT_SECRET; or drop .txt files in inbox/confessions/confessions/
           drive_folder: "Confessions Inbox"   # a folder in the Drive of the Google account you sign in with (the channel's); its Docs and .txt files are copied to the inbox
           seconds: [60, 120]
-          original_genres: [confession, motivational, science]   # the kinds of original story, taking turns (science = space, earth, forests, oceans)
+          original_genres: [confession, motivational, science, money]   # the kinds of original video, taking turns (science = space, earth, forests, oceans; money = honest money lessons)
           originals: true                # no real story waiting (Drive, inbox, Reddit)? write an original, fictional one from a premise never used before
           ending: hopeful                # hopeful = a heavy story still closes on what was learned or how they moved forward (no invented events) | plain
           voice_engine: edge             # edge (online, exact caption timing) | kokoro (local voices, models/kokoro-v1.0.onnx)
@@ -165,7 +165,7 @@ masters:
           viewer_comments: true          # long comments under the channel's own Shorts become stories (screened like any other), ahead of everything else
           classics: [2776, 2518, 269, 38025]   # Project Gutenberg book ids: O. Henry, Tagore, Saki, Tolstoy (public domain); each story is retold once, with its citation
           classics_per_day: 1
-          playlists: { classic: "Classic Stories", science: "Science Stories", motivational: "Motivational Stories" }   # story kind -> playlist (kinds: classic, original, viewer, real); created on the channel if missing
+          playlists: { classic: "Classic Stories", science: "Science Stories", motivational: "Motivational Stories", money: "Money Lessons" }   # story kind -> playlist (kinds: classic, original, viewer, real); created on the channel if missing
           logo: ""                       # path to the channel logo (png); blank = the channel name as the watermark
           music: true                    # a quiet track from assets/bgm/<mood>/ under the narration (fill with: python -m vision bgm)
           music_volume: 0.12             # against the voice at 1.0

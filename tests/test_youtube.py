@@ -26,16 +26,17 @@ GOOD = ("I have carried this for eleven years and nobody in my family knows. " *
 
 
 class WriterLLM:
-    def __init__(self, safe=True, story_words=200):
-        self.safe, self.story_words, self.prompts = safe, story_words, []
+    def __init__(self, safe=True, story_words=200, seo=None):
+        self.safe, self.story_words, self.prompts, self.seo = safe, story_words, [], seo
 
     async def json(self, prompt, **kw):
         self.prompts.append(prompt)
         if prompt.startswith("You screen"):
             return {"ok": True, "why": ""} if self.safe else None
-        if prompt.startswith("Plan short science") or "motivational stories" in prompt[:60]:
-            what = "science" if prompt.startswith("Plan") else "motivational"
-            body = {"science": "Why is the sea salty? Rain wears salts out of rock, rivers carry them down, and the sun lifts only the water back out.",
+        if prompt.startswith("Plan short science") or prompt.startswith("Plan short lessons") or "motivational stories" in prompt[:60]:
+            what = "science" if prompt.startswith("Plan short science") else "money" if prompt.startswith("Plan short lessons") else "motivational"
+            body = {"money": "What does a minimum payment really cost? Interest is charged on what is left, so most of each payment is interest; paying a little more ends it years sooner.",
+                    "science": "Why is the sea salty? Rain wears salts out of rock, rivers carry them down, and the sun lifts only the water back out.",
                     "motivational": "A single father fails his licence exam twice, nearly gives up, and passes by studying one page every night."}[what]
             return [{"title": f"A {what} one", "premise": body}]
         if prompt.startswith("Invent premises"):
@@ -45,6 +46,8 @@ class WriterLLM:
             return [{"title": f"Premise {n + 1}", "premise": t} for n, t in enumerate(texts)] + [
                 {"title": "Same again", "premise": texts[0].replace("funeral", "wedding")}, {"title": "Too thin", "premise": "Short."},
                 {"title": "Dark", "premise": "A man planned a murder in a small town and nobody ever found out about it at all."}]
+        if prompt.startswith("You package") and self.seo:
+            return self.seo
         if prompt.startswith("You are retelling"):
             part = int(prompt.split("This is part ")[1].split(".")[0])
             return {"heading": f"Chapter {part}", "text": " ".join(("He climbed the stair once more that night and said nothing. " * 12).split()[:self.story_words])}
@@ -216,6 +219,8 @@ def web(media, posts, yt):
 
     def handler(req):
         u = str(req.url)
+        if "suggestqueries" in u:
+            return httpx.Response(200, json=[req.url.params["q"], ["confession story time", "family secret confession"]])
         if "gutenberg.org" in u:
             return httpx.Response(200, content=BOOK.encode())
         if "/commentThreads" in u:
@@ -479,6 +484,48 @@ def test_original_kinds_take_turns_and_each_is_written_by_its_own_rules(tmp_path
     science = next(p for p in store.kv_list(youtube.PREMISES) if p["genre"] == "science")
     assert science["seed"].split(":")[0] in youtube.SCIENCE and science["used"]
     assert youtube._about({"kind": "motivational"}).strip() == "This story is fiction." and youtube._about({"kind": "science"}) == ""
+    assert "Keep them listening" in seen[0][2] and "Build it exactly like this" not in seen[0][2]          # a story gets the retention rule, not a lesson's pattern
+    assert "Build it exactly like this: Open with the end result" in seen[2][2] and ctx["job"]["structure"] == "result_first"
+    assert "Never hand over the whole answer before the final third" in seen[2][2] and "Never hand over" not in seen[0][2]
+    assert list(youtube.STRUCTURES) == ["result_first", "belief_flip", "better_best", "unless", "only_if", "not_a_not_b", "most_do_least"]
+
+
+def test_money_lessons_follow_a_pattern_and_never_promise_earnings(tmp_path, monkeypatch, media):
+    for title, bad in [("Get Monetized in 3 Days", True), ("How to make $500 a day", True), ("Guaranteed passive income", True), ("Get rich quick with this", True),
+                       ("Everybody makes money, but at what cost?", False), ("Why your minimum payment keeps you in debt", False)]:
+        assert youtube.promises(title) == bad, title
+    assert not youtube.promises("Can you get monetized in 3 days?") and not youtube.promises("How can we make passive income from this?")    # asked, not claimed
+    assert youtube.TOLD_PROMISE.search("Honestly, you can make $500 a day.") and youtube.TOLD_PROMISE.search("It gives guaranteed returns.")
+    assert not youtube.TOLD_PROMISE.search("People who promise you will get rich quick are selling something. A $10 gadget sold for $20 nets $3.40.")
+
+    class Tempted(WriterLLM):                                  # the model's first lesson promises an income: it is sent back
+        async def json(self, prompt, **kw):
+            d = await super().json(prompt, **kw)
+            if prompt.startswith("Write a short, honest lesson") and "promised or suggested" not in prompt:
+                return {**d, "story": "You can make $500 a day. " + d["story"]}
+            return d
+
+    llm = Tempted(story_words=70, seo={"title": "Get rich quick: pay it off in 3 days", "lead": "A money lesson.", "tags": ["letter kept in a drawer", "get rich quick", "minimum payment rules"],
+                                       "hashtags": ["money", "debt", "credit"]})
+    m = make(tmp_path, monkeypatch, media, [], llm, originals=True, original_genres=["money"])
+    monkeypatch.delenv("REDDIT_CLIENT_ID")
+    scout, writer = m.agents[0].members[0], m.agents[0].members[1]
+    strategist = next(a for a in m.agents[0].members if a.name == "SEO Strategist")
+    store, bus = Store(tmp_path / "t.db"), EventBus()
+    store.kv_put(youtube.LOG, "earlier", {"channel": "confessions", "status": "public", "structure": "result_first", "made": 1.0, "title": "E", "seconds": 60})
+    ctx = {"store": store, "bus": bus, "llm": llm, "cfg": Config(), "master": "youtube"}
+    asyncio.run(scout.run(ctx))
+    job = ctx["job"]
+    assert job["genre"] == "money" and job["structure"] == "belief_flip" and youtube.kind(job) == "money"       # the pattern used least so far
+    asyncio.run(writer.run(ctx))
+    asks = [p for p in llm.prompts if p.startswith("Write a short, honest lesson")]
+    assert len(asks) == 2 and "Open by stating something most people believe" in asks[0] and "promised or suggested an amount" in asks[1] and "$500" not in job["script"]
+    assert "Explore, do not promise" in asks[0] and "may or may not work" in asks[0]
+    asyncio.run(strategist.run(ctx))
+    assert job["title"] == "The letter she never sent" and job["seo"]["tags"] == ["letter kept in a drawer"]             # a promising title is refused, and so is that tag
+    assert "the title is an open question" in next(p for p in llm.prompts if p.startswith("You package"))
+    assert youtube._about({"kind": "money"}).strip() == "For education only. This is not financial advice."
+    assert store.kv_list(youtube.PREMISES)[0]["seed"] in youtube.MONEY
 
 
 def test_scheduled_upload_takes_the_next_free_slot_and_needs_no_review(tmp_path, monkeypatch, media):
@@ -592,6 +639,46 @@ def test_long_video_is_written_in_chapters_made_wide_given_a_cover_and_queued_ap
     due = _t.localtime(sent)                                    # its own queue: the next 20:00, not after the Short scheduled nine days out
     assert (due.tm_hour, due.tm_min) == (20, 0) and sent < _t.time() + 2 * 86400 and "thumbnail set" in crew["Uploader"]["summary"]
     assert "2 made" in report
+
+
+def test_seo_strategist_packages_from_real_searches_and_the_channels_best(tmp_path, monkeypatch, media):
+    async def token(account, provider, client=None):
+        return "tok"
+
+    monkeypatch.setattr(oauth, "access_token", token)
+    yt = {}
+    seo = {"title": "She hid one letter for thirty years", "lead": "A confession story about a letter never sent.", "hashtags": ["confession", "story", "secrets"],
+           "tags": ["confession story", "the letter never sent", "Confession Story", "x" * 60, "confession story for kids", "confession story in hindi",
+                    "car insurance quotes"] + [f"letter story number {n} of many" for n in range(30)]}
+    llm = WriterLLM(story_words=70, seo=seo)
+    m = make(tmp_path, monkeypatch, media, POSTS, llm, yt)
+    bus, store = EventBus(), Store(tmp_path / "t.db")
+    store.kv_put(youtube.STATE, "confessions:insights", {"top_titles": ["The night she told the truth"]})
+    yt["items"] = [{"id": "vid1", "status": {"privacyStatus": "unlisted"}, "statistics": {}}]
+    asyncio.run(m.cycle(bus, store))
+    crew = {a["name"]: a for a in bus.state["masters"]["youtube"]["agents"]}
+    ask = next(p for p in llm.prompts if p.startswith("You package"))
+    assert "confession story time; family secret confession" in ask and "The night she told the truth" in ask and "Working title: The letter she never sent" in ask
+    assert crew["SEO Strategist"]["label"] == "PACKAGED" and "from 2 real searches, 1 of our best titles" in crew["SEO Strategist"]["summary"]
+    rec = store.kv_list(youtube.LOG)[0]
+    assert rec["title"] == "She hid one letter for thirty years" and rec["seo"]["title_before"] == "The letter she never sent" and rec["hashtags"] == ["#confession", "#story", "#secrets"]
+    sent = yt["meta"]["snippet"]
+    assert sent["title"] == "She hid one letter for thirty years" and sent["description"].startswith("A confession story about a letter never sent.\n\n#confession #story #secrets #Shorts")
+    assert sent["tags"][:2] == ["confession story", "the letter never sent"] and "car insurance quotes" not in sent["tags"] and len(sent["tags"]) == len(set(t.lower() for t in sent["tags"]))   # no repeats
+    assert not any("kids" in t or "hindi" in t for t in sent["tags"])                                                                            # tags for some other video are dropped
+    assert sum(len(t) + 3 for t in sent["tags"]) <= 430 and all(len(t) <= 40 for t in sent["tags"])                                              # inside YouTube's limit
+
+    # the channel's own results become what it learns from; a fiction story is never titled "true"; no answer = the writer's title stands
+    yt["items"] = [{"id": "vid1", "status": {"privacyStatus": "public"}, "statistics": {"viewCount": "40"}}]
+    asyncio.run(m.cycle(bus, store))
+    assert store.kv_get(youtube.STATE, "confessions:insights") == {"top_titles": ["She hid one letter for thirty years"], "views_by_kind": {"real": 40}, "videos": 1}
+    strategist = next(a for a in m.agents[0].members if a.name == "SEO Strategist")
+    job = {"title": "A quiet lie", "script": "She lied. " * 30, "original": True, "genre": "confession", "source": {"from": "original (confession)", "title": "x"}}
+    asyncio.run(strategist.run({"job": job, "store": store, "llm": WriterLLM(seo={**seo, "title": "The true story of a quiet lie"})}))
+    assert job["title"] == "A quiet lie" and job["seo"]["title_before"] == "A quiet lie"
+    job2 = {k: v for k, v in job.items() if k != "seo"}
+    res = asyncio.run(strategist.run({"job": job2, "store": store, "llm": WriterLLM()}))
+    assert res.label == "KEPT" and "seo" not in job2 and not strategist.blocking
 
 
 def test_scout_says_no_without_a_clear_yes_and_asks_for_a_source(tmp_path, monkeypatch, media):
