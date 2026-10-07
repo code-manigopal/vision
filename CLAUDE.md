@@ -287,6 +287,15 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   contradicted, better then best, won't work unless, only if done one way, not A / not B / C pays off, most do this and get
   least; plus `HOLD_BACK`: never the whole answer before the final third), the least used so far, saved as `structure` and compared in
   insights (`views_by_structure`); stories get the `RETAIN_STORY` rule (open a question, raise the stakes mid-way, answer last).
+  Opening shapes (`HOOKS`, reworked from hook sheets Mani collected): ten for stories (third person; the narrator has no
+  "I", so nothing claims a personal result) and twelve for lessons (spoken to "you"). An original story's first sentence
+  follows its shape; a lesson's shape goes to its title via the SEO Strategist, because its script already follows a
+  pattern. Chosen like the patterns (least used, then by `views_by_hook`), saved as `hook`.
+  Trends (`trends`, `trend_region`, `services/yt_trends.py`): the Scout reads YouTube's most-popular chart (overall plus
+  three categories, one quota unit each, at most twice a day, kept in kv `yt_state` `<channel>:trends`). It is mostly
+  music and gaming, so it is used narrowly: a money or science subject sharing a telling word with it is planned and
+  picked first (`trend_score`), and the SEO Strategist sees only the chart titles that touch its video. Lesson titles
+  stay open questions; an opening shape is borrowed only as a question the lesson really answers.
   Groq's free allowance is 8,000 tokens a minute and 1,000 requests a day; `llm.py` waits and retries on a 429.
   Real stories always go first. **Mani intends to monetise**: YouTube's "inauthentic content" policy is the standing risk
   for AI-written stories; variety and his review before publishing are the mitigations. A story is screened by rule and by the model (no clear yes = not used), retold in the third

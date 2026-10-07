@@ -185,6 +185,8 @@ masters:
           sfx_volume: 0.35               # against the voice at 1.0
           quick:                         # a 20-35 second Short among the day's Shorts; original stories only
             per_day: 1                   # 0 = off
+          trends: true                   # reads YouTube's most-watched list twice a day: lesson subjects that touch it are made first, and it informs titles
+          trend_region: US
           double_down: true              # once 12 videos have views, the story kinds and lesson patterns that get more views are made more often (explore: 0.15 keeps the rest alive)
           long:                          # one long video a day beside the Shorts: wide 1920x1080, a classic retold chapter by chapter, with its own cover
             enabled: true

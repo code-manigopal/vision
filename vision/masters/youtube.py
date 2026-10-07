@@ -33,7 +33,7 @@ import httpx
 
 from ..agents import AgentResult, Director, Stage, SubAgent
 from ..config import ROOT
-from ..services import bgm, fonts, gdrive, genmedia, gutenberg, oauth, reddit, sfx, stock_video, yt_suggest
+from ..services import bgm, fonts, gdrive, genmedia, gutenberg, oauth, reddit, sfx, stock_video, yt_suggest, yt_trends
 from . import shorts_edit
 
 SEEN, LOG, DRIVE, STATE, PREMISES, CLASSICS = "yt_seen", "yt_videos", "yt_drive", "yt_state", "yt_premises", "yt_classics"
@@ -50,7 +50,7 @@ CHANNEL = {"id": "confessions", "name": "Confessions Everywhere", "director": "C
            "publish_times": ["06:00", "12:00", "18:00", "00:00"], "create_after": "",
            "classics": [], "classics_per_day": 1, "playlists": {}, "viewer_comments": False, "cta": "", "long": {},
            "motion": True, "caption_styles": True, "sfx": True, "sfx_volume": 0.35, "quick": {},
-           "double_down": True, "double_down_after": 12, "explore": 0.15}
+           "double_down": True, "double_down_after": 12, "explore": 0.15, "trends": True, "trend_region": "US"}
 # Original stories: a premise is built from one of each, so no two start from the same place (20 x 12 x 10 x 10 combinations).
 THEMES = ["a family secret", "a betrayal by a close friend", "a lie that grew too big", "a second chance that felt undeserved", "a debt never repaid",
           "an inheritance dispute", "a workplace mistake hidden for years", "a kindness kept secret", "a marriage on autopilot", "jealousy of a sibling",
@@ -108,6 +108,37 @@ STRUCTURES = {
 }
 # The pattern that loses viewers (first row of Mani's second table): the whole answer in the middle and nothing left to wait for.
 HOLD_BACK = ("Never hand over the whole answer before the final third: every part must leave one question open, and the last part closes it.")
+# Opening shapes that earn the first two seconds (from the hook sheets Mani collected, reworked for this channel: the
+# narrator has no "I", so a story's shape is in the third person and a lesson's speaks to "you"; nothing here claims
+# a personal result). A story opens in its shape; a lesson's shape goes to its title, since its script follows a pattern.
+HOOKS = {
+    "story": {
+        "told_it_would_fail": "Everyone told her it would never work. Then it did.",
+        "thought_wrong": "He thought ___ would make him happy. He was wrong.",
+        "almost_quit": "The day she almost quit ___, and didn't.",
+        "no_one_talks": "No one talks about how lonely ___ can feel.",
+        "ignored_advice": "For years he ignored one piece of advice. He regrets it still.",
+        "failure_taught": "One failure taught her more than every success before it.",
+        "wished_known": "There was one thing he wished he had known before ___.",
+        "worst_moment": "It was the worst moment of her year. It became the reason for everything after.",
+        "quiet_ruin": "Something was quietly ruining ___, and he could not see it.",
+        "used_to_think": "She used to think ___ was selfish. Now she sees it differently.",
+    },
+    "lesson": {
+        "doing_it_wrong": "You're probably doing ___ wrong, and don't realise it",
+        "not_working": "Why your ___ isn't working, and how to fix it",
+        "truth_untold": "The truth no one tells you about ___",
+        "new_to": "If you're new to ___, hear this first",
+        "myth": "The myth about ___ that keeps most people stuck",
+        "do_this_instead": "If you're doing ___, do this instead",
+        "beginner_mistake": "The mistake nearly every beginner makes with ___",
+        "overcomplicated": "Stop overcomplicating ___: the simple version",
+        "start_calm": "How to start ___ without getting overwhelmed",
+        "beginner_trap": "The biggest trap for beginners in ___, and how to avoid it",
+        "three_mistakes": "Three mistakes that make ___ harder than it needs to be",
+        "wish_known": "What most people wish they had known before starting ___",
+    },
+}
 RETAIN_STORY = ("Keep them listening: the first sentence opens a question the listener needs answered; around the middle, one line raises the stakes again "
                 "(\"and that was not the worst of it\"); the answer comes only at the end.")
 PROMISE = re.compile(r"\b(guarantee\w*|get rich|rich quick|overnight|risk[- ]free|easy money|secret (trick|method)|in \d+ (days?|hours?|weeks?))\b|"
@@ -364,6 +395,17 @@ def align(text: str, heard: list | None, total: float) -> list | None:
     return [[w, t[0], t[1]] for w, t in zip(mine, times)]
 
 
+def trending_words(trends: dict | None) -> set[str]:
+    """The telling words in today's most-watched titles and their tags."""
+    text = " ".join(t.get("title", "") + " " + " ".join(t.get("tags") or []) for t in (trends or {}).get("videos") or [])
+    return set(re.findall(r"[a-z]{5,}", text.lower())) - STOP
+
+
+def trend_score(text: str, hot: set[str]) -> int:
+    """How many of a subject's own telling words are in what people are watching today."""
+    return len((set(re.findall(r"[a-z]{5,}", text.lower())) - STOP) & hot) if hot else 0
+
+
 def fallback_query(text: str) -> str:
     picks = sorted(dict.fromkeys(w for w in re.findall(r"[a-zA-Z]{4,}", text.lower()) if w not in STOP), key=len, reverse=True)[:3]
     return " ".join(picks) or "person thinking alone"
@@ -397,7 +439,7 @@ def save_record(store, ch: dict, job: dict) -> None:
         "channel": ch["id"], "status": "ready", "made": time.time(), "title": job["title"], "hashtags": job["hashtags"],
         "source": job["source"], "script": job["script"], "keywords": job["keywords"], "seconds": job["seconds"], "file": job["file"],
         "mood": job.get("mood", ""), "voice": job.get("voice", ""), "music": job.get("music", ""), "original": bool(job.get("original")), "kind": kind(job),
-        "classic": job.get("classic"), "seo": job.get("seo"), "structure": job.get("structure", ""), "format": job.get("format", "short"), "summary": job.get("summary", ""),
+        "classic": job.get("classic"), "seo": job.get("seo"), "structure": job.get("structure", ""), "hook": job.get("hook", ""), "format": job.get("format", "short"), "summary": job.get("summary", ""),
         "caption": job.get("caption", ""), "sfx": job.get("sfx", 0), "quick": bool(job.get("quick")),
         "thumb": job.get("thumb", ""), "thumb_text": job.get("thumb_text", ""),
         "chapters": [{"t": round(sum(x["dur"] for x in job["beats"][:n])), "heading": b["heading"]} for n, b in enumerate(job["beats"]) if b.get("heading")],
@@ -455,6 +497,7 @@ class Crew(SubAgent):
 
 class StoryScout(Crew):
     name, tier, note = "Story Scout", "API", "finds one confession worth telling"
+    _hot: set = set()               # today's most-watched words, set while an original is being chosen
 
     def _inbox(self) -> list[dict]:
         folder = ROOT / "inbox" / "confessions" / self.ch["id"]
@@ -527,9 +570,29 @@ class StoryScout(Crew):
                 return AgentResult("done", "LONG", f"A long video: “{c['title']}” by {c['author']}", {"source": ctx["job"]["source"]})
         return res or AgentResult("idle", "NOTHING NEW", "No story on the shelf is long enough for a long video")
 
+    async def _trends(self, ctx: dict) -> dict:
+        """Today's most-watched list for the channel's region, read at most twice a day and kept; nothing if it can't be read."""
+        ch, store = self.ch, ctx["store"]
+        kept = store.kv_get(STATE, f"{ch['id']}:trends") or {}
+        if not ch["trends"]:
+            return {}
+        if time.time() - kept.get("at", 0) < 12 * 3600:
+            return kept
+        try:
+            token = await oauth.access_token(account(ch), "youtube")
+            async with self.client() as c:
+                videos = await yt_trends.popular(c, token, ch["trend_region"])
+        except (oauth.AuthNeeded, httpx.HTTPError):
+            return kept
+        if videos:
+            kept = {"at": time.time(), "region": ch["trend_region"], "videos": videos}
+            store.kv_put(STATE, f"{ch['id']}:trends", kept)
+        return kept
+
     async def _short(self, ctx: dict) -> AgentResult:
         """Find the next Short's story: viewers' comments and Mani's own stories, then a classic, then an original."""
         ch, store, bus = self.ch, ctx["store"], ctx["bus"]
+        await self._trends(ctx)
         await self._from_drive(ctx)
         cands = self._inbox() + await self._from_comments(ctx)
         if reddit.configured():
@@ -654,11 +717,15 @@ class StoryScout(Crew):
             taken = {p.get("seed") for p in bank}
             subjects = [(d, t) for d, ts in SCIENCE.items() for t in ts]
             pool = [x for x in subjects if f"{x[0]}: {x[1]}" not in taken] or subjects
-            return [(f"{d}: {t}", f"{d}: {t}; told {rng.choice(ANGLES)}") for d, t in rng.sample(pool, min(8, len(pool)))]
+            hot = [x for x in pool if trend_score(x[1], self._hot) > 0][:3]
+            rest = [x for x in pool if x not in hot]
+            return [(f"{d}: {t}", f"{d}: {t}; told {rng.choice(ANGLES)}") for d, t in hot + rng.sample(rest, min(8 - len(hot), len(rest)))]
         if genre == "money":
             taken = {p.get("seed") for p in bank}
             pool = [t for t in MONEY if t not in taken] or MONEY
-            return [(t, t) for t in rng.sample(pool, min(8, len(pool)))]
+            hot = [t for t in pool if trend_score(t, self._hot) > 0][:3]         # subjects that touch what is being watched today go in first
+            rest = [t for t in pool if t not in hot]
+            return [(t, t) for t in hot + rng.sample(rest, min(8 - len(hot), len(rest)))]
         if genre == "motivational":
             return [("", f"{rng.choice(STRUGGLES)}; about {rng.choice(TELLERS)}; in {rng.choice(SETTINGS)}; it turns on {rng.choice(LIFTS)}") for _ in range(8)]
         return [("", f"{rng.choice(THEMES)}; set in {rng.choice(SETTINGS)}; told about {rng.choice(TELLERS)}; it comes out through {rng.choice(TURNS)}") for _ in range(8)]
@@ -708,10 +775,11 @@ class StoryScout(Crew):
         else:
             genre = min(genres, key=lambda g: told[g])             # the kind told least so far, so the kinds take turns
         bank = [p for p in everything if p.get("genre", "confession") == genre]
+        self._hot = trending_words(store.kv_get(STATE, f"{ch['id']}:trends")) if ch["trends"] else set()
         fresh = [p for p in bank if not p.get("used")] or await self._premises(ctx, bank, genre)
         if not fresh:
             return None
-        p = fresh[-1]
+        p = max(reversed(fresh), key=lambda x: trend_score(x.get("seed") or x["title"], self._hot))    # one that touches today's list, else the oldest waiting
         store.kv_put(PREMISES, p["_key"], {k: v for k, v in p.items() if not k.startswith("_")} | {"used": True})
         tail = p["_key"].split(":", 1)[1]
         slug = re.sub(r"[^a-z0-9]+", "-", p["title"].lower()).strip("-")[:40] or tail
@@ -724,6 +792,11 @@ class StoryScout(Crew):
             shapes = list(STRUCTURES)
             ctx["job"]["structure"] = (self._lean(shapes, {k: used.count(k) for k in shapes}, insights.get("views_by_structure") or {})
                                        if learned else min(shapes, key=used.count))
+        group = "lesson" if genre in ("money", "science") else "story"      # and an opening shape, likewise the least used (or the best performing)
+        told_h = [v.get("hook") for v in log]
+        keys = list(HOOKS[group])
+        ctx["job"]["hook"] = (self._lean(keys, {k: told_h.count(k) for k in keys}, {k: x for k, x in (insights.get("views_by_hook") or {}).items() if k in keys})
+                              if learned else min(keys, key=told_h.count))
         Q = quick_of(ch)
         if Q["per_day"] and made_today(store, ch, quick=True) < Q["per_day"]:      # a short, sharp one among the day's Shorts
             ctx["job"]["quick"] = True
@@ -797,6 +870,9 @@ class StoryWriter(Crew):
         head, rules = GENRE_WRITE.get(job.get("genre") or "confession", GENRE_WRITE["confession"])
         science, learning = job.get("genre") == "science", job.get("structure") in STRUCTURES
         shape = f"- Build it exactly like this: {STRUCTURES[job['structure']]}\n- {HOLD_BACK}\n" if learning else f"- {RETAIN_STORY}\n"
+        opener = HOOKS["story"].get(job.get("hook") or "")
+        if opener and not learning:                 # a story opens in its shape; a lesson's first line belongs to its pattern
+            shape += f"- Shape the first sentence like this one, fitted to this story and in the third person: “{opener}”\n"
         close = ("End on the one thing to remember or do." if job.get("genre") == "money" else "End on what it means for us, or the wonder of it." if science else ending)
         prompt = (f"{head}, narrated for {length}, {lo + pad}-{hi - pad} words.\n"
                   "- The first sentence is a hook that makes someone stop scrolling (never say \"stop scrolling\" or speak to the scrolling itself).\n"
@@ -973,6 +1049,9 @@ class SEOStrategist(Crew):
                 searched += await yt_suggest.suggest(c, phrase)
         searched = list(dict.fromkeys(searched))[:24]
         learned = (ctx["store"].kv_get(STATE, f"{ch['id']}:insights") or {}).get("top_titles") or []
+        today = (ctx["store"].kv_get(STATE, f"{ch['id']}:trends") or {}) if ch["trends"] else {}
+        mine = job["title"] + " " + job["script"]     # only the few that share a telling word with this video are worth showing the model
+        watching = [t["title"] for t in today.get("videos") or [] if trend_score(mine, trending_words({"videos": [t]})) > 0][:6]
         fixed = (f" It retells “{job['classic']['title']}” by {job['classic']['author']}: the story's title and the author's name must be in the title."
                  if job.get("classic") else "")
         d = await ctx["llm"].json(
@@ -982,13 +1061,17 @@ class SEOStrategist(Crew):
             "capitals for emphasis, no emoji, no \"you won't believe\", and never call fiction true.\n"
             + ("- This is a lesson: the title is an open question that the video explores and does not answer in the title (\"How can we make money "
                "from this?\", \"Can you really live on one income?\", \"Everybody makes money, but at what cost?\"). It asks; it never states an "
-               "amount, a speed or a certainty of earning.\n" if job.get("structure") else "") +
+               "amount, a speed or a certainty of earning.\n" if job.get("structure") else "")
+            + (f"- A title shape to borrow from only if the lesson really shows it, and turned into a question: “{HOOKS['lesson'][job['hook']]}”. "
+               "Otherwise keep to a plain open question.\n" if job.get("hook") in HOOKS["lesson"] else "") +
             "- lead: one or two sentences for the top of the description that say what the video is, using the main search phrase early and naturally.\n"
             "- tags: 8 to 12 search phrases of 2-4 words that someone looking for exactly this video would type, the most specific first. Leave out any "
             "that describe a different video: another language, \"for kids\", \"animated\", \"official\", and \"real life\" or \"true\" for fiction.\n"
             "- hashtags: exactly 3 single words, no #.\n"
             + ("Phrases people are typing into YouTube's search right now (use the ones that truly fit, ignore the rest): " + "; ".join(searched) + "\n" if searched else "")
             + ("Titles that have done best on this channel so far (learn their shape, do not copy them): " + "; ".join(learned[:5]) + "\n" if learned else "")
+            + ("Being watched most on YouTube today and touching this video's subject (its angle may shape a tag or the title only if it truly "
+               "connects; never force it, never name a channel or a person): " + "; ".join(watching) + "\n" if watching else "")
             + 'Answer as {"title": "...", "lead": "...", "tags": ["..."], "hashtags": ["..."]}.\n\n'
             f"Working title: {before}\nKind: {kind(job)}\nHow it opens:\n{' '.join(job['script'].split()[:150])}", tier="writer", max_tokens=900)
         if not isinstance(d, dict):
@@ -1453,6 +1536,10 @@ class AnalyticsManager(Crew):
         for v in seen:
             if v.get("structure"):
                 by_shape.setdefault(v["structure"], []).append(v["stats"]["view"])
+        by_hook: dict[str, list[int]] = {}
+        for v in seen:
+            if v.get("hook"):
+                by_hook.setdefault(v["hook"], []).append(v["stats"]["view"])
         by_len: dict[str, list[int]] = {}
         for v in seen:
             if v.get("format") != "long":
@@ -1461,6 +1548,8 @@ class AnalyticsManager(Crew):
                     "views_by_kind": {k: round(sum(x) / len(x)) for k, x in by_kind.items()}, "videos": len(seen)}
         if by_shape:
             insights["views_by_structure"] = {k: round(sum(x) / len(x)) for k, x in by_shape.items()}
+        if by_hook:
+            insights["views_by_hook"] = {k: round(sum(x) / len(x)) for k, x in by_hook.items()}
         if by_len:
             insights["views_by_length"] = {k: round(sum(x) / len(x)) for k, x in by_len.items()}
         ctx["store"].kv_put(STATE, f"{ch['id']}:insights", insights)

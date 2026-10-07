@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -247,6 +248,9 @@ def web(media, posts, yt):
         if u.startswith("https://upload.test/"):
             yt["bytes"] = len(req.read())
             return httpx.Response(200, json={"id": "vid1", "status": {"privacyStatus": "unlisted"}})
+        if "youtube/v3/videos" in u and req.url.params.get("chart"):
+            yt["chart_calls"] = yt.get("chart_calls", 0) + 1
+            return httpx.Response(200 if not req.url.params.get("videoCategoryId") == "26" else 404, json={"items": yt.get("popular", [])})
         if "youtube/v3/videos" in u:
             return httpx.Response(200, json={"items": yt.get("items", [])})
         if "access_token" in u:
@@ -489,6 +493,12 @@ def test_original_kinds_take_turns_and_each_is_written_by_its_own_rules(tmp_path
     assert "Keep them listening" in seen[0][2] and "Build it exactly like this" not in seen[0][2]          # a story gets the retention rule, not a lesson's pattern
     assert "Build it exactly like this: Open with the end result" in seen[2][2] and ctx["job"]["structure"] == "result_first"
     assert "Never hand over the whole answer before the final third" in seen[2][2] and "Never hand over" not in seen[0][2]
+    # opening shapes: a story opens in one (third person); a lesson's goes to its title, never into its patterned script
+    first = next(iter(youtube.HOOKS["story"].values()))
+    assert f"Shape the first sentence like this one, fitted to this story and in the third person: “{first}”" in seen[0][2]
+    assert "Shape the first sentence" not in seen[2][2] and ctx["job"]["hook"] in youtube.HOOKS["lesson"]
+    assert not any(re.search(r"\b(I|my|me)\b", h) for group in youtube.HOOKS.values() for h in group.values())       # the narrator has no "I"
+    assert not any(youtube.promises(h) for h in youtube.HOOKS["lesson"].values())
     assert list(youtube.STRUCTURES) == ["result_first", "belief_flip", "better_best", "unless", "only_if", "not_a_not_b", "most_do_least"]
 
 
@@ -526,6 +536,7 @@ def test_money_lessons_follow_a_pattern_and_never_promise_earnings(tmp_path, mon
     asyncio.run(strategist.run(ctx))
     assert job["title"] == "The letter she never sent" and job["seo"]["tags"] == ["letter kept in a drawer"]             # a promising title is refused, and so is that tag
     assert "the title is an open question" in next(p for p in llm.prompts if p.startswith("You package"))
+    assert f"only if the lesson really shows it, and turned into a question: “{youtube.HOOKS['lesson'][job['hook']]}”" in next(p for p in llm.prompts if p.startswith("You package"))
     assert youtube._about({"kind": "money"}).strip() == "For education only. This is not financial advice."
     assert store.kv_list(youtube.PREMISES)[0]["seed"] in youtube.MONEY
 
@@ -681,6 +692,44 @@ def test_seo_strategist_packages_from_real_searches_and_the_channels_best(tmp_pa
     job2 = {k: v for k, v in job.items() if k != "seo"}
     res = asyncio.run(strategist.run({"job": job2, "store": store, "llm": WriterLLM()}))
     assert res.label == "KEPT" and "seo" not in job2 and not strategist.blocking
+
+
+def test_todays_most_watched_steers_lesson_subjects_and_informs_titles(tmp_path, monkeypatch, media):
+    async def token(account, provider, client=None):
+        return "tok"
+
+    monkeypatch.setattr(oauth, "access_token", token)
+    hot = {"videos": [{"title": "Why inflation is back and what it does to your savings", "tags": ["economy"]}, {"title": "Minecraft speedrun world record", "tags": []}]}
+    words = youtube.trending_words(hot)
+    assert {"inflation", "savings", "minecraft"} <= words and youtube.trend_score("what inflation does to savings", words) == 2
+    assert youtube.trend_score("how a credit score is built", words) == 0 and youtube.trend_score("anything", set()) == 0
+
+    yt = {"popular": [{"id": "p1", "snippet": {"title": "Why inflation is back and what it does to your savings", "tags": ["economy"]}},
+                      {"id": "p2", "snippet": {"title": "Musica nueva", "defaultAudioLanguage": "es"}}]}
+    llm = WriterLLM(story_words=70, seo={"title": "What does inflation do to your savings?", "lead": "A money lesson.", "tags": ["inflation savings"], "hashtags": ["a", "b", "c"]})
+    m = make(tmp_path, monkeypatch, media, [], llm, yt, originals=True, original_genres=["money"])
+    monkeypatch.delenv("REDDIT_CLIENT_ID")
+    scout = m.agents[0].members[0]
+    strategist = next(a for a in m.agents[0].members if a.name == "SEO Strategist")
+    store, bus = Store(tmp_path / "t.db"), EventBus()
+    ctx = {"store": store, "bus": bus, "llm": llm, "cfg": Config(), "master": "youtube"}
+    asyncio.run(scout.run(ctx))
+    kept = store.kv_get(youtube.STATE, "confessions:trends")
+    assert [v["title"] for v in kept["videos"]] == ["Why inflation is back and what it does to your savings"] and kept["region"] == "US"     # other languages left out
+    plan = next(p for p in llm.prompts if p.startswith("Plan short lessons"))
+    assert plan.split("\n\n")[-1].startswith("1. what inflation does to savings")           # the subject that touches today's list is offered first
+    calls = yt["chart_calls"]
+    ctx2 = {"store": store, "bus": bus, "llm": llm, "cfg": Config(), "master": "youtube"}
+    asyncio.run(scout.run(ctx2))
+    assert yt["chart_calls"] == calls                                                       # read at most twice a day, then kept
+    job = {"title": "What inflation does to savings", "script": "Prices rise and savings buy less. " * 20, "original": True, "genre": "money", "structure": "unless",
+           "source": {"from": "original (money)", "title": "what inflation does to savings"}}
+    asyncio.run(strategist.run({"job": job, "store": store, "llm": llm}))
+    ask = [p for p in llm.prompts if p.startswith("You package")][-1]
+    assert "Being watched most on YouTube today" in ask and "Why inflation is back" in ask and "never name a channel or a person" in ask
+    strategist.ch["trends"] = False
+    asyncio.run(strategist.run({"job": {**job, "title": "What inflation does to savings"}, "store": store, "llm": llm}))
+    assert "Being watched most" not in [p for p in llm.prompts if p.startswith("You package")][-1]
 
 
 def test_scout_says_no_without_a_clear_yes_and_asks_for_a_source(tmp_path, monkeypatch, media):
