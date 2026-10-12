@@ -380,7 +380,6 @@ div:has(>.barglow){height:8px!important;background:rgba(255,255,255,.07)!importa
     <div style="flex-grow: 1; display: flex; flex-direction: column; align-items: center; gap: 14px; min-width: 0; position: relative">
       <div class="aura2" style="top: -70px"></div>
       <div class="aura" style="top: -30px"></div>
-      <div style="font-family: 'Michroma', sans-serif; font-size: 12px; letter-spacing: 4px; color: #B97D10; position: relative">VISION · {{modeLabel}}</div>
       <sc-if value="{{coreOn}}" hint-placeholder-val="{{ true }}">
       <div style="position: relative; width: 430px; height: 430px">
       <button class="corebtn" onClick="{{openMind}}" aria-label="Open VISION Mind" style="position: relative; background: transparent; border: none; padding: 0; cursor: pointer; width: 430px; height: 430px">
@@ -831,11 +830,7 @@ div:has(>.barglow){height:8px!important;background:rgba(255,255,255,.07)!importa
       </div>
       <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; position: relative">
         <button class="qa" onClick="{{toggleMind}}">{{mindBtn}}</button>
-        <button class="qa" onClick="{{askStatus}}">How are we doing?</button>
-        <button class="qa" onClick="{{openBrief}}">Brief me</button>
-        <button class="qa" onClick="{{openWorld}}">World &amp; flights</button>
-        <button class="qa" onClick="{{openCal}}">Calendar</button>
-        <button class="qa">Scan jobs</button>
+        <button class="qa" onClick="{{scanJobs}}">Scan jobs</button>
       </div>
     </div>
 
@@ -3040,6 +3035,7 @@ class Component extends DCLogic {
       })(),
       closeAsk: () => this.setState({ mode: 'ambient' }),
       askStatus: () => this.runCommand('hey vision, how are we doing today'),
+      scanJobs: () => { if (this.state.liveUp) { fetch('/api/masters/jobs/run', { method: 'POST' }).catch(() => {}); this.setState({ master: 'jobs', accOpen: true }); } else this.runCommand('scan jobs'); },
       orbMarks, orbOn: !!orb, orb: orb || { agents: [] },
       trackX: s.page === 1 ? '-50%' : '0%', busDrops, reportLine, reporterNote: '▲ ' + reporterName + ' reports to ' + sel.name, masterCardX, gMasterName,
       agPgCls: (agPgI + (s.master.length % 2)) % 2 ? 'pgB' : 'pgA', agMulti: false, agDots, agPgLabel: (agPgI * PG + 1) + '–' + Math.min(allAg.length, agPgI * PG + PG) + ' of ' + allAg.length,
@@ -3085,7 +3081,7 @@ class Component extends DCLogic {
       },
       powerOn: () => { if (this.state.liveUp) fetch('/api/boot', { method: 'POST' }).catch(() => {}); this.setState({ off: null, offT: 0, boot: true, bootT: 0, mode: 'ambient', mind: false }); },
       toggleMusic: () => { const m = !this.state.music; try { window.localStorage.setItem('vision-music', m ? 'on' : 'off'); } catch (e) {} this.setState({ music: m }); },
-      hostLabel: s.liveUp ? 'LIVE · CORE CONNECTED' : this.isLocal() ? 'CORE OFFLINE · RETRYING' : 'PREVIEW · DEMO DATA',
+      hostLabel: s.liveUp ? '' : this.isLocal() ? 'CORE OFFLINE · RETRYING' : 'PREVIEW · DEMO DATA',
       closeBrief: () => { this.stopSpeech(); this.setState({ mode: 'ambient', deckTalk: false }); },
       briefDate: briefDate, briefTag, bPortsTitle, bMktsTitle, bPorts, bMkts, bNews, bMasters, tr,
       openMind: () => this.setState({ mind: true, openT: 0, sel: 'root' }),
