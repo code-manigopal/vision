@@ -233,6 +233,8 @@ div:has(>.barglow){height:8px!important;background:rgba(255,255,255,.07)!importa
 .acc-row{display:flex;align-items:center;gap:8px;height:19px;min-width:0;font-size:12px;font-weight:600;color:#EDE6D6}
 .acc-row span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .acc .qa{height:26px!important;font-size:12px!important;padding:0 10px}
+/* the emblem's heart is its own layer: it swells with the voice while the frame stays still */
+.corehrt{transform-origin:50% 45.6%;transition:transform .09s linear,opacity .09s linear;pointer-events:none}
 .need{border-left:2px solid #AA0505!important}
 .need-txt{font-size:13px;font-weight:600;color:#EDE6D6;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .need .qa{height:28px;font-size:12px}
@@ -429,7 +431,8 @@ div:has(>.barglow){height:8px!important;background:rgba(255,255,255,.07)!importa
         <circle cx="220" cy="220" r="100" fill="url(#vcore)" opacity="0.5"></circle>
       </svg>
       <div style="position: absolute; left: 0; top: 0; width: 430px; height: 430px; display: flex; align-items: center; justify-content: center; pointer-events: none">
-        <img class="{{coreImgCls}}" src="/dashboard/core.svg" alt="" style="position: relative; top: 15px; width: 250px; height: 250px">
+        <img class="{{coreImgCls}}" src="/dashboard/core-frame.svg" alt="" style="position: relative; top: 15px; width: 250px; height: 250px">
+        <img class="corehrt" src="/dashboard/core-heart.svg" alt="" style="position: absolute; left: 90px; top: 105px; width: 250px; height: 250px; transform: scale({{heartScale}}); opacity: {{heartO}}">
       </div>
       </button>
       <sc-for list="{{orbMarks}}" as="om" hint-placeholder-count="7">
@@ -508,7 +511,8 @@ div:has(>.barglow){height:8px!important;background:rgba(255,255,255,.07)!importa
         <circle cx="220" cy="220" r="100" fill="url(#vcore)" opacity="0.5"></circle>
       </svg>
       <div style="position: absolute; left: 0; top: 0; width: 430px; height: 430px; display: flex; align-items: center; justify-content: center; pointer-events: none">
-        <img class="{{coreImgCls}}" src="/dashboard/core.svg" alt="" style="position: relative; top: 15px; width: 250px; height: 250px">
+        <img class="{{coreImgCls}}" src="/dashboard/core-frame.svg" alt="" style="position: relative; top: 15px; width: 250px; height: 250px">
+        <img class="corehrt" src="/dashboard/core-heart.svg" alt="" style="position: absolute; left: 90px; top: 105px; width: 250px; height: 250px; transform: scale({{heartScale}}); opacity: {{heartO}}">
       </div>
           </div>
         </div>
@@ -728,7 +732,8 @@ div:has(>.barglow){height:8px!important;background:rgba(255,255,255,.07)!importa
         <circle cx="220" cy="220" r="100" fill="url(#vcore)" opacity="0.5"></circle>
       </svg>
       <div style="position: absolute; left: 0; top: 0; width: 430px; height: 430px; display: flex; align-items: center; justify-content: center; pointer-events: none">
-        <img class="{{coreImgCls}}" src="/dashboard/core.svg" alt="" style="position: relative; top: 15px; width: 250px; height: 250px">
+        <img class="{{coreImgCls}}" src="/dashboard/core-frame.svg" alt="" style="position: relative; top: 15px; width: 250px; height: 250px">
+        <img class="corehrt" src="/dashboard/core-heart.svg" alt="" style="position: absolute; left: 90px; top: 105px; width: 250px; height: 250px; transform: scale({{heartScale}}); opacity: {{heartO}}">
       </div>
         </div>
         <div class="holo-cone"></div>
@@ -2202,6 +2207,7 @@ class Component extends DCLogic {
     const voiceOpacity = Math.min(1, vp * 1.4).toFixed(2);
     const voiceGlowW = (2 + vp * 10).toFixed(1), voiceGlowO = (vp * 0.6).toFixed(2);
     const voiceScaleOuter = (1 + vp * 0.045).toFixed(3), voiceScaleInner = (1 - vp * 0.03).toFixed(3);
+    const heartScale = (1 + vp * 0.55).toFixed(3), heartO = (0.82 + vp * 0.18).toFixed(2);   // the heart of the emblem follows the voice
     const statusColor = s.listening || s.wakeHeard ? '#67C7EB' : s.speaking ? '#FBCA03' : '#EDE6D6';
     const liveMsgs = CON ? Object.keys(s.live.reports || {}).filter((m) => data[m] && s.live.reports[m]).map((m) => data[m].name.charAt(0) + data[m].name.slice(1).toLowerCase() + ': ' + s.live.reports[m]) : [];
     const rotMsgs = CON ? (liveMsgs.length ? liveMsgs : ['Waiting for the first reports.']) : msgs;
@@ -3052,7 +3058,7 @@ class Component extends DCLogic {
             reject: () => fetch('/api/approvals/' + a.id + '/rejected', { method: 'POST' }).catch(() => {}), review: () => this.openDecide(a.id) }); }));
         return { liveActions: true, demoActions: false, actionItems: items.slice(0, 3), noActions: items.length === 0 };
       })(),
-      tgStatus, tgSent, voiceBars, voiceOpacity, voiceGlowW, voiceGlowO, voiceScaleOuter, voiceScaleInner, statusColor,
+      tgStatus, tgSent, voiceBars, voiceOpacity, voiceGlowW, voiceGlowO, voiceScaleOuter, voiceScaleInner, heartScale, heartO, statusColor,
       bootOn: ov.on, bootCls: ov.cls, bootPhase: ov.phase, bootPct: ov.pct, bootCount: ov.count, bootCols: ov.cols, bootLog: ov.log, replyText, approvalCount,
       deckOn: Component.DECK.test(s.mode) && !s.mind, deckCards, holoRGB: s.holoBlue ? '103,199,235' : '251,202,3',
       deckTitle: s.mode === 'issues' ? 'VISION ISSUES' : s.mode === 'decide' ? 'YOUR DECISIONS' : s.mode === 'desk' ? (data[s.deskFor] ? data[s.deskFor].name : '') + ' DESK' : 'VISION BRIEF',

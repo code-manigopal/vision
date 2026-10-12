@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1254 1254" width="1254" height="1254" role="img" aria-hidden="true">
+  <!-- The heart of the emblem alone, on the same frame as core-frame.svg. -->
+  <defs>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="16" result="b1"/>
+      <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="b2"/>
+      <feMerge><feMergeNode in="b1"/><feMergeNode in="b1"/><feMergeNode in="b2"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="22"/></filter>
+    <radialGradient id="heart" cx="50%" cy="38%" r="60%">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="0.22" stop-color="#FFF4D6"/>
+      <stop offset="0.6" stop-color="#FFDD1A"/>
+      <stop offset="1" stop-color="#FFC400" stop-opacity="0.9"/>
+    </radialGradient>
+    <linearGradient id="glass" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FBCA03" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#FBCA03" stop-opacity="0.03"/>
+    </linearGradient>
+    <linearGradient id="glassIn" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FBCA03" stop-opacity="0.34"/>
+      <stop offset="1" stop-color="#FBCA03" stop-opacity="0.08"/>
+    </linearGradient>
+  </defs>
+
+  <!-- heart -->
+  <circle cx="627" cy="575" r="120" fill="#FFD400" opacity="0.6" filter="url(#soft)"/>
+  <path d="M560 540 H694 L627 652 Z" fill="url(#heart)" stroke="#FFF4D6" stroke-width="3" stroke-linejoin="round" filter="url(#glow)"/>
+  <circle cx="627" cy="570" r="24" fill="#FFFFFF" filter="url(#glow)"/>
+
+</svg>
