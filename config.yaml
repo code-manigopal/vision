@@ -11,7 +11,7 @@ vision:
 
 llm:                       # Ask engine + every agent that writes or judges
   local_base_url: http://localhost:1234/v1   # LM Studio > Developer > Start server
-  local_model: "deepseek/deepseek-r1-0528-qwen3-8b"                            # the model id LM Studio shows (a 7-8B instruct model with tool use)
+  local_model: "qwen/qwen3-vl-8b"                            # the model id LM Studio shows (a 7-8B instruct model with tool use)
   cloud_provider: anthropic
   cloud_model: ""                            # e.g. a current Claude model id; needs ANTHROPIC_API_KEY in .env
   writer_model: "openai/gpt-oss-120b"        # story writing (YouTube Manager) on Groq; needs GROQ_API_KEY in .env, else cloud, else local
@@ -22,7 +22,7 @@ llm:                       # Ask engine + every agent that writes or judges
 #   only_masters: [youtube, news]      those two
 #   only_masters: []                   no override: each master's own `enabled:` below decides
 # ids: email, calendar, trading, invest, news, web, jobs, world, traffic, youtube, visa. Restart VISION after a change.
-only_masters: [youtube, visa]
+only_masters: []
 
 # mode: stub = demo agents until that master is built · live = real agents
 # trust: OBSERVE | SUGGEST | ACT | HOLD
@@ -73,6 +73,8 @@ masters:
       wealthsimple_inbox: inbox/wealthsimple
       csv_stale_days: 7
       targets: {}                         # optional, e.g. { india: 40, us: 40, crypto: 20 }
+      ideas_tier: writer                  # who writes "ideas to consider": local (LM Studio) or writer (Groq: faster, but your movers' names and percentages leave the Mac)
+      ideas_timeout: 45                   # seconds to wait for the model; after that the ideas come from plain rules
   news:
     enabled: true
     trust: OBSERVE

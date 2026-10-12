@@ -2,7 +2,8 @@
 
 SYNC (Zerodha · Fyers · Wealthsimple, in parallel) -> CONSOLIDATE (to CAD) ->
 ANALYZE (allocation · risk · market watch · tax records) -> MARKET PULSE (indices · BTC) ->
-Daily P&L Reporter (reporter).
+Daily P&L Reporter (reporter): the day's P&L, the overall P&L against cost, the day's top gainers and
+losers with the news on them, and a few ideas to consider.
 
 A broker that isn't set up or needs a login never blocks the others: the brief uses what's available.
 Nothing here can trade.
@@ -10,6 +11,8 @@ Nothing here can trade.
 
 from __future__ import annotations
 
+import asyncio
+import re
 import time
 from typing import Any
 
@@ -28,6 +31,63 @@ def money(v: float, sym: str) -> str:
 
 def pct(v: float | None) -> str:
     return "—" if v is None else f"{'+' if v >= 0 else '−'}{abs(v):.2f}%"
+
+
+def short(sym: str) -> str:
+    return (sym or "").split(":")[-1].replace("-EQ", "")
+
+
+MOVERS = 3   # top gainers and top losers shown
+GENERIC = {"class", "corp", "corporation", "company", "limited", "group", "holdings", "technologies", "trust", "fund", "index",
+           "shares", "stock", "common", "international", "global", "systems", "industries"}
+
+
+def telling(p: dict) -> str | None:
+    """The word a headline would use for a holding: "Palantir" for "Palantir Technologies Inc (Class A)"."""
+    return next((w for w in re.findall(r"[A-Za-z]+", p["name"]) if len(w) > 3 and w.lower() not in GENERIC), None)
+
+
+def about(title: str, p: dict) -> bool:
+    """A headline counts for a holding only if it names it: its ticker, or the first telling word of its name."""
+    words = [p["symbol"].lower()] + ([telling(p).lower()] if telling(p) else [])
+    return any(re.search(rf"\b{re.escape(w)}\b", title.lower()) for w in words)
+
+
+def flatten(accounts: list[dict], fx: dict) -> list[dict]:
+    """Every holding in CAD: value, day change, cost and overall P&L where the broker gives a cost."""
+    out = []
+    for a in accounts:
+        for p in a["positions"]:
+            rate = fx.get(p.get("ccy") or a["ccy"], 1.0)
+            value, day = p["value"] * rate, (p.get("day") or 0.0) * rate
+            cost = p.get("book_cad") or (p.get("cost") or 0.0) * rate
+            prev = value - day
+            out.append({"symbol": short(p["symbol"]), "name": p.get("name") or short(p["symbol"]), "account": a["account"],
+                        "india": ":" in (p["symbol"] or ""), "crypto": bool(p.get("crypto")), "value_cad": value, "day_cad": day,
+                        "day_pct": p["pct"] if "pct" in p else (day / prev * 100 if prev else None),
+                        "cost_cad": cost or None, "pnl_cad": value - cost if cost else None,
+                        "pnl_pct": (value - cost) / cost * 100 if cost else None})
+    return out
+
+
+def rule_ideas(pf: dict, flags: list[str], drift: dict) -> list[dict]:
+    """Plain observations from the numbers, used when no model answers."""
+    out = [{"idea": f"Concentration: {f}. Consider not adding to it until the mix evens out.", "why": "risk flag"} for f in flags]
+    for k, d in (drift or {}).items():
+        if abs(d) >= 5:
+            out.append({"idea": f"{k.upper() if len(k) <= 2 else k.title()} is {abs(d):.0f} points {'over' if d > 0 else 'under'} its target. New money could go "
+                                f"{'elsewhere' if d > 0 else 'there'} first.", "why": "allocation drift"})
+    for p in pf.get("losers", []):
+        if p["day_pct"] <= -5 or (p.get("pnl_pct") or 0) <= -20:
+            news_bit = f' Read "{p["news"][0]["title"]}" first.' if p.get("news") else ""
+            out.append({"idea": f"{p['symbol']} is down {abs(p['day_pct']):.1f}% today"
+                                + (f" and {abs(p['pnl_pct']):.0f}% below cost" if (p.get("pnl_pct") or 0) < 0 else "")
+                                + f". Check whether the reason you hold it still stands.{news_bit}", "why": "top loser"})
+    for p in pf.get("gainers", []):
+        if (p.get("pnl_pct") or 0) >= 50 and p["weight"] >= 10:
+            out.append({"idea": f"{p['symbol']} is {p['pnl_pct']:.0f}% above cost and {p['weight']:.0f}% of the portfolio. "
+                                "Booking part of the gain is one option.", "why": "large winner"})
+    return out[:3]
 
 
 # ---------- SYNC ----------
@@ -123,6 +183,7 @@ class PortfolioAggregator(SubAgent):
             ctx["portfolio"] = {"accounts": [], "total_cad": 0, "day_cad": 0, "day_pct": None, "fx": {}}
             return AgentResult("idle", "NO DATA", "No accounts synced yet")
         fx = await markets.fx_to_cad()
+        positions = flatten(ctx["accounts"], fx)   # before the accounts below are restated in CAD
         order = ["Zerodha", "Fyers", "Wealthsimple TFSA", "Wealthsimple Crypto"]
         out = []
         for a in sorted(ctx.get("accounts", []), key=lambda x: order.index(x["account"]) if x["account"] in order else 9):
@@ -138,8 +199,25 @@ class PortfolioAggregator(SubAgent):
             out.append(a)
         total = sum(a["value_cad"] for a in out)
         day = sum(a["day_cad"] for a in out)
+        for p in positions:
+            p["weight"] = p["value_cad"] / total * 100 if total else 0.0
+        costed = [p for p in positions if p["cost_cad"]]
+        cost = sum(p["cost_cad"] for p in costed)
+        pnl = sum(p["pnl_cad"] for p in costed)
+        for a in out:   # each broker's own overall P&L, in its own currency like its day P&L
+            mine = [p for p in costed if p["account"] == a["account"]]
+            a_cost, a_pnl = sum(p["cost_cad"] for p in mine), sum(p["pnl_cad"] for p in mine)
+            a["overall"] = {"pnl": a_pnl / (fx.get("INR") or 1.0 if a["ccy"] == "INR" else 1.0), "pnl_cad": a_pnl,
+                            "pnl_pct": a_pnl / a_cost * 100} if a_cost else None
+        moved = sorted((p for p in positions if p["day_pct"]), key=lambda p: -p["day_pct"])
         ctx["portfolio"] = {"accounts": out, "total_cad": total, "day_cad": day,
-                            "day_pct": day / (total - day) * 100 if total - day else None, "fx": fx}
+                            "day_pct": day / (total - day) * 100 if total - day else None, "fx": fx,
+                            "positions": positions,
+                            # overall = what the holdings are worth against what they cost, for holdings with a known cost
+                            "overall": {"pnl_cad": pnl, "cost_cad": cost, "pnl_pct": pnl / cost * 100,
+                                        "of_portfolio": pnl / total * 100 if total else None} if cost else None,
+                            "gainers": [p for p in moved if p["day_pct"] > 0][:MOVERS],
+                            "losers": [p for p in reversed(moved) if p["day_pct"] < 0][:MOVERS]}
         if not out:
             return AgentResult("idle", "NO DATA", "No accounts synced yet")
         return AgentResult("done", "CONSOLIDATED", f"{len(out)} accounts · C${total:,.0f}", {"total_cad": total})
@@ -175,7 +253,7 @@ class AllocationAnalyst(SubAgent):
         ctx["mix"] = mix_pct
         if not self.targets:
             return AgentResult("done", "NO TARGET", " · ".join(f"{k} {v:.0f}%" for k, v in sorted(mix_pct.items())), {"mix": mix_pct})
-        drift = {k: mix_pct.get(k, 0) - t for k, t in self.targets.items()}
+        drift = ctx["drift"] = {k: mix_pct.get(k, 0) - t for k, t in self.targets.items()}
         off = {k: d for k, d in drift.items() if abs(d) >= 5}
         label = "ON TARGET" if not off else f"DRIFT {len(off)}"
         return AgentResult("done", label, ", ".join(f"{k} {d:+.0f}pp" for k, d in off.items()) or "within 5pp of targets",
@@ -199,26 +277,29 @@ class RiskMonitor(SubAgent):
             flags.append(f"crypto {ctx['mix']['crypto']:.0f}%")
         if (pf.get("day_pct") or 0) < -3:
             flags.append(f"down {pf['day_pct']:.1f}% in a day")
+        ctx["flags"] = flags
         return AgentResult("done", f"{len(flags)} FLAGS" if flags else "OK", "; ".join(flags) or "no risk flags", {"flags": flags})
 
 
 class MarketWatcher(SubAgent):
-    name, tier, note, blocking = "Market Watcher", "API", "news on your holdings", False
+    name, tier, note, blocking = "Market Watcher", "API", "news on your movers", False
 
     async def run(self, ctx):
         pf = ctx.get("portfolio") or {}
-        fx = pf.get("fx", {})
-        top = sorted(((p, p["value"] * fx.get(p.get("ccy", a["ccy"]), 1.0)) for a in pf.get("accounts", []) for p in a["positions"]),
-                     key=lambda x: -x[1])[:3]
+        # the day's movers first: their news is what explains the P&L; with no movers, the largest holdings
+        picks = pf.get("gainers", []) + pf.get("losers", [])
+        if not picks:
+            picks = sorted(pf.get("positions", []), key=lambda p: -p["value_cad"])[:3]
         stories = []
-        for p, _ in top:
-            term = p.get("name") or p["symbol"].split(":")[-1].replace("-EQ", "")
+        for p in picks:
             try:
-                items = await news.gather(f'"{term}" stock', "IN" if ":" in p["symbol"] else "US", max_age_hours=24, limit=2)
+                items = await news.gather(f'"{telling(p) or p["symbol"]}" {"price" if p["crypto"] else "stock"}', "IN" if p["india"] else "US", max_age_hours=24, limit=8)
             except Exception:
                 items = []
+            items = [i for i in items if about(i["title"], p) and "Quote & History" not in i["title"]][:2]   # a search also returns stories that only sit near the name
+            p["news"] = [{"title": i["title"], "source": i["source"], "link": i["link"]} for i in items]
             stories += [{"symbol": p["symbol"], **i} for i in items]
-        return AgentResult("done", f"{len(stories)} STORIES", stories[0]["title"] if stories else "no news on top holdings", {"stories": stories})
+        return AgentResult("done", f"{len(stories)} STORIES", stories[0]["title"] if stories else "no news on your movers", {"stories": stories})
 
 
 class TaxRecordsKeeper(SubAgent):
@@ -263,7 +344,41 @@ class BitcoinTracker(SubAgent):
 
 # ---------- REPORT ----------
 class DailyPnLReporter(SubAgent):
-    name, tier, note = "Daily P&L Reporter", "QUICK", "yesterday's P&L → VISION"
+    name, tier, note = "Daily P&L Reporter", "QUICK", "day + overall P&L, movers, ideas → VISION"
+
+    def __init__(self, ideas_tier: str = "local", ideas_timeout: float = 45) -> None:
+        super().__init__()
+        self.ideas_tier, self.ideas_timeout = ideas_tier, ideas_timeout
+
+    async def ideas(self, ctx, pf: dict) -> tuple[list[dict], str]:
+        """Up to three things to consider, from the model when one answers, else from plain rules.
+        Read-only desk: these are options to weigh, never orders, and nothing here can trade."""
+        flags, drift = ctx.get("flags") or [], ctx.get("drift") or {}
+        llm = ctx.get("llm")
+        if llm and (pf.get("gainers") or pf.get("losers") or flags):
+            row = lambda p: {"holding": p["symbol"], "day_pct": round(p["day_pct"], 2), "share_of_portfolio_pct": round(p["weight"], 1),
+                             "vs_cost_pct": None if p.get("pnl_pct") is None else round(p["pnl_pct"], 1),
+                             "news": [n["title"] for n in p.get("news", [])]}
+            facts = {"overall_vs_cost_pct": (pf.get("overall") or {}).get("pnl_pct"), "day_pct": pf.get("day_pct"),
+                     "gainers": [row(p) for p in pf.get("gainers", [])], "losers": [row(p) for p in pf.get("losers", [])],
+                     "risk_flags": flags, "drift_vs_targets_pp": drift}
+            try:
+                # capped: a slow local model must not hold up the report (or the boot roll call); the rules answer instead
+                res = await asyncio.wait_for(llm.json(
+                    "You help a long-term investor read their own portfolio. From these facts only, give at most 3 things "
+                    "they could consider doing, most important first. Return a list of {idea, why}: idea is one plain sentence "
+                    "(under 30 words) naming the holding; why is the fact or headline behind it (under 15 words). Phrase each as "
+                    "an option to weigh (hold, add, trim, review, wait for results), never an order. No price targets, no "
+                    "predictions, no promised returns, no quantities. If a headline does not explain a move, say the cause is "
+                    "unclear. If nothing calls for action, return one idea saying so.\n" + str(facts),
+                    tier=self.ideas_tier, max_tokens=1500), self.ideas_timeout)
+                out = [{"idea": str(r["idea"]).strip()[:260], "why": str(r.get("why") or "").strip()[:140]}
+                       for r in (res or []) if isinstance(r, dict) and r.get("idea")][:3]
+                if out:
+                    return out, "model"
+            except Exception:
+                pass
+        return rule_ideas(pf, flags, drift), "rules"
 
     async def run(self, ctx):
         pf = ctx.get("portfolio") or {}
@@ -277,8 +392,22 @@ class DailyPnLReporter(SubAgent):
         if ctx.get("btc"):
             mkts.append({"name": "Bitcoin (24h)", "pct": ctx["btc"]["pct"]})
         parts = []
+        overall, gainers, losers = pf.get("overall"), pf.get("gainers", []), pf.get("losers", [])
+        # overall P&L broker by broker (worth against cost), then the total in CAD
+        overall_ports = [{"name": a["account"], "value": a["overall"]["pnl"], "pct": a["overall"]["pnl_pct"],
+                          "sym": "₹" if a["ccy"] == "INR" else "C$"} for a in pf.get("accounts", []) if a.get("overall")]
+        if overall:
+            overall_ports.append({"name": "Total (CAD)", "value": overall["pnl_cad"], "pct": overall["pnl_pct"], "sym": "C$", "total": True})
+        ideas, ideas_by = await self.ideas(ctx, pf) if pf.get("accounts") else ([], "rules")
         if pf.get("accounts"):
             parts.append(f"Portfolio {money(pf['day_cad'], 'C$')} ({pct(pf.get('day_pct'))})")
+            if overall:
+                parts.append("Overall " + ", ".join(f"{o['name'].replace('Wealthsimple ', 'WS ')} {money(o['value'], o['sym'])} ({pct(o['pct'])})"
+                                                    for o in overall_ports))
+            if gainers:
+                parts.append(f"Top gainer {gainers[0]['symbol']} {pct(gainers[0]['day_pct'])}")
+            if losers:
+                parts.append(f"Top loser {losers[0]['symbol']} {pct(losers[0]['day_pct'])}")
             parts += [f"{a['account'].replace('Wealthsimple ', 'WS ')} {money(a['day'], '₹' if a['ccy'] == 'INR' else 'C$')}"
                       for a in pf["accounts"]]
         else:
@@ -290,7 +419,14 @@ class DailyPnLReporter(SubAgent):
         waiting = [k for k in ("kite", "fyers", "wealthsimple") if k in ctx["bus"].state.get("notices", {})]
         if waiting:
             parts.append("waiting on: " + ", ".join(waiting))
-        return AgentResult("done", "SENT", " · ".join(parts), {"ports": ports, "mkts": mkts, "total_cad": pf.get("total_cad")})
+        if ideas:
+            parts.append("Consider: " + ideas[0]["idea"])
+        keep = ("symbol", "name", "account", "day_pct", "day_cad", "weight", "pnl_cad", "pnl_pct", "news")
+        mover = lambda p: {k: p.get(k) for k in keep}
+        return AgentResult("done", "SENT", " · ".join(parts),
+                           {"ports": ports, "mkts": mkts, "total_cad": pf.get("total_cad"), "overall": overall, "overall_ports": overall_ports,
+                            "gainers": [mover(p) for p in gainers], "losers": [mover(p) for p in losers],
+                            "ideas": ideas, "ideas_by": ideas_by})
 
 
 def build_agents(options: dict[str, Any], cfg=None) -> dict[str, SubAgent]:
@@ -309,5 +445,5 @@ def build_agents(options: dict[str, Any], cfg=None) -> dict[str, SubAgent]:
         "Tax & Records Keeper": TaxRecordsKeeper(),
         "Index Tracker": IndexTracker(),
         "Bitcoin Tracker": BitcoinTracker(),
-        "Daily P&L Reporter": DailyPnLReporter(),
+        "Daily P&L Reporter": DailyPnLReporter(options.get("ideas_tier", "local"), float(options.get("ideas_timeout", 45))),
     }

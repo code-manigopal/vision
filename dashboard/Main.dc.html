@@ -199,6 +199,31 @@ a{color:#FBCA03}a:hover{color:#FBCA03}
 .row-ok{opacity:1;animation:vtype .35s ease-out}
 .mic{background:#AA0505}
 .mic-on{background:#AA0505;animation:vmic 1.2s ease-out infinite}
+/* ---- Chronograph look: the core as a still watch dial, open bracket-corner panels, segmented bars, no glow.
+   One block on purpose: delete it to get the earlier look back. ---- */
+.aura,.aura2{opacity:.16!important}
+.ping,.ping2,.scan,.shoot,.cshift,.orb{display:none!important}
+.neb1,.neb2{opacity:.3!important}
+.sweep{opacity:.28!important}
+.r4,.r1,.r3{animation:none!important}
+.r4 circle{stroke:#B97D10!important;stroke-width:7px!important;stroke-dasharray:1 20.467!important;opacity:.85}
+.r1 circle{stroke:#FBCA03!important;stroke-width:12px!important;stroke-dasharray:2 85.965!important}
+.r2{animation-duration:90s!important}
+.r2 circle{stroke-width:2px!important;stroke-dasharray:236 706.5!important;stroke-linecap:round;opacity:1!important}
+.r3 circle{stroke-width:.75px!important;stroke-dasharray:none!important;opacity:.45}
+.coreimg{animation:none!important;filter:drop-shadow(0 0 8px rgba(251,202,3,.2))!important}
+.tglow{filter:none!important}
+.tab,.tab-on{border:none!important;border-radius:0!important;background:transparent!important;box-shadow:none!important;border-bottom:1px solid rgba(185,125,16,.25)!important;height:36px!important}
+.tab-on{border-bottom:2px solid #FBCA03!important}
+.edgetab,.gc{box-shadow:none!important}
+.panel:not([style*="6A0C0B"]){border-color:transparent!important;border-radius:0!important;background:linear-gradient(rgba(185,125,16,.75),rgba(185,125,16,.75)) top left/14px 1px no-repeat,linear-gradient(rgba(185,125,16,.75),rgba(185,125,16,.75)) top left/1px 14px no-repeat,linear-gradient(rgba(185,125,16,.75),rgba(185,125,16,.75)) top right/14px 1px no-repeat,linear-gradient(rgba(185,125,16,.75),rgba(185,125,16,.75)) top right/1px 14px no-repeat,linear-gradient(rgba(185,125,16,.75),rgba(185,125,16,.75)) bottom left/14px 1px no-repeat,linear-gradient(rgba(185,125,16,.75),rgba(185,125,16,.75)) bottom left/1px 14px no-repeat,linear-gradient(rgba(185,125,16,.75),rgba(185,125,16,.75)) bottom right/14px 1px no-repeat,linear-gradient(rgba(185,125,16,.75),rgba(185,125,16,.75)) bottom right/1px 14px no-repeat,rgba(9,10,13,.45)!important}
+.panel:not([style*="6A0C0B"])>div:first-child:has(>div[style*="Michroma"]){padding-bottom:7px;border-bottom:1px solid rgba(185,125,16,.18)}
+div:has(>.barglow){height:8px!important;background:rgba(255,255,255,.07)!important;-webkit-mask:repeating-linear-gradient(90deg,#000 0 5px,transparent 5px 7px);mask:repeating-linear-gradient(90deg,#000 0 5px,transparent 5px 7px)}
+.barglow{height:8px!important;box-shadow:none!important}
+.mst{background:transparent!important;border:none!important;border-bottom:1px solid rgba(255,255,255,.05)!important;border-radius:0!important;box-shadow:none!important}
+.d-wait,.d-work,.d-done,.d-idle{width:7px!important;height:7px!important;border-radius:0!important;transform:rotate(45deg);box-shadow:none!important}
+.qa{background:transparent!important;border-color:rgba(185,125,16,.3)!important;box-shadow:none!important}
+#vision-ask~button{background:transparent!important;border-left:1px solid rgba(185,125,16,.35)!important;color:#FBCA03!important;box-shadow:none!important}
 </style>
 </helmet>
 <div ref="{{topRef}}" style="width: 100%; height: 100%; min-width: 1440px; min-height: 900px; box-sizing: border-box; background: #07080A; display: flex; flex-direction: column; overflow: hidden; border: 1px solid #1C1F26; position: relative; isolation: isolate; border-radius: 8px">
@@ -2366,12 +2391,27 @@ class Component extends DCLogic {
       pl('Wealthsimple TFSA · US', 38, 0.41, 'C$', false), pl('Wealthsimple Crypto', -22, -1.10, 'C$', false),
       pl('Total (CAD)', 43, 0.18, 'C$', true)
     ];
+    // overall P&L (worth against cost), broker by broker, then the total
+    let bOverall = [pl('Zerodha', 184200, 14.6, '₹', false), pl('Fyers', -12400, -3.2, '₹', false), pl('Wealthsimple TFSA · US', 2140, 9.8, 'C$', false),
+      pl('Wealthsimple Crypto', -310, -12.4, 'C$', false), pl('Total (CAD)', 4610, 8.2, 'C$', true)];
     const mk = (name, pct) => ({ name, val: (pct >= 0 ? '▲ +' : '▼ −') + Math.abs(pct).toFixed(2) + '%', color: pct >= 0 ? up : dn });
     let bMkts = [mk('NIFTY 50', 0.44), mk('BANK NIFTY', -0.21), mk('NIFTY IT', 1.08), mk('NYSE Composite', 0.12), mk('NASDAQ Composite', 0.57), mk('Bitcoin (24h)', -1.35)];
     const RD = (s.live && s.live.report_data) || {};
     const noRow = (name) => ({ name, nameColor: '#9A8F76', val: '—', color: '#9A8F76' });
     if (RD.invest && RD.invest.ports && RD.invest.ports.length) bPorts = RD.invest.ports.map((p) => pl(p.name, Math.round(p.value || 0), p.pct == null ? 0 : p.pct, p.sym, !!p.total));
     else if (bLive) bPorts = [noRow(RD.invest ? 'No accounts synced yet' : 'Waiting for Investments')];
+    if (bLive) bOverall = ((RD.invest && RD.invest.overall_ports) || []).map((p) => pl(p.name, Math.round(p.value || 0), p.pct == null ? 0 : p.pct, p.sym, !!p.total));
+    // Investments beyond the day's P&L: the day's movers with their news, and ideas to consider (sample values in the preview only)
+    const inv = bLive ? (RD.invest || {}) : {
+      gainers: [{ symbol: 'INFY', day_pct: 2.4, weight: 6.1, pnl_pct: 15.4, news: [{ title: 'Infosys raises its revenue outlook', source: 'Mint' }] },
+        { symbol: 'VFV', day_pct: 0.8, weight: 22, pnl_pct: 16.7, news: [] }],
+      losers: [{ symbol: 'TCS', day_pct: -1.9, weight: 4.2, pnl_pct: -3.1, news: [{ title: 'TCS slips after a client cuts spending', source: 'Reuters' }] }],
+      ideas: [{ idea: 'TCS fell on a client spending cut. Waiting for its results before adding is one option.', why: 'top loser, news' }] };
+    const sgnP = (v, dp) => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(dp == null ? 2 : dp) + '%';
+    const moverRows = (list) => [].concat(...(list || []).map((p) => [
+      { a: p.symbol, b: sgnP(p.day_pct) + ' today · ' + Math.round(p.weight) + '% of portfolio' + (p.pnl_pct == null ? '' : ' · ' + sgnP(p.pnl_pct, 0) + ' on cost'), ac: '#FBCA03', bc: p.day_pct >= 0 ? up : dn },
+      { a: '', b: p.news && p.news.length ? p.news[0].title + (p.news[0].source ? ' · ' + p.news[0].source : '') : 'No news found on it today', ac: '#9A8F76', bc: '#C9C0AC' }]));
+    const moverSay = (list) => (list || []).map((p) => p.symbol + ' ' + (p.day_pct >= 0 ? 'up ' : 'down ') + Math.abs(p.day_pct).toFixed(1) + ' percent, ' + Math.round(p.weight) + ' percent of your portfolio' + (p.news && p.news.length ? '. In the news: ' + p.news[0].title : '')).join('. ');
     if (RD.invest && RD.invest.mkts && RD.invest.mkts.length) bMkts = RD.invest.mkts.map((m) => m.pct == null ? noRow(m.name) : mk(m.name, m.pct));
     else if (bLive) bMkts = [noRow(RD.invest ? 'Markets unavailable' : 'Waiting for Investments')];
     // ---- Boot sequence: every agent reports in to VISION ----
@@ -2689,6 +2729,11 @@ class Component extends DCLogic {
       if (needs.length) deck.push({ key: 'needs', kick: 'BRIEFING · NEEDS YOU', title: 'Waiting for you', rows: needs.map((n) => ({ a: this.cap1(n.text), b: '', ac: '#FF8A73', bc: '#EDE6D6' })),
         say: 'Waiting for you. ' + needs.map((n) => this.cap1(n.text)).join('. ') + '.' });
       deck.push({ key: 'port', kick: 'BRIEFING · ' + bPortsTitle, title: 'Portfolio', rows: bPorts.map((p) => ({ a: p.name, b: p.val, ac: p.nameColor, bc: p.color })), say: 'Portfolio. ' + bPorts.map((p) => spkMoney(p.name, p.val)).join('. ') + '.' });
+      if (bOverall.length) deck.push({ key: 'overall', kick: 'BRIEFING · PORTFOLIOS · OVERALL P&L', title: 'Overall, against cost', rows: bOverall.map((p) => ({ a: p.name, b: p.val, ac: p.nameColor, bc: p.color })), say: 'Overall, against what you paid. ' + bOverall.map((p) => spkMoney(p.name, p.val)).join('. ') + '.' });
+      if (inv.gainers && inv.gainers.length) deck.push({ key: 'gain', kick: 'BRIEFING · TOP GAINERS TODAY', title: 'Top gainers', rows: moverRows(inv.gainers), say: 'Top gainers. ' + moverSay(inv.gainers) + '.' });
+      if (inv.losers && inv.losers.length) deck.push({ key: 'lose', kick: 'BRIEFING · TOP LOSERS TODAY', title: 'Top losers', rows: moverRows(inv.losers), say: 'Top losers. ' + moverSay(inv.losers) + '.' });
+      if (inv.ideas && inv.ideas.length) deck.push({ key: 'ideas', kick: 'BRIEFING · IDEAS TO CONSIDER', title: 'What you could do', rows: inv.ideas.map((x, i) => ({ a: String(i + 1), b: x.idea + (x.why ? '  (' + x.why + ')' : ''), ac: '#FBCA03', bc: '#EDE6D6' })),
+        say: 'Ideas to consider, not advice. ' + inv.ideas.map((x) => x.idea).join(' ') });
       deck.push({ key: 'mkt', kick: 'BRIEFING · ' + bMktsTitle, title: 'Markets', rows: bMkts.map((m) => ({ a: m.name, b: m.val, ac: '#EDE6D6', bc: m.color })), say: 'Markets. ' + spk(bMkts.map((m) => m.name + ' ' + m.val).join('. ')) + '.' });
       deck.push({ key: 'desk', kick: 'BRIEFING · DESKS', title: 'Your desks', rows: bMasters.map((x) => ({ a: x.name, b: x.line, ac: '#FBCA03', bc: x.color })), say: 'Your desks. ' + spk(bMasters.map((x) => x.name.toLowerCase() + ': ' + x.line).join('. ')) + '.' });
       if (heads.length) deck.push({ key: 'news', kick: 'BRIEFING · NEWS', title: 'Headlines', rows: heads.map((n) => ({ a: n.tag, b: n.text, ac: '#FBCA03', bc: '#EDE6D6' })), say: 'In the news. ' + heads.slice(0, 4).map((n) => n.text).join('. ') + '.' });

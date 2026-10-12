@@ -160,6 +160,40 @@ def test_invest_master_end_to_end(mocked, monkeypatch, tmp_path):
     assert [x["name"] for x in data["mkts"]][-1] == "Bitcoin (24h)"
     assert report.startswith("Portfolio ") and "NIFTY +1.00%" in report and "BTC −1.35%" in report
     assert "ALLOC" not in report
+    # overall P&L against cost, the day's movers with their news, and ideas (rules here: the fake model gives none)
+    o = data["overall"]
+    assert o["pnl_cad"] > 0 and round(o["pnl_pct"], 1) == round(o["pnl_cad"] / o["cost_cad"] * 100, 1)
+    assert data["gainers"][0]["day_pct"] > 0 > data["losers"][0]["day_pct"]
+    assert {"TCS", "BTC"} <= {p["symbol"] for p in data["losers"]}
+    assert data["losers"][0]["news"] == []                      # "Stocks edge higher" names no holding, so it is not shown as its news
+    assert all(0 < p["weight"] <= 100 for p in data["gainers"] + data["losers"])
+    assert data["ideas_by"] == "rules" and "VFV" in data["ideas"][0]["idea"]
+    op = {p["name"]: p for p in data["overall_ports"]}          # every broker's own overall P&L, then the total
+    assert list(op) == names and op["Zerodha"]["sym"] == "₹" and op["Fyers"]["value"] == 5000   # TCS: 10 x (4000 − 3500)
+    assert round(op["Total (CAD)"]["value"], 2) == round(o["pnl_cad"], 2) and op["Total (CAD)"]["total"]
+    assert "Overall Zerodha +₹" in report and "Fyers +₹5,000 (+14.29%)" in report and "Top gainer " in report and "Top loser BTC" in report
+
+
+def test_invest_news_must_name_the_holding_and_model_ideas():
+    import vision.masters.invest as inv
+    p = {"symbol": "PLTR", "name": "Palantir Technologies Inc (Class A)"}
+    assert inv.about("Palantir wins army contract", p) and inv.about("Why PLTR jumped today", p)
+    assert not inv.about("Lori Trahan Stock Trades and Disclosures", p) and not inv.about("Tech technologies rally", p)
+
+    class Model:
+        async def json(self, prompt, **kw):
+            assert "never an order" in prompt and kw["tier"] == "local"
+            return [{"idea": "PLTR rose on a contract win; holding is one option.", "why": "contract headline"}, {"nope": 1}]
+
+    class Slow:
+        async def json(self, prompt, **kw):
+            await asyncio.sleep(5)
+
+    pf = {"gainers": [{"symbol": "PLTR", "day_pct": 5.2, "weight": 25.0, "pnl_pct": -0.8, "news": []}], "losers": []}
+    ideas, by = asyncio.run(inv.DailyPnLReporter().ideas({"llm": Model()}, pf))
+    assert by == "model" and len(ideas) == 1 and ideas[0]["why"] == "contract headline"
+    ideas, by = asyncio.run(inv.DailyPnLReporter(ideas_timeout=0.05).ideas({"llm": Slow(), "flags": ["X is 60% of portfolio"]}, pf))
+    assert by == "rules" and "X is 60%" in ideas[0]["idea"]
 
 
 def test_invest_partial_setup_never_blocks(mocked, monkeypatch, tmp_path):

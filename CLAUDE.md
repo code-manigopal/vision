@@ -143,6 +143,9 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
 - Music: `dashboard/audio/inspired.mp3` during the boot roll call, fading into `roadside.mp3` as a quiet loop
   that ducks while VISION speaks or listens. Switch in the voice menu (`vision-music` in localStorage).
 - Power button: confirmation → `/api/shutdown` → the roll call in reverse → standby screen; "Power on" calls `/api/boot`.
+- Chronograph look (Mani's choice, 2026-10-12): one CSS block at the end of the `<style>` in Main.dc.html restyles the HUD
+  (still tick-mark dial round the emblem, one thin red arc, bracket-corner panels, segmented bars, diamond status marks,
+  underline tabs, no glow). Delete that block to get the earlier look back.
 - Design system: palette #FBCA03 gold, #B97D10 bronze, #AA0505 red, #6A0C0B dark red, #67C7EB blue
   (sparingly), bg #07080A. Fonts: **Michroma** headings, **Pixelywave** body (`dashboard/fonts/pixelywave.otf`, freeware non-commercial, kept out of git), **JetBrains Mono** numbers.
   Rounded corners 8–14 px. Subtle starfield background. No scrollbars (lists fit or page themselves).
@@ -153,6 +156,11 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
 - Python backend, no Docker (RAM on 16 GB M1); SQLite; LM Studio for local models.
 - Telegram via long polling (no open ports); bot talks only to TELEGRAM_CHAT_ID; briefs 06:00 and 18:00.
 - Investments is read-only; rebalancing intentionally removed. Wealthsimple via CSV (no official API).
+  The report (Daily P&L Reporter) carries, beside the day's P&L: `overall` (worth against cost, for holdings whose broker gives
+  a cost: Zerodha/Fyers `cost`, Wealthsimple `book_cad`; as % on cost and as % of the portfolio) and `overall_ports` (the same broker by broker, each in its own currency, then the CAD total), `gainers` / `losers` (the day's
+  top 3 each, with share of portfolio and the Market Watcher's news on them) and `ideas` (up to 3 options to weigh, from the
+  local model, else from plain rules in `rule_ideas`; `ideas_by` says which). Ideas are wording only, never orders; nothing trades.
+  The briefing deck shows them as cards (Top gainers, Top losers, What you could do).
 - Zerodha via hosted Kite MCP (read-only); Fyers via API v3 with daily login (PIN refresh optional).
 - Job Hunt: **never touch LinkedIn or Indeed** (not even alert emails). Sources: Job Bank alert emails,
   Adzuna, Greenhouse/Lever/Ashby boards. Never auto-applies; never invents resume content.
