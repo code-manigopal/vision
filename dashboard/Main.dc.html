@@ -1801,6 +1801,7 @@ class Component extends DCLogic {
   deckSpeak() {
     const tok = this.deckTok = (this.deckTok || 0) + 1, c = (this.deck || [])[this.deckIdx];
     if (!c) return;
+    const nx = this.deck[this.deckIdx + 1]; if (nx) this.ttsAhead(nx.say);   // no wait when the next card comes up
     this.speak(c.say, () => {
       if (tok !== this.deckTok || !this.state.deckTalk || !Component.DECK.test(this.state.mode)) return;
       if (this.deckIdx < this.deck.length - 1) { this.deckIdx += 1; this.setState({ deckI: this.deckIdx }); setTimeout(() => { if (tok === this.deckTok) this.deckSpeak(); }, 500); }
@@ -1920,6 +1921,21 @@ class Component extends DCLogic {
       this.setState({ kVoices: j.voices, kVoice: j.voices.some((v) => v.id === saved) ? saved : j.current });
     } catch (e) {}
   }
+  // The voice for a line is made once and kept briefly, so the next card's can be made while this one is still being spoken.
+  ttsFetch(text) {
+    const key = (this.state.kVoice || '') + '|' + text, c = this.ttsCache || (this.ttsCache = new Map());
+    if (!c.has(key)) {
+      c.set(key, fetch('/api/tts', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text, voice: this.state.kVoice || undefined }) })
+        .then((r) => { if (!r.ok) throw new Error('tts ' + r.status); return r.arrayBuffer(); })
+        .catch((e) => { c.delete(key); throw e; }));
+      if (c.size > 6) c.delete(c.keys().next().value);
+    }
+    return c.get(key).then((b) => b.slice(0));   // a copy: decoding empties the buffer it is given
+  }
+  ttsAhead(text) {
+    const V = this.state.liveUp && this.state.live && this.state.live.voice;
+    if (text && V && V.tts && !this.ttsFailed) this.ttsFetch(text).catch(() => {});
+  }
   async speakLocal(text, after) {
     // Kokoro/Piper/macOS on the Mac mini; the rings follow the real audio loudness
     clearTimeout(this.speakTimer);
@@ -1927,10 +1943,9 @@ class Component extends DCLogic {
     const done = () => { this.setState({ speaking: false }); if (after) after(); };
     try {
       if (this.audioSrc) { try { this.audioSrc.stop(); } catch (e) {} }
-      const r = await fetch('/api/tts', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text, voice: this.state.kVoice || undefined }) });
-      if (!r.ok) throw new Error('tts ' + r.status);
+      const wav = await this.ttsFetch(text);
       const ac = this.audioCtx || (this.audioCtx = new (window.AudioContext || window.webkitAudioContext)());
-      const buf = await ac.decodeAudioData(await r.arrayBuffer());
+      const buf = await ac.decodeAudioData(wav);
       const src = ac.createBufferSource(), an = ac.createAnalyser();
       an.fftSize = 512; src.buffer = buf; src.connect(an); an.connect(ac.destination);
       const data = new Uint8Array(an.fftSize);
@@ -2573,6 +2588,10 @@ class Component extends DCLogic {
       let line = line0;
       const w = data[m].agents.some((x) => x[1] === 'wait') && m !== Component.HOLD;
       line = (s.live && s.live.reports && s.live.reports[m]) || (bLive && !(m === 'traffic' && s.traffic) ? 'no report yet' : line);
+      // Investments has its own cards just before this one: here only what they don't say (a login or CSV it waits on)
+      if (m === 'invest' && RD.invest && RD.invest.ports && RD.invest.ports.length) { const wt = /waiting on: [^·]+/.exec(line); line = 'In the portfolio cards' + (wt ? ' · ' + wt[0].trim() : ''); }
+      // one short line per desk, so all eleven fit the card and none is read out at length
+      line = line.split('; ')[0]; if (line.length > 96) line = line.slice(0, 96).replace(/[\s·,]+\S*$/, '') + '…';
       return { name, line, color: m === Component.HOLD ? '#6E6654' : w ? '#FF8A73' : '#C9C0AC', border: w ? '#6A0C0B' : '#262A33' };
     });
     const spokenMasters = 'Email: 24 new in the last day, 3 need your attention, 2 replies drafted. Calendar: ' + calSpoken + ' Trading: the final call is waiting for your approval. Investments: portfolio up 43 dollars yesterday. Web Designer: a pitch is ready. Jobs: 12 new postings. ';
