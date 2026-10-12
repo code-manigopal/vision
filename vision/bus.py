@@ -23,6 +23,7 @@ class EventBus:
                                       "approvals": [], "telegram": {"connected": False, "reason": "not started"},
                                       "report_data": {}, "notices": {}, "power": {"on": True}}
         self.log: deque[dict] = deque(maxlen=50)
+        self._closed: dict[str, tuple[str, float]] = {}   # notices Mani closed: key -> (its text, when)
 
     def subscribe(self) -> asyncio.Queue:
         q: asyncio.Queue = asyncio.Queue(maxsize=500)
@@ -47,12 +48,29 @@ class EventBus:
         """Something only you can do (log in, drop a CSV). Shown on the dashboard, sent once to Telegram."""
         if self.state["notices"].get(key, {}).get("text") == text:
             return
+        closed = self._closed.get(key)
+        if closed and closed[0] == text and time.time() - closed[1] < self.CLOSED_FOR:
+            return   # he closed exactly this one: it stays away for a day, or until it has something new to say
         self.publish({"type": "notice", "key": key, "text": text, "url": url, "t": time.strftime("%H:%M")})
         self.say(f"Action needed · {text}")
 
     def clear_notice(self, key: str) -> None:
+        self._closed.pop(key, None)   # the matter is settled, so the next time it comes up it shows again
         if key in self.state["notices"]:
             self.publish({"type": "notice_clear", "key": key})
+
+    CLOSED_FOR = 24 * 3600
+
+    def dismiss_notice(self, key: str) -> bool:
+        """Mani's Close button: take a notice off the dashboard without doing what it asks. Agents raise their notices
+        again on every run, so the same text is held back for a day; a changed text, or the matter being settled and
+        coming up again, shows as usual. Kept in memory only: a restart brings open matters back."""
+        n = self.state["notices"].get(key)
+        if not n:
+            return False
+        self._closed[key] = (n.get("text") or "", time.time())
+        self.publish({"type": "notice_clear", "key": key})
+        return True
 
     def say(self, msg: str) -> None:
         self.publish({"type": "log", "t": time.strftime("%H:%M"), "msg": msg})

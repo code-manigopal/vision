@@ -38,6 +38,7 @@ def short(sym: str) -> str:
 
 
 MOVERS = 3   # top gainers and top losers shown
+MIN_WEIGHT = 1.0   # % of the portfolio a holding needs to be listed as a mover
 GENERIC = {"class", "corp", "corporation", "company", "limited", "group", "holdings", "technologies", "trust", "fund", "index",
            "shares", "stock", "common", "international", "global", "systems", "industries"}
 
@@ -47,9 +48,19 @@ def telling(p: dict) -> str | None:
     return next((w for w in re.findall(r"[A-Za-z]+", p["name"]) if len(w) > 3 and w.lower() not in GENERIC), None)
 
 
+JUNK_TITLE = re.compile(r"share price|stock price|quote (&|and) history|price prediction", re.I)   # quote pages and guesses, not news
+
+
 def about(title: str, p: dict) -> bool:
-    """A headline counts for a holding only if it names it: its ticker, or the first telling word of its name."""
-    words = [p["symbol"].lower()] + ([telling(p).lower()] if telling(p) else [])
+    """A headline counts for a holding only if it names it: its ticker, or the first two telling words of its name
+    ("Constellation Software", so a story about Constellation Energy does not count)."""
+    t = title.lower()
+    if JUNK_TITLE.search(t):
+        return False
+    name = [w.lower() for w in re.findall(r"[A-Za-z]+", p["name"]) if len(w) > 3 and w.lower() not in GENERIC][:2]
+    if name and all(re.search(rf"\b{re.escape(w)}\b", t) for w in name):
+        return True
+    words = [p["symbol"].lower()]
     return any(re.search(rf"\b{re.escape(w)}\b", title.lower()) for w in words)
 
 
@@ -209,7 +220,9 @@ class PortfolioAggregator(SubAgent):
             a_cost, a_pnl = sum(p["cost_cad"] for p in mine), sum(p["pnl_cad"] for p in mine)
             a["overall"] = {"pnl": a_pnl / (fx.get("INR") or 1.0 if a["ccy"] == "INR" else 1.0), "pnl_cad": a_pnl,
                             "pnl_pct": a_pnl / a_cost * 100} if a_cost else None
-        moved = sorted((p for p in positions if p["day_pct"]), key=lambda p: -p["day_pct"])
+        # movers that matter: a holding under 1% of the portfolio can jump without changing anything
+        big = [p for p in positions if p["day_pct"] and p["weight"] >= MIN_WEIGHT]
+        moved = sorted(big or [p for p in positions if p["day_pct"]], key=lambda p: -p["day_pct"])
         ctx["portfolio"] = {"accounts": out, "total_cad": total, "day_cad": day,
                             "day_pct": day / (total - day) * 100 if total - day else None, "fx": fx,
                             "positions": positions,
@@ -296,7 +309,7 @@ class MarketWatcher(SubAgent):
                 items = await news.gather(f'"{telling(p) or p["symbol"]}" {"price" if p["crypto"] else "stock"}', "IN" if p["india"] else "US", max_age_hours=24, limit=8)
             except Exception:
                 items = []
-            items = [i for i in items if about(i["title"], p) and "Quote & History" not in i["title"]][:2]   # a search also returns stories that only sit near the name
+            items = [i for i in items if about(i["title"], p)][:2]   # a search also returns stories that only sit near the name
             p["news"] = [{"title": i["title"], "source": i["source"], "link": i["link"]} for i in items]
             stories += [{"symbol": p["symbol"], **i} for i in items]
         return AgentResult("done", f"{len(stories)} STORIES", stories[0]["title"] if stories else "no news on your movers", {"stories": stories})

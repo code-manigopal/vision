@@ -179,6 +179,9 @@ def test_invest_news_must_name_the_holding_and_model_ideas():
     p = {"symbol": "PLTR", "name": "Palantir Technologies Inc (Class A)"}
     assert inv.about("Palantir wins army contract", p) and inv.about("Why PLTR jumped today", p)
     assert not inv.about("Lori Trahan Stock Trades and Disclosures", p) and not inv.about("Tech technologies rally", p)
+    assert not inv.about("Palantir (PLTR) Share Price, NYSE", p) and not inv.about("PLTR Price Prediction for October", p)
+    csu = {"symbol": "CSU", "name": "Constellation Software Inc"}
+    assert inv.about("Can Constellation Software keep thriving?", csu) and not inv.about("Constellation Energy stock loses 1.33 percent", csu)
 
     class Model:
         async def json(self, prompt, **kw):

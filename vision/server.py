@@ -408,6 +408,13 @@ def create_app(*, boot_on_start: bool = True, schedules: bool = True, telegram_o
             app.state.bus.clear_notice(key)
         return _visa_list()
 
+    @app.post("/api/notices/{key:path}/dismiss")
+    async def notice_dismiss(key: str):
+        """The Close button on a notice: off the dashboard for a day unless its text changes."""
+        if not app.state.bus.dismiss_notice(key):
+            raise HTTPException(404, "No such notice")
+        return {"ok": True}
+
     @app.get("/api/desk/{master_id}")
     async def desk_view(master_id: str):
         out = desk.build(app.state.store, master_id)

@@ -95,6 +95,7 @@ Tests: mock HTTP with `httpx.MockTransport`; use `FakeLLM` from tests/test_phase
 ### API
 `GET /api/state` · `POST /api/boot` · `POST /api/shutdown` (standby) · `POST /api/masters/{id}/run` · `GET /api/brief` · `POST /api/brief/send`
 · `GET/POST /api/approvals` · `POST /api/approvals/{id}/{approved|rejected}` · `POST /api/ask {text, session}`
+· `POST /api/notices/{key}/dismiss` (the Close button: that notice stays away for a day unless its text changes; in memory only)
 · `GET /api/issues` · `POST /api/issues/explain {master, agent}` → `{text, source}` · `GET /api/approvals/{id}/email` (full body + attachments) · `GET /api/approvals/{id}/attachments/{att}` (streamed, never stored)
 · `GET /api/desk/{master}` (read-only pipeline: stages + items + artifacts) · `GET /api/files/{path}` (only `data/sites`, `data/applications`)
 · `GET/POST /api/visa/accounts`, `POST /api/visa/accounts/{id}` (`{cities, booked, password?}` or `{action: signin|pause|resume|check|forget}`), `DELETE /api/visa/accounts/{id}` (a password is never returned; a request from another origin is refused)
@@ -146,6 +147,11 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
 - Chronograph look (Mani's choice, 2026-10-12): one CSS block at the end of the `<style>` in Main.dc.html restyles the HUD
   (still tick-mark dial round the emblem, one thin red arc, bracket-corner panels, segmented bars, diamond status marks,
   underline tabs, no glow). Delete that block to get the earlier look back.
+- Ambient layout (Mani's choice, 2026-10-12): left = Instruments in one row, then Master Agents; clicking a master opens its
+  sub-agents (two columns, name + status diamond, status word on hover) and its Desk / Agent graph buttons right under it
+  (`accOpen`, `ms.open`, `.acc`); a second click folds them. Right = Needs Approval (each notice has Close) then the Activity
+  Log (14 lines). Bottom = the 24h timeline alone. The trust badge and agent count show on the selected master only; the
+  "Agent graph" side tab is gone (the button does it).
 - Design system: palette #FBCA03 gold, #B97D10 bronze, #AA0505 red, #6A0C0B dark red, #67C7EB blue
   (sparingly), bg #07080A. Fonts: **Michroma** headings, **Pixelywave** body (`dashboard/fonts/pixelywave.otf`, freeware non-commercial, kept out of git), **JetBrains Mono** numbers.
   Rounded corners 8–14 px. Subtle starfield background. No scrollbars (lists fit or page themselves).

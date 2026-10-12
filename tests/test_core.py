@@ -228,3 +228,21 @@ def test_pending_approvals_survive_a_restart(tmp_path):
     orch = Orchestrator(cfg, [m for m in build_masters(cfg) if m.id == "web"], EventBus(), store)
     orch.seed_state()
     assert [a["id"] for a in orch.bus.snapshot()["state"]["approvals"]] == [waiting["id"]]
+
+
+def test_notice_can_be_closed_for_a_day():
+    from vision.bus import EventBus
+    bus = EventBus()
+    bus.notice("wealthsimple", "CSV is 11 days old")
+    assert bus.dismiss_notice("wealthsimple") and "wealthsimple" not in bus.state["notices"]
+    bus.notice("wealthsimple", "CSV is 11 days old")                  # the agent raises it again on its next run: stays closed
+    assert "wealthsimple" not in bus.state["notices"]
+    bus.notice("wealthsimple", "CSV is 12 days old")                  # something new to say: shows
+    assert bus.state["notices"]["wealthsimple"]["text"] == "CSV is 12 days old"
+    assert bus.dismiss_notice("wealthsimple") and not bus.dismiss_notice("nothing-here")
+    bus.clear_notice("wealthsimple")                                  # settled; when it comes up again it shows
+    bus.notice("wealthsimple", "CSV is 12 days old")
+    assert "wealthsimple" in bus.state["notices"]
+    bus._closed["kite"] = ("Log in", 0.0)                             # closed more than a day ago
+    bus.notice("kite", "Log in")
+    assert "kite" in bus.state["notices"]
