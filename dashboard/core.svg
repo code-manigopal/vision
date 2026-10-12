@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1254 1254" width="1254" height="1254" role="img" aria-label="VISION emblem">
+  <!-- VISION core emblem, drawn as vectors on the frame of core.webp (1254 x 1254) so it drops into the same place. -->
+  <defs>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="16" result="b1"/>
+      <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="b2"/>
+      <feMerge><feMergeNode in="b1"/><feMergeNode in="b1"/><feMergeNode in="b2"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="22"/></filter>
+    <radialGradient id="heart" cx="50%" cy="38%" r="60%">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="0.22" stop-color="#FFF4D6"/>
+      <stop offset="0.6" stop-color="#FFDD1A"/>
+      <stop offset="1" stop-color="#FFC400" stop-opacity="0.9"/>
+    </radialGradient>
+    <linearGradient id="glass" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FBCA03" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#FBCA03" stop-opacity="0.03"/>
+    </linearGradient>
+    <linearGradient id="glassIn" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FBCA03" stop-opacity="0.34"/>
+      <stop offset="1" stop-color="#FBCA03" stop-opacity="0.08"/>
+    </linearGradient>
+  </defs>
+
+  <!-- dark body behind the glass -->
+  <path d="M352 338 H902 L962 392 L972 470 L668 928 H586 L282 470 L292 392 Z" fill="#030303" opacity="0.9"/>
+
+  <!-- glass faces -->
+  <path d="M305 395 H949 L627 905 Z" fill="url(#glass)"/>
+  <path d="M478 497 H776 L627 748 Z" fill="url(#glassIn)"/>
+  <!-- facets: the three panels between the outer and inner triangles catch the light differently -->
+  <path d="M305 395 H949 L776 497 H478 Z" fill="#FBCA03" opacity="0.07"/>
+  <path d="M305 395 L478 497 L627 748 L627 905 Z" fill="#FBCA03" opacity="0.04"/>
+
+  <!-- frame brackets -->
+  <g fill="none" stroke="#FBCA03" stroke-width="4" stroke-linecap="square" stroke-linejoin="miter" opacity="0.7" filter="url(#glow)">
+    <path d="M328 366 L354 342 H900 L926 366"/>
+    <path d="M292 432 L268 466 L290 506"/>
+    <path d="M962 432 L986 466 L964 506"/>
+    <path d="M322 548 L444 762" stroke-dasharray="46 20"/>
+    <path d="M932 548 L810 762" stroke-dasharray="46 20"/>
+    <path d="M456 788 L498 830 H598"/>
+    <path d="M798 788 L756 830 H656"/>
+  </g>
+
+  <!-- outer triangle: a bright tube with a pale core -->
+  <g fill="none" stroke-linejoin="round" stroke-linecap="round" filter="url(#glow)">
+    <path d="M305 395 H949 L627 905 Z" stroke="#FFD400" stroke-width="12"/>
+    <path d="M305 395 H949 L627 905 Z" stroke="#FFF29A" stroke-width="3.5"/>
+    <!-- struts from the corners to the inner triangle, and the spine -->
+    <path d="M305 395 L478 497 M949 395 L776 497 M627 905 V748 M627 395 V748" stroke="#FFD400" stroke-width="8"/>
+    <path d="M305 395 L478 497 M949 395 L776 497 M627 905 V748 M627 395 V748" stroke="#FFF29A" stroke-width="2.5"/>
+    <!-- inner triangle -->
+    <path d="M478 497 H776 L627 748 Z" stroke="#FFD400" stroke-width="11"/>
+    <path d="M478 497 H776 L627 748 Z" stroke="#FFF29A" stroke-width="3"/>
+    <!-- short bright bars on the two long sides -->
+    <path d="M396 562 L462 676 M858 562 L792 676" stroke="#FFE14A" stroke-width="12"/>
+  </g>
+
+  <!-- heart -->
+  <circle cx="627" cy="575" r="120" fill="#FFD400" opacity="0.6" filter="url(#soft)"/>
+  <path d="M560 540 H694 L627 652 Z" fill="url(#heart)" stroke="#FFF4D6" stroke-width="3" stroke-linejoin="round" filter="url(#glow)"/>
+  <circle cx="627" cy="570" r="24" fill="#FFFFFF" filter="url(#glow)"/>
+
+  <!-- corner nodes -->
+  <g fill="#FFF29A" stroke="#FFD400" stroke-width="5" filter="url(#glow)">
+    <path d="M305 377 L321 386 V404 L305 413 L289 404 V386 Z"/>
+    <path d="M949 377 L965 386 V404 L949 413 L933 404 V386 Z"/>
+    <path d="M627 887 L643 896 V914 L627 923 L611 914 V896 Z"/>
+  </g>
+</svg>
