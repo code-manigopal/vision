@@ -330,6 +330,57 @@ def test_weather_grid_for_the_globe(web_mock):
     weather._grid.update(at=0.0, points=[])
 
 
+def test_job_free_sources_and_resume_choice(tmp_path, monkeypatch):
+    import time as _t
+    import vision.masters.jobs as jobs
+    feed = ('<feed><entry><title type="html"><![CDATA[software developer]]></title>'
+            '<link rel="alternate" type="text/html" href="https://www.jobbank.gc.ca/jobsearch/jobposting/501"/>'
+            '<summary type="html"><![CDATA[<strong>Location:</strong> Windsor (ON)<br /><strong>Employer:</strong> Acme<br /><strong>Salary:</strong> $45.00 hourly]]></summary></entry></feed>')
+
+    def route(req):
+        h, p = req.url.host, req.url.path
+        if h == "www.jobbank.gc.ca":
+            return httpx.Response(200, text=feed if "feed" in p else "<html><body>Python SQL role</body></html>")
+        if h == "himalayas.app":
+            return httpx.Response(200, json={"jobs": [
+                {"title": "AI Engineer", "companyName": "Beta", "locationRestrictions": ["Canada"], "applicationLink": "https://h/1", "description": "<p>LLM agents</p>", "pubDate": str(int(_t.time()))},
+                {"title": "Old one", "companyName": "Beta", "applicationLink": "https://h/2", "pubDate": "1000"}]})
+        if h == "jobicy.com":
+            return httpx.Response(200, json={"jobs": [{"id": 7, "jobTitle": "Data Analyst", "companyName": "Gamma", "jobGeo": "Canada", "url": "https://j/7", "jobExcerpt": "SQL",
+                                                       "pubDate": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()}]})
+        if h == "apply.workable.com":
+            return httpx.Response(200, json={"jobs": [{"shortcode": "W1", "title": "Software Engineer", "city": "Toronto", "country": "Canada", "telecommuting": True, "url": "https://w/1"}]})
+        if h == "api.smartrecruiters.com":
+            return httpx.Response(200, json={"content": [{"id": "S1", "name": "Business Analyst", "location": {"city": "Windsor", "region": "ON", "remote": False}}]})
+        return httpx.Response(500)                                            # a source that is down gives nothing and stops nobody
+
+    async def go():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(route)) as c:
+            return (await jobs.jobbank_feed(c, ["Software Engineer", "Data Analyst"]), await jobs.himalayas(c, ["AI Engineer"], 3), await jobs.jobicy(c, 3),
+                    await jobs.company_boards(c, [{"name": "W", "ats": "workable", "slug": "w"}, {"name": "S", "ats": "smartrecruiters", "slug": "s"},
+                                                  {"name": "Down", "ats": "greenhouse", "slug": "x"}]))
+    jb, hi, ji, boards = asyncio.run(go())
+    assert len(jb) == 1 and jb[0]["title"] == "Software Developer" and jb[0]["company"] == "Acme" and jb[0]["location"] == "Windsor (ON)" and "Python" in jb[0]["description"]
+    assert [j["title"] for j in hi] == ["AI Engineer"] and hi[0]["location"] == "Remote · Canada" and hi[0]["description"] == "LLM agents"
+    assert ji[0]["title"] == "Data Analyst" and ji[0]["location"] == "Remote · Canada"
+    assert [(j["title"], j["location"]) for j in boards] == [("Software Engineer", "Toronto, Canada · Remote"), ("Business Analyst", "Windsor, ON")]
+
+    assert [jobs.resume_for(x) for x in ("AI Automation Engineer", "Senior Software Engineer", "Business Analyst", "Data Analytics Engineer", "Maintenance Engineer")] \
+        == ["ai", "software", "analyst", "analyst", "software"]
+    # Ontario only: a place in Ontario, or a remote job open to Canada when remote_ok
+    J = lambda loc, desc="": {"location": loc, "description": desc}
+    assert all(jobs.in_ontario(J(x)) for x in ("Toronto, ON", "Windsor (ON)", "Ottawa, Ontario, Canada", "Remote · Canada", "Remote · LATAM,  Canada,  USA", "Toronto, Canada · Remote"))
+    assert not any(jobs.in_ontario(J(x)) for x in ("Remote · anywhere", "Remote · United States", "Vancouver, BC", "London, United Kingdom", "San Francisco, CA"))
+    assert not jobs.in_ontario(J("Remote · Canada"), remote_ok=False) and jobs.in_ontario(J("Toronto, ON · Remote"), remote_ok=False)
+    assert jobs.in_ontario(J("", "Data Analyst Leamington (ON) full time")) and not jobs.in_ontario(J("", "Data Analyst Calgary (AB)"))
+    monkeypatch.setattr(jobs, "ROOT", tmp_path)
+    d = tmp_path / "vault" / "resume"
+    d.mkdir(parents=True)
+    (d / "master.md").write_text("MASTER")
+    (d / "ai.md").write_text("AI")
+    assert jobs._master_resume("AI Developer") == "AI" and jobs._master_resume("Data Analyst") == "MASTER"
+
+
 def test_job_hunt_pipeline(tmp_path, web_mock, monkeypatch):
     import vision.masters.jobs as jobs
     monkeypatch.setenv("ADZUNA_APP_ID", "a")

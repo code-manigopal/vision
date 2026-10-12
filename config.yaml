@@ -107,13 +107,18 @@ masters:
     mode: live
     cycle_minutes: 360
     options:
-      target_titles: ["Data Analyst", "Data Analytics Engineer", "BI Developer", "Software Engineering Manager"]
-      skills: ["Python", "SQL", "Power BI", "Java", "Kubernetes", "CI/CD"]
+      target_titles: ["Data Analyst", "Business Analyst", "Data Analytics Engineer", "Software Engineer", "Senior Software Engineer",
+                      "AI Engineer", "AI Automation Engineer", "AI Developer"]
+      skills: ["Python", "SQL", "Java", "Spring", "Power BI", "Excel", "Docker", "Kubernetes", "CI/CD", "Jenkins", "Flask", "LLM", "AI agent"]
+      free_sources: [jobbank, himalayas, jobicy]   # public feeds with no key; remove one to switch it off
+      adzuna_titles: 0                    # Adzuna gives 25 test calls, then charges £8 a month: 0 = don't ask it; 4 = the first four titles each run
       locations: ["Windsor, ON", "Leamington, ON", "Toronto, ON", "Remote"]
       seniority: ["mid", "senior", "lead"]
       exclude: ["unpaid", "commission only"]
       adzuna_where: Ontario
-      max_days_old: 3
+      max_days_old: 14                    # postings from the last 14 days
+      region: Ontario                     # only jobs in Ontario; anything else is dropped before scoring
+      remote_ok: true                     # also keep remote jobs that say they are open to Canada (workable from Ontario); false = on site or hybrid in Ontario only
       min_match: 70
       max_packages_per_cycle: 2
       target_companies: []   # e.g. - { name: Shopify, ats: greenhouse, slug: shopify }   (ats: greenhouse | lever | ashby)

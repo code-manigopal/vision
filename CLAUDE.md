@@ -164,6 +164,14 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
 - Zerodha via hosted Kite MCP (read-only); Fyers via API v3 with daily login (PIN refresh optional).
 - Job Hunt: **never touch LinkedIn or Indeed** (not even alert emails). Sources: Job Bank alert emails,
   Adzuna, Greenhouse/Lever/Ashby boards. Never auto-applies; never invents resume content.
+  Adzuna is no longer free (25 test calls, then £8 a month, seen 2026-10-12): `adzuna_titles: 0` keeps it unused. Free feeds
+  with no key (`free_sources`): Job Bank's search feed (Ontario, only the last couple of days, its own job names), Himalayas
+  and Jobicy (remote jobs open to Canada); company pages also on Workable and SmartRecruiters (titles only, no description).
+  **Mani's rule (2026-10-12): Ontario only, postings from the last 14 days** (`region: Ontario`, `in_ontario`; `remote_ok: true` also keeps
+  remote jobs that say they are open to Canada). The Muse was tried and dropped (old postings, loose location filter). Three resumes in `vault/resume/` (git-ignored):
+  `analyst.md`, `software.md`, `ai.md`, converted word for word from Mani's .docx files and picked by the posting's title
+  (`resume_for`); `master.md` (a copy of software) is the fallback. The AI resume was built from the software one
+  (`Kanaga_Manikandan_Gopal_AI_Engineer.docx`, same styles) with a VISION project section; re-convert after he edits a .docx.
 - Web Designer images: free stock (Pexels, Pixabay) then Openverse, downloaded as .webp and credited on the page; never
   Google Maps photos or AI-generated images. Unsplash is out (its API forbids rehosting). Pitches need approval.
 - Web Designer keeps a stack of 5 demos in play (`options.stack`): being built, live, or awaiting a decision.
@@ -346,7 +354,7 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
 | News + Weather | live | nothing |
 | Investments | live | Kite login link, FYERS_APP_ID/SECRET (+PIN), Wealthsimple CSV in inbox/wealthsimple |
 | Email / Calendar | live | GOOGLE_CLIENT_ID/SECRET and/or MS_CLIENT_ID/SECRET, accounts in config, sign-in |
-| Job Hunt | live | ADZUNA keys, vault/resume/master.md, target titles/companies |
+| Job Hunt | live | resumes in vault/resume (done), target companies (optional); Adzuna is paid and switched off |
 | Web Designer | live | GOOGLE_MAPS_API_KEY, CLOUDFLARE_API_TOKEN + ACCOUNT_ID, optional PEXELS_API_KEY / PIXABAY_API_KEY |
 | World Watch | live | optional OPENSKY creds |
 | Trading Desk | live | OANDA practice token + account |

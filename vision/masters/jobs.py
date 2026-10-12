@@ -3,8 +3,12 @@
 
 Sources (no LinkedIn, no Indeed):
 - Job Bank Canada alert emails (set up alerts at jobbank.gc.ca; the Email Manager reads them)
-- Adzuna API (ADZUNA_APP_ID / ADZUNA_APP_KEY, free)
-- Company career pages on Greenhouse, Lever and Ashby (public job feeds), listed in config
+- Adzuna API (ADZUNA_APP_ID / ADZUNA_APP_KEY; 25 test calls free, then £8 a month as of 2026-10)
+- Company career pages on Greenhouse, Lever, Ashby, Workable and SmartRecruiters (public job feeds), listed in config
+- Free public feeds, no key (`free_sources`): Job Bank's own search feed (Ontario, the last couple of days), Himalayas and
+  Jobicy (remote jobs open to Canada). Any of them may change or close; each fails on its own.
+
+Resumes: vault/resume/analyst.md, software.md and ai.md, picked by the posting's title (`resume_for`); master.md is the fallback.
 
 VISION never applies for you. It prepares the package; you submit it from the posting's page.
 Your master resume lives at vault/resume/master.md; tailored versions never invent experience.
@@ -67,11 +71,87 @@ async def company_boards(c: httpx.AsyncClient, companies: list[dict]) -> list[di
             elif ats == "ashby":
                 r = await c.get(f"https://api.ashbyhq.com/posting-api/job-board/{slug}")
                 jobs = [(j["id"], j["title"], j.get("location", ""), j["jobUrl"], j.get("descriptionPlain", "")) for j in r.json().get("jobs", [])]
+            elif ats == "workable":   # titles and places only: this feed carries no description
+                r = await c.get(f"https://apply.workable.com/api/v1/widget/accounts/{slug}")
+                jobs = [(j["shortcode"], j["title"], ", ".join(x for x in (j.get("city"), j.get("state"), j.get("country")) if x)
+                         + (" · Remote" if str(j.get("telecommuting")).lower() == "true" else ""), j["url"], "") for j in r.json().get("jobs", [])]
+            elif ats == "smartrecruiters":
+                r = await c.get(f"https://api.smartrecruiters.com/v1/companies/{slug}/postings", params={"limit": 100, "country": "ca"})
+                jobs = [(j["id"], j["name"], ", ".join(x for x in ((j.get("location") or {}).get("city"), (j.get("location") or {}).get("region")) if x)
+                         + (" · Remote" if (j.get("location") or {}).get("remote") else ""),
+                         f"https://jobs.smartrecruiters.com/{slug}/{j['id']}", "") for j in r.json().get("content", [])]
             else:
                 continue
         except Exception:
             continue
         out += [{"id": jid(ats, str(i)), "source": name, "title": t, "company": name, "location": loc, "url": u, "description": d[:6000]} for i, t, loc, u, d in jobs]
+    return out
+
+
+async def jobbank_feed(c: httpx.AsyncClient, titles: list[str], province: str = "ON", pages: int = 12) -> list[dict]:
+    """Job Bank's search feed (Atom): the newest postings for each title in one province. It lists only the last couple of
+    days and uses Job Bank's own job names, so a search often comes back short or empty; the posting page gives the text."""
+    found: dict[str, dict] = {}
+    for t in titles:
+        try:
+            r = await c.get("https://www.jobbank.gc.ca/jobsearch/feed/jobSearchRSSfeed", params={"searchstring": t, "fprov": province, "sort": "D"})
+        except Exception:
+            continue
+        for e in re.findall(r"<entry>(.*?)</entry>", r.text if r.status_code == 200 else "", re.S):
+            url = re.search(r'href="(https://www\.jobbank\.gc\.ca/jobsearch/jobposting/\d+)', e)
+            name = re.search(r"<title[^>]*><!\[CDATA\[(.*?)\]\]>", e, re.S)
+            if not (url and name):
+                continue
+            part = lambda label: _text((re.search(label + r":</strong>(.*?)(?:<br|\]\]>)", e, re.S) or [None, ""])[1])
+            found.setdefault(url.group(1), {"id": jid("jobbank", url.group(1)), "source": "Job Bank", "title": _text(name.group(1)).title(),
+                                            "company": part("Employer"), "location": part("Location"), "url": url.group(1),
+                                            "description": "", "salary": part("Salary")})
+    for j in list(found.values())[:pages]:
+        try:
+            j["description"] = _text((await c.get(j["url"])).text)[:6000]
+        except Exception:
+            pass
+    return list(found.values())
+
+
+async def himalayas(c: httpx.AsyncClient, titles: list[str], days: int, country: str = "Canada") -> list[dict]:
+    """Remote jobs open to one country, searched by title."""
+    out = []
+    for t in titles:
+        try:
+            r = await c.get("https://himalayas.app/jobs/api/search", params={"q": t, "country": country, "limit": 20})
+            jobs = r.json().get("jobs", []) if r.status_code == 200 else []
+        except Exception:
+            continue
+        for j in jobs:
+            if float(j.get("pubDate") or 0) < time.time() - days * 86400:
+                continue
+            url = j.get("applicationLink") or j.get("guid") or ""
+            where = ", ".join(j.get("locationRestrictions") or []) or "anywhere"
+            out.append({"id": jid("himalayas", url), "source": "Himalayas", "title": j.get("title", ""), "company": j.get("companyName", ""),
+                        "location": "Remote · " + where, "url": url, "description": _text(j.get("description") or j.get("excerpt") or "")[:6000],
+                        "salary": j.get("minSalary")})
+    return out
+
+
+async def jobicy(c: httpx.AsyncClient, days: int, geo: str = "canada") -> list[dict]:
+    """The newest remote jobs open to one country (one request; the scoring sorts out which matter)."""
+    from datetime import datetime
+    try:
+        r = await c.get("https://jobicy.com/api/v2/remote-jobs", params={"count": 50, "geo": geo})
+        jobs = r.json().get("jobs", []) if r.status_code == 200 else []
+    except Exception:
+        return []
+    out = []
+    for j in jobs:
+        try:
+            if datetime.fromisoformat(j["pubDate"]).timestamp() < time.time() - days * 86400:
+                continue
+        except (KeyError, ValueError):
+            pass
+        out.append({"id": jid("jobicy", str(j.get("id"))), "source": "Jobicy", "title": j.get("jobTitle", ""), "company": j.get("companyName", ""),
+                    "location": "Remote · " + (j.get("jobGeo") or ""), "url": j.get("url", ""),
+                    "description": _text(j.get("jobDescription") or j.get("jobExcerpt") or "")[:6000]})
     return out
 
 
@@ -102,6 +182,24 @@ async def jobbank_alerts(c: httpx.AsyncClient, store, cfg) -> list[dict]:
     return out
 
 
+# Places that mean Ontario when a posting names only the city (names shared with well-known places elsewhere are left out)
+ONTARIO_CITIES = ("toronto", "windsor", "leamington", "ottawa", "mississauga", "brampton", "hamilton", "kitchener", "waterloo", "markham",
+                  "vaughan", "oakville", "burlington", "guelph", "barrie", "sudbury", "thunder bay", "oshawa", "richmond hill", "scarborough",
+                  "north york", "etobicoke", "sarnia", "st. catharines", "niagara", "kanata", "chatham-kent", "greater toronto", "gta")
+
+
+def in_ontario(job: dict, remote_ok: bool = True) -> bool:
+    """Is this job in Ontario? On site or hybrid: the place must be in Ontario. Remote: only with `remote_ok`, and only when
+    the posting says it is open to Canada or Ontario (a remote job open to "anywhere" or to other countries does not count)."""
+    loc = (job.get("location") or "").lower()
+    if not loc.strip():                                   # no place given (a Job Bank alert page): go by the top of the posting
+        loc = (job.get("description") or "")[:600].lower()
+    ontario = bool(re.search(r"\bontario\b|,\s*on\b|\(on\)", loc)) or any(c in loc for c in ONTARIO_CITIES)
+    if "remote" in loc and not ontario:
+        return remote_ok and "canada" in loc
+    return ontario
+
+
 def rule_score(job: dict, prof: dict) -> int:
     t, d = job["title"].lower(), (job["title"] + " " + job.get("description", "")).lower()
     title = 40 if any(w.lower() in t for w in prof.get("target_titles", [])) else 15 if any(w.split()[-1].lower() in t for w in prof.get("target_titles", [])) else 0
@@ -118,12 +216,19 @@ class JobScout(SubAgent):
 
     async def run(self, ctx):
         prof, store, llm = ctx["options"], ctx["store"], ctx.get("llm")
-        async with httpx.AsyncClient(timeout=25, headers=UA) as c:
-            found = (await adzuna(c, prof.get("target_titles", [])[:4], prof.get("adzuna_where", "Ontario"), int(prof.get("max_days_old", 3)))
-                     + await company_boards(c, prof.get("target_companies", [])) + await jobbank_alerts(c, store, ctx.get("cfg")))
-        if not found and not (secret("ADZUNA_APP_ID") or prof.get("target_companies")):
+        titles, days = prof.get("target_titles", []), int(prof.get("max_days_old", 3))
+        free = prof.get("free_sources", ["jobbank", "himalayas", "jobicy"])
+        async with httpx.AsyncClient(timeout=25, headers=UA, follow_redirects=True) as c:
+            found = (await adzuna(c, titles[:int(prof.get("adzuna_titles", 4))], prof.get("adzuna_where", "Ontario"), days)
+                     + await company_boards(c, prof.get("target_companies", [])) + await jobbank_alerts(c, store, ctx.get("cfg"))
+                     + (await jobbank_feed(c, titles) if "jobbank" in free else [])
+                     + (await himalayas(c, titles, days) if "himalayas" in free else [])
+                     + (await jobicy(c, days) if "jobicy" in free else []))
+        if not found and not (free or secret("ADZUNA_APP_ID") or prof.get("target_companies")):
             return AgentResult("idle", "NOT SET UP", "Job Hunt: add Adzuna keys, target companies, or Job Bank alerts")
         found = list({j["id"]: j for j in found}.values())  # same posting from two searches counts once
+        if str(prof.get("region", "")).lower() == "ontario":    # Mani's rule: Ontario only
+            found = [j for j in found if in_ontario(j, bool(prof.get("remote_ok", True)))]
         new = [j for j in found if not store.kv_has("jobs", j["id"])]
         for j in new:
             j["score"], j["why"] = rule_score(j, prof), "rules"
@@ -145,9 +250,22 @@ class JobScout(SubAgent):
                            {"matches": [{"title": j["title"], "company": j["company"], "score": j["score"]} for j in keep[:5]]})
 
 
-def _master_resume() -> str | None:
-    p = ROOT / "vault" / "resume" / "master.md"
-    return p.read_text() if p.exists() else None
+def resume_for(title: str = "") -> str:
+    """Which of the resumes suits a posting: ai, analyst or software, judged by its title."""
+    t = " " + re.sub(r"[^a-z]+", " ", title.lower()) + " "
+    if any(w in t for w in (" ai ", " ml ", " llm ", " machine learning ", " automation ", " agent", " genai ", " generative ")):
+        return "ai"
+    if any(w in t for w in (" analyst", " analytics ", " bi ", " business intelligence ", " data ", " reporting ")):
+        return "analyst"
+    return "software"
+
+
+def _master_resume(title: str = "") -> str | None:
+    d = ROOT / "vault" / "resume"
+    for p in (d / f"{resume_for(title)}.md", d / "master.md"):
+        if p.exists():
+            return p.read_text()
+    return None
 
 
 def _app_dir(job: dict) -> Path:
@@ -193,13 +311,13 @@ class ResumeTailor(SubAgent):
             try:
                 md = await llm.complete("Tailor this resume to the job. Reorder and reword to highlight relevant experience. "
                                         "Do NOT add any skill, job, degree, number or claim that isn't in the original. Keep it to one page in Markdown.\n\n"
-                                        f"JOB: {j['title']} at {j['company']}\n{j['description'][:3500]}\n\nRESUME:\n{master}", tier="cloud", max_tokens=1800)
+                                        f"JOB: {j['title']} at {j['company']}\n{j['description'][:3500]}\n\nRESUME:\n{_master_resume(j['title'])}", tier="cloud", max_tokens=1800)
             except LLMUnavailable:
                 return AgentResult("idle", "NEEDS AI", "Tailoring needs LM Studio or a cloud model")
             d = _app_dir(j)
             (d / "resume.md").write_text(md)
             _write_docx(d / "resume.docx", md)
-            j.update(status="tailored", folder=str(d))
+            j.update(status="tailored", folder=str(d), resume=resume_for(j["title"]))
             store.kv_put("jobs", j.pop("_key"), {k: v for k, v in j.items() if k != "_ts"})
         return AgentResult("done", f"{len(todo)} TAILORED", f"Tailored {len(todo)} resumes")
 
@@ -217,7 +335,7 @@ class CoverLetterWriter(SubAgent):
         for j in await_t:
             try:
                 letter = await llm.complete(f"Write a 180-word cover letter from {ctx['cfg'].vision.owner} for {j['title']} at {j['company']}. Specific, warm, "
-                                            "no clichés, only facts from the resume.\n\nJOB:\n" + j["description"][:3000] + "\n\nRESUME:\n" + master, tier="cloud", max_tokens=600)
+                                            "no clichés, only facts from the resume.\n\nJOB:\n" + j["description"][:3000] + "\n\nRESUME:\n" + (_master_resume(j["title"]) or master), tier="cloud", max_tokens=600)
             except LLMUnavailable:
                 break
             d = _app_dir(j)
@@ -283,7 +401,7 @@ class InterviewPrep(SubAgent):
             return AgentResult("idle", "NEEDS AI", "Prep needs LM Studio or a cloud model")
         for j in todo[:1]:
             notes = await llm.complete("Prepare interview notes: company snapshot, 8 likely questions, and STAR answers using only this resume.\n\n"
-                                       f"JOB: {j['title']} at {j['company']}\n{j['description'][:3000]}\n\nRESUME:\n{_master_resume() or ''}", tier="cloud", max_tokens=1800)
+                                       f"JOB: {j['title']} at {j['company']}\n{j['description'][:3000]}\n\nRESUME:\n{_master_resume(j['title']) or ''}", tier="cloud", max_tokens=1800)
             p = ROOT / "vault" / "interviews"
             p.mkdir(parents=True, exist_ok=True)
             (p / f"{re.sub(r'[^A-Za-z0-9]+', '-', j['company'])}.md").write_text(notes)
