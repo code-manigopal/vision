@@ -16,6 +16,7 @@ Your master resume lives at vault/resume/master.md; tailored versions never inve
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import re
 import time
@@ -305,21 +306,41 @@ class ResumeTailor(SubAgent):
         todo = [j for j in store.kv_list("jobs") if j.get("status") == "match"][:n]
         if not todo:
             return AgentResult("done", "UP TO DATE", "No new matches to tailor")
-        if not llm:
-            return AgentResult("idle", "NEEDS AI", "Tailoring needs LM Studio or a cloud model")
+        opts = ctx["options"]
+        tier, wait = opts.get("tailor_tier", "cloud"), float(opts.get("tailor_timeout", 150))
+        tailored = 0
         for j in todo:
-            try:
-                md = await llm.complete("Tailor this resume to the job. Reorder and reword to highlight relevant experience. "
-                                        "Do NOT add any skill, job, degree, number or claim that isn't in the original. Keep it to one page in Markdown.\n\n"
-                                        f"JOB: {j['title']} at {j['company']}\n{j['description'][:3500]}\n\nRESUME:\n{_master_resume(j['title'])}", tier="cloud", max_tokens=1800)
-            except LLMUnavailable:
-                return AgentResult("idle", "NEEDS AI", "Tailoring needs LM Studio or a cloud model")
+            # The resume for this kind of role is the package's resume as it stands. A model may reorder and reword it for the
+            # posting; if it doesn't answer in time, fails, or hands back a cut-down text, the resume goes in as Mani wrote it.
+            base = _master_resume(j["title"]) or master
+            head, body = split_contact(base)
+            md, did = base, False
+            if llm:
+                try:
+                    out = await asyncio.wait_for(llm.complete(
+                        "Tailor this resume to the job. Reorder and reword bullets to bring forward the relevant experience; keep every "
+                        "section, role, date and project. Do NOT add any skill, job, degree, number or claim that isn't in the original. "
+                        "Return the whole resume in Markdown, nothing else.\n\n"
+                        f"JOB: {j['title']} at {j['company']}\n{j['description'][:3500]}\n\nRESUME:\n{body}", tier=tier, max_tokens=3200), wait)
+                    if len(out.split()) >= 0.6 * len(body.split()):
+                        md, did = head + out.strip() + "\n", True
+                except Exception:   # no model, a timeout, a refused request: the resume as written still makes a package
+                    pass
+            tailored += did
             d = _app_dir(j)
             (d / "resume.md").write_text(md)
             _write_docx(d / "resume.docx", md)
-            j.update(status="tailored", folder=str(d), resume=resume_for(j["title"]))
+            j.update(status="tailored", folder=str(d), resume=resume_for(j["title"]), reworded=did)
             store.kv_put("jobs", j.pop("_key"), {k: v for k, v in j.items() if k != "_ts"})
-        return AgentResult("done", f"{len(todo)} TAILORED", f"Tailored {len(todo)} resumes")
+        plain = len(todo) - tailored
+        return AgentResult("done", f"{len(todo)} READY", f"{len(todo)} resumes ready: {tailored} reworded for the posting"
+                           + (f", {plain} as written (the model didn't answer in time)" if plain else ""))
+
+
+def split_contact(md: str) -> tuple[str, str]:
+    """The name and contact lines at the top of a resume, and the rest. Only the rest goes to a model; the top is put back as is."""
+    i = md.find("\n## ")
+    return (md[:i + 1], md[i + 1:]) if i > 0 else ("", md)
 
 
 class CoverLetterWriter(SubAgent):

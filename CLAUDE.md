@@ -172,6 +172,9 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   `analyst.md`, `software.md`, `ai.md`, converted word for word from Mani's .docx files and picked by the posting's title
   (`resume_for`); `master.md` (a copy of software) is the fallback. The AI resume was built from the software one
   (`Kanaga_Manikandan_Gopal_AI_Engineer.docx`, same styles) with a VISION project section; re-convert after he edits a .docx.
+  Resume Tailor never blocks the chain: the model (`tailor_tier`, `tailor_timeout`) gets the resume without its name and
+  contact lines (`split_contact`); a timeout, an error or a cut-down answer leaves the resume as written (`reworded: false`).
+  The local 8B model timed out on a full resume (2026-10-12), so **Mani chose Groq** (`tailor_tier: writer`).
 - Web Designer images: free stock (Pexels, Pixabay) then Openverse, downloaded as .webp and credited on the page; never
   Google Maps photos or AI-generated images. Unsplash is out (its API forbids rehosting). Pitches need approval.
 - Web Designer keeps a stack of 5 demos in play (`options.stack`): being built, live, or awaiting a decision.

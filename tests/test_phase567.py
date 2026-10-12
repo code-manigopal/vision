@@ -380,6 +380,37 @@ def test_job_free_sources_and_resume_choice(tmp_path, monkeypatch):
     (d / "ai.md").write_text("AI")
     assert jobs._master_resume("AI Developer") == "AI" and jobs._master_resume("Data Analyst") == "MASTER"
 
+    # Resume Tailor: the model never sees the contact lines; a model that is slow, failing or hands back a stub leaves the resume as written
+    resume = "# Mani G\n647-000 | m@x.ca\n\n## Profile Summary\n- " + "built data pipelines in Python and SQL " * 8 + "\n## Projects\n- VISION\n"
+    (d / "ai.md").write_text(resume)
+    seen = []
+
+    class Good:
+        async def complete(self, prompt, **kw):
+            seen.append((prompt, kw["tier"]))
+            return "## Profile Summary\n- " + "led Python and SQL data pipeline work " * 8 + "\n## Projects\n- VISION"
+
+    class Slow:
+        async def complete(self, prompt, **kw):
+            await asyncio.sleep(5)
+
+    class Stub:
+        async def complete(self, prompt, **kw):
+            return "Sure! Here is your resume."
+
+    def tailor(llm, **opts):
+        store = Store(tmp_path / f"{type(llm).__name__}.db")
+        store.kv_put("jobs", "j1", {"id": "j1", "title": "AI Engineer", "company": type(llm).__name__, "description": "LLM agents", "status": "match"})
+        res = asyncio.run(jobs.ResumeTailor().run({"store": store, "llm": llm, "options": opts}))
+        return res, store.kv_list("jobs")[0], (tmp_path / "data" / "applications" / f"{type(llm).__name__.lower()}-ai-engineer" / "resume.md").read_text()
+
+    res, job, md = tailor(Good(), tailor_tier="writer")
+    assert res.label == "1 READY" and job["reworded"] and job["resume"] == "ai" and md.startswith("# Mani G\n647-000 | m@x.ca") and "led Python" in md
+    assert "647-000" not in seen[0][0] and "m@x.ca" not in seen[0][0] and seen[0][1] == "writer"
+    for llm, opts in ((Slow(), {"tailor_timeout": 0.05}), (Stub(), {})):
+        res, job, md = tailor(llm, **opts)
+        assert res.status == "done" and job["status"] == "tailored" and not job["reworded"] and md == resume and "as written" in res.summary
+
 
 def test_job_hunt_pipeline(tmp_path, web_mock, monkeypatch):
     import vision.masters.jobs as jobs

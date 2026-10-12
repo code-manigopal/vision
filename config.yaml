@@ -121,6 +121,8 @@ masters:
       remote_ok: true                     # also keep remote jobs that say they are open to Canada (workable from Ontario); false = on site or hybrid in Ontario only
       min_match: 70
       max_packages_per_cycle: 2
+      tailor_tier: writer                 # who rewords the resume for a posting: cloud (Claude if set up, else LM Studio) or writer (Groq: fast; your work history leaves the Mac, your name and contact lines never do)
+      tailor_timeout: 150                 # seconds to wait for it; after that the resume goes into the package as you wrote it
       target_companies: []   # e.g. - { name: Shopify, ats: greenhouse, slug: shopify }   (ats: greenhouse | lever | ashby)
   world:
     enabled: true
