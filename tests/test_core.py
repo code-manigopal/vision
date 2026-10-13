@@ -32,7 +32,7 @@ def store(tmp_path):
 
 
 def test_catalog_matches_dashboard():
-    assert len(CATALOG["order"]) == 11
+    assert len(CATALOG["order"]) == 10
     for mid, spec in CATALOG["masters"].items():
         names = [a["name"] for a in spec["agents"]]
         staged = [n for s in spec["stages"] for n in s["agents"]]
@@ -111,11 +111,11 @@ def test_server_ws_and_api(tmp_path, monkeypatch):
         assert c.get("/").status_code == 200
         assert "x-dc" in c.get("/dashboard/Main.dc.html").text
         st = c.get("/api/state").json()
-        assert len(st["masters"]) == 11
+        assert len(st["masters"]) == 10
         with c.websocket_connect("/ws") as ws:
             snap = ws.receive_json()
             assert snap["type"] == "snapshot"
-            c.post("/api/masters/news/run")
+            c.post("/api/masters/world/run")
             kinds = {ws.receive_json()["type"] for _ in range(6)}
             assert "agent" in kinds
 
@@ -143,7 +143,7 @@ def test_standby_and_wake(monkeypatch, schedules):
             assert c.get("/api/state").json()["power"] == {"on": False}
             if schedules:
                 assert sched.state == STATE_PAUSED
-            r = c.post("/api/masters/news/run")
+            r = c.post("/api/masters/world/run")
             assert r.status_code == 409 and r.json()["detail"] == "VISION is in standby"
             assert c.post("/api/approvals/1/approved").status_code == 409
             assert c.post("/api/boot").json() == {"ok": True}
@@ -151,7 +151,7 @@ def test_standby_and_wake(monkeypatch, schedules):
             assert c.get("/api/state").json()["power"] == {"on": True}
             if schedules:
                 assert sched.state == STATE_RUNNING
-            assert c.post("/api/masters/news/run").status_code == 200
+            assert c.post("/api/masters/world/run").status_code == 200
 
 
 def test_standby_cancels_running_cycle(store):

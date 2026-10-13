@@ -11,7 +11,7 @@ The goal is the best result for the fewest usage credits and tokens.
    and ask them to return conclusions, not file dumps.
 
 VISION is Mani's personal assistant: one always-on Python service on a **Mac mini M1 (16 GB)** that runs
-**11 master agents**, each with its own sub-agents, a red/gold HUD dashboard, Telegram briefs/alerts,
+**10 master agents**, each with its own sub-agents, a red/gold HUD dashboard, Telegram briefs/alerts,
 an AI "Ask" engine (LM Studio local model + optional cloud), and optional local voice.
 Phases 1–7 are built and unit-tested with mocked services. **No real external API has been exercised yet**;
 first real runs happen on Mani's Mac.
@@ -73,7 +73,7 @@ tests/             test_core, test_telegram, test_phase34, test_phase567
 1. **One reporter per master.** Sub-agents pass work down their chain (`ctx`); only the reporter's
    `AgentResult.summary` (+ `data`) becomes the master report. Briefs use master reports only.
    Reporters: email=Summarizer, calendar=Scheduler, trading=Portfolio Manager, invest=Daily P&L Reporter,
-   news=News Summarizer, web=Proposal Drafter, jobs=Application Tracker, world=Flight Tracker,
+   web=Proposal Drafter, jobs=Application Tracker, world=News Summarizer,
    traffic=Incident Scout, visa=Slot Watcher, youtube=Confessions Everywhere Director (its crew reports to it through Analytics Manager).
 2. **Errors skip the chain**: a failing agent turns red, alerts the master log (Telegram once/30 min),
    and blocks later stages — unless the agent sets `blocking = False` (sync/data agents do).
@@ -157,7 +157,7 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
 - Design system: palette #FBCA03 gold, #B97D10 bronze, #AA0505 red, #6A0C0B dark red, #67C7EB blue
   (sparingly), bg #07080A. Fonts: **Michroma** headings, **Pixelywave** body (`dashboard/fonts/pixelywave.otf`, freeware non-commercial, kept out of git), **JetBrains Mono** numbers.
   Rounded corners 8–14 px. Subtle starfield background. No scrollbars (lists fit or page themselves).
-  Center: Mani's triangle emblem (`dashboard/core.svg`, a vector redraw of the original `core.webp`, which stays in the repo; swells with the voice) with 11 gold diamond icons on one ring (glass hover cards). Mani reverted
+  Center: Mani's triangle emblem (`dashboard/core.svg`, a vector redraw of the original `core.webp`, which stays in the repo; swells with the voice) with 10 gold diamond icons on one ring (glass hover cards). Mani reverted
   a "sun" core and solar-system orbits — don't reintroduce them.
 
 ## Decisions log
@@ -245,10 +245,17 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   `data/tours/`, the test home in `data/dummy_home/`, `models/depth-anything-v2-small.onnx` (99 MB), and Blender.
 - Trading: practice account default; live needs OANDA_ENV=live AND options.live_trading: true;
   approval TTL 30 min; refuse if price moved > 0.5 ATR; units capped.
-- Weather Agent belongs to News Desk; World Watch is flights only (the globe's weather icons are a plain data endpoint, not an agent).
+- **World Watch is everything VISION watches in the world: news, weather and flights (Mani, 2026-10-13). News Desk is no longer a
+  master**: its four gatherers and the Weather Agent run beside the Flight Tracker (stage GATHER, none of them blocking), then
+  the News Summarizer reports for the master (stage CURATE): headlines, weather, the Flight Tracker's line, and the flights in the
+  same report data (`report_data.world`: `headlines`, `weather`, `flights`, ...). The news agents stay in `masters/news.py`,
+  built by `world.build_agents`; settings are under `masters.world.options`. The master cycles every 15 min for the flights;
+  the feeds are read again only every `news_minutes` (30). The globe's weather icons are a plain data endpoint, not an agent.
+  OpenSky without an account allows about 100 world snapshots a day (a 429 after that): a refusal is a wait, not a fault
+  (label RESTING, the last flights stay up, nothing asked until the allowance is back: kv `world_state`), hence 15 min.
   World Watch shows `near_slots` (10) flights nearest home first, the rest spread worldwide; a route lookup is spent only on callsigns not yet known.
 - Traffic Desk is read-only (no approval gate).
-- Visa Watch (`masters/visa.py`, the 11th master; Mani and family only, **notify only, Mani books by hand**): about once an
+- Visa Watch (`masters/visa.py`, added as the 11th master, now one of ten; Mani and family only, **notify only, Mani books by hand**): about once an
   hour per account (`interval_minutes` 60 ± `jitter_minutes` 10; the master cycles every 10 min and looks at one due account
   per run, never two within 5 min unless `test_mode: true`) it reads the dates the Canada portal (ais.usvisa-info.com) offers
   for the chosen cities; a date strictly earlier than the booked one raises a notice (dashboard + Mani's Telegram), once per
@@ -390,12 +397,11 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
 | Master | Mode | Needs from Mani |
 |---|---|---|
 | Traffic | live | TOMTOM_API_KEY |
-| News + Weather | live | nothing |
 | Investments | live | Kite login link, FYERS_APP_ID/SECRET (+PIN), Wealthsimple CSV in inbox/wealthsimple |
 | Email / Calendar | live | GOOGLE_CLIENT_ID/SECRET and/or MS_CLIENT_ID/SECRET, accounts in config, sign-in |
 | Job Hunt | live | resumes in vault/resume (done), target companies (optional); Adzuna is paid and switched off |
 | Web Designer | live | GOOGLE_MAPS_API_KEY, CLOUDFLARE_API_TOKEN + ACCOUNT_ID, optional PEXELS_API_KEY / PIXABAY_API_KEY |
-| World Watch | live | optional OPENSKY creds |
+| World Watch (news, weather, flights) | live | nothing; optional OPENSKY creds (a free account lifts flights from about 100 to 1,000 snapshots a day) |
 | Trading Desk | live | OANDA practice token + account |
 | YouTube Manager | live (upload mocked only, never run against YouTube) | GROQ_API_KEY, PEXELS_API_KEY (the .env line has no usable value), REDDIT_CLIENT_ID/SECRET or .txt stories in inbox/confessions/confessions; GOOGLE_CLIENT_ID/SECRET with YouTube Data API v3 and Google Drive API enabled and redirect `http://127.0.0.1:8765/auth/youtube/callback`, then the YouTube sign-in |
 | Visa Watch | live (never run signed in) | add the account on its desk, then sign in to the portal himself in the window it opens (again whenever the session runs out); the Keychain prompt allowed once |

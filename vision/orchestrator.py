@@ -42,7 +42,8 @@ class Orchestrator:
                 "agents": [m.agent_state(a, "idle", "ON HOLD" if not m.enabled else "QUEUED") for a in m.agents],
             }
         for mid, summary in self.store.latest_reports().items():
-            self.bus.state["reports"][mid] = summary
+            if mid in self.bus.state["masters"]:               # a master that no longer exists (News Desk) leaves no report behind
+                self.bus.state["reports"][mid] = summary
         self.bus.state["approvals"] = self.store.pending_approvals()   # still waiting from before a restart
 
     # ---------- boot: every master runs its first cycle; the dashboard shows the roll call ----------

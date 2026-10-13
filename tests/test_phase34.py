@@ -80,19 +80,21 @@ def test_news_gather_dedups_and_drops_old(mocked):
     assert items[0]["source"] in ("Mint", "ET")
 
 
-def test_news_master_live(mocked, tmp_path):
-    cfg = Config(masters={"news": MasterConfig(mode="live")})
-    m = next(x for x in build_masters(cfg) if x.id == "news")
+def test_world_watch_news_live(mocked, tmp_path):
+    cfg = Config(masters={"world": MasterConfig(mode="live")})                   # news and weather are World Watch's agents now
+    assert not any(x.id == "news" for x in build_masters(cfg))
+    m = next(x for x in build_masters(cfg) if x.id == "world")
     bus = EventBus()
     report = asyncio.run(m.cycle(bus, Store(tmp_path / "t.db")))
-    agents = {a["name"]: a for a in bus.state["masters"]["news"]["agents"]}
+    agents = {a["name"]: a for a in bus.state["masters"]["world"]["agents"]}
     assert agents["Political News"]["status"] == "error"       # feed down...
     assert agents["News Summarizer"]["status"] == "done"       # ...but the brief still goes out
-    data = bus.state["report_data"]["news"]
+    assert m.reporter == "News Summarizer" and "Flight Tracker" in agents          # flights down or up, the report still goes out
+    data = bus.state["report_data"]["world"]
     tags = [h["tag"] for h in data["headlines"]]
     assert tags == ["INDIA MKT", "GLOBAL", "CRICKET", "WEATHER"]
     assert data["weather"]["temp"] == 22 and data["weather"]["daily"][1]["kind"] == "rain"
-    assert report.startswith("3 desks updated · Leamington 22°C cloudy")
+    assert report.startswith("3 topics updated · Leamington 22°C cloudy")
 
 
 def write_ws_csv(folder):

@@ -1,10 +1,13 @@
-"""News Desk (live): 5 gatherers in parallel -> News Summarizer (reporter).
+"""World Watch's news and weather agents: four news gatherers and the Weather Agent in parallel -> News Summarizer,
+which reports for the whole master (headlines, weather, and the Flight Tracker's line and flights). Built into the
+master by world.build_agents; News Desk is no longer a master of its own (Mani, 2026-10-13).
 
-Sources and searches are set in config.yaml -> masters.news.options.
+Sources and searches are set in config.yaml -> masters.world.options.
 """
 
 from __future__ import annotations
 
+import time
 from typing import Any
 
 from ..agents import AgentResult, SubAgent
@@ -22,12 +25,17 @@ class Gatherer(SubAgent):
     tier = "API"
     blocking = False  # one bad feed never stops the brief
 
-    def __init__(self, name: str, topic: str, tag: str, cfg: dict, extra: list[str], max_age: float) -> None:
+    def __init__(self, name: str, topic: str, tag: str, cfg: dict, extra: list[str], max_age: float, every: float = 0) -> None:
         super().__init__(name=name, note="RSS · many outlets")
         self.topic, self.tag, self.cfg, self.extra, self.max_age = topic, tag, cfg, extra, max_age
+        self.every, self.kept = every, None   # the master cycles at the flights' pace; the feeds are read again only every `every` seconds
 
     async def run(self, ctx: dict[str, Any]) -> AgentResult:
-        items = await news.gather(self.cfg.get("query"), self.cfg.get("edition", "CA"), self.extra, max_age_hours=self.max_age)
+        if self.kept and time.time() - self.kept[0] < self.every:
+            items = self.kept[1]
+        else:
+            items = await news.gather(self.cfg.get("query"), self.cfg.get("edition", "CA"), self.extra, max_age_hours=self.max_age)
+            self.kept = (time.time(), items)
         ctx.setdefault("news", {})[self.topic] = items
         if not items:
             return AgentResult("done", "QUIET", f"{self.tag}: nothing new", {"items": []})
@@ -62,25 +70,29 @@ class NewsSummarizer(SubAgent):
         w = ctx.get("weather")
         if w:
             headlines.append({"tag": "WEATHER", "text": f"{w['city']} · {w['temp']}°C · {w['words']}", "source": "Open-Meteo", "link": ""})
+        # the flights come along in the same report: the Flight Tracker's line in the summary, its flights in the data
+        air = ctx.get("results", {}).get("Flight Tracker")
+        flights = (air.data or {}) if air and air.status != "error" else {}
+        air_line = air.summary if air and air.status != "error" and air.summary else ""
         if not headlines:
-            return AgentResult("done", "QUIET", "No fresh headlines", {"headlines": []})
-        summary = f"{len(parts)} desks updated" + (f" · {w['city']} {w['temp']}°C {w['words']}" if w else "")
+            return AgentResult("done", "QUIET", " · ".join(x for x in ("No fresh headlines", air_line) if x), {**flights, "headlines": []})
+        summary = f"{len(parts)} topics updated" + (f" · {w['city']} {w['temp']}°C {w['words']}" if w else "") + (f" · {air_line}" if air_line else "")
         return AgentResult("done", f"{len(headlines)} ITEMS", summary,
-                           {"headlines": headlines, "weather": w, "detail": parts})
+                           {**flights, "headlines": headlines, "weather": w, "detail": parts})
 
 
 def build_agents(options: dict[str, Any], cfg=None) -> dict[str, SubAgent]:
     topics = {**DEFAULT_TOPICS, **(options.get("topics") or {})}
     extra = options.get("extra_feeds") or {}
-    age = float(options.get("max_age_hours", 30))
+    age, every = float(options.get("max_age_hours", 30)), float(options.get("news_minutes", 30)) * 60 - 30
     home = (cfg.vision.home_city if cfg else "Leamington, ON")
     tz = (cfg.vision.timezone if cfg else "America/Toronto")
     w = options.get("weather") or {}
     return {
-        "Indian Market News": Gatherer("Indian Market News", "india_markets", "India", topics["india_markets"], extra.get("india_markets", []), age),
-        "Global Market News": Gatherer("Global Market News", "global_markets", "Global", topics["global_markets"], extra.get("global_markets", []), age),
-        "Cricket News": Gatherer("Cricket News", "cricket", "Cricket", topics["cricket"], extra.get("cricket", []), age),
-        "Political News": Gatherer("Political News", "politics", "Politics", topics["politics"], extra.get("politics", []), age),
+        "Indian Market News": Gatherer("Indian Market News", "india_markets", "India", topics["india_markets"], extra.get("india_markets", []), age, every),
+        "Global Market News": Gatherer("Global Market News", "global_markets", "Global", topics["global_markets"], extra.get("global_markets", []), age, every),
+        "Cricket News": Gatherer("Cricket News", "cricket", "Cricket", topics["cricket"], extra.get("cricket", []), age, every),
+        "Political News": Gatherer("Political News", "politics", "Politics", topics["politics"], extra.get("politics", []), age, every),
         "Weather Agent": WeatherAgent(city=w.get("city", home), tz=tz, lat=w.get("lat"), lon=w.get("lon")),
         "News Summarizer": NewsSummarizer(),
     }

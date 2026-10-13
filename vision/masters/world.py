@@ -1,4 +1,6 @@
-"""World Watch (live): Flight Tracker (reporter).
+"""World Watch (live): everything VISION watches in the world: news, weather and flights (Mani, 2026-10-13).
+Four news gatherers, the Weather Agent and the Flight Tracker run side by side -> News Summarizer (reporter).
+The news and weather agents live in news.py; this module holds the Flight Tracker and builds the whole crew.
 
 Positions: OpenSky Network (free for non-commercial use; OPENSKY_CLIENT_ID/SECRET in .env gives
 higher limits, anonymous works with lower limits). Routes: adsbdb (free, no key), cached for a week.
@@ -60,6 +62,7 @@ async def _route(c: httpx.AsyncClient, store, cs: str) -> dict | None:
 
 class FlightTracker(SubAgent):
     name, tier, note = "Flight Tracker", "API", "OpenSky + adsbdb"
+    blocking = False   # flights down never holds back the news and weather
 
     def __init__(self, home: tuple[float, float] | None, max_flights: int, near_km: int, lookups: int, near_slots: int = 10) -> None:
         super().__init__()
@@ -68,8 +71,17 @@ class FlightTracker(SubAgent):
 
     async def run(self, ctx):
         store = ctx["store"]
+        until = (store.kv_get("world_state", "opensky") or {}).get("until", 0)
+        if until > time.time():
+            return self.resting(store, until)
         async with httpx.AsyncClient(timeout=25) as c:
             r = await c.get(STATES_URL, headers=await _headers(c))
+            if r.status_code == 429:
+                # OpenSky's allowance for the day is used up (a world snapshot costs 4 of 400 credits without an account).
+                # A wait, not a fault: nothing is asked again until it says the allowance is back, and the last flights stay up.
+                until = time.time() + int(r.headers.get("X-Rate-Limit-Retry-After-Seconds") or 3600)
+                store.kv_put("world_state", "opensky", {"until": until})
+                return self.resting(store, until)
             r.raise_for_status()
             states = [s for s in (r.json().get("states") or []) if s[5] is not None and s[6] is not None and not s[8] and (s[1] or "").strip()]
             near = sorted((s for s in states if self.home and km(self.home[0], self.home[1], s[6], s[5]) <= self.near_km),
@@ -102,12 +114,21 @@ class FlightTracker(SubAgent):
                 if len(flights) >= self.max_flights:
                     break
         n_near = sum(1 for f in flights if self.home and km(self.home[0], self.home[1], f["lat"], f["lon"]) <= self.near_km)
-        return AgentResult("done", f"{len(flights)} TRACKED", f"{len(states):,} in the air · showing {len(flights)} · {n_near} near home",
-                           {"flights": flights, "total_airborne": len(states), "at": time.time(),
-                            "home": list(self.home) if self.home else None, "near_km": self.near_km})
+        data = {"flights": flights, "total_airborne": len(states), "at": time.time(),
+                "home": list(self.home) if self.home else None, "near_km": self.near_km}
+        store.kv_put("world_state", "last", data)
+        return AgentResult("done", f"{len(flights)} TRACKED", f"{len(states):,} in the air · showing {len(flights)} · {n_near} near home", data)
+
+    def resting(self, store, until: float) -> AgentResult:
+        last = store.kv_get("world_state", "last") or {}
+        last = {k: v for k, v in last.items() if not k.startswith("_")}
+        clock = lambda t: time.strftime("%H:%M", time.localtime(t))
+        return AgentResult("done", "RESTING", f"OpenSky's allowance for today is used up · flights resume about {clock(until)}"
+                           + (f" · showing the {len(last['flights'])} seen at {clock(last['at'])}" if last.get("flights") else ""), last)
 
 
 def build_agents(options: dict[str, Any], cfg=None) -> dict[str, SubAgent]:
+    from .news import build_agents as news_agents
     home = tuple(options["home"]) if options.get("home") else (42.05, -82.6)
-    return {"Flight Tracker": FlightTracker(home, int(options.get("max_flights", 60)), int(options.get("near_km", 400)), int(options.get("route_lookups", 25)),
+    return {**news_agents(options, cfg), "Flight Tracker": FlightTracker(home, int(options.get("max_flights", 60)), int(options.get("near_km", 400)), int(options.get("route_lookups", 25)),
                                             int(options.get("near_slots", 10)))}

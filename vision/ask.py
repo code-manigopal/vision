@@ -43,15 +43,15 @@ TOOLS = [
     {"name": "portfolio", "description": "Yesterday's portfolio P&L per account and total in CAD.", "parameters": {"type": "object", "properties": {}}},
     {"name": "markets", "description": "NIFTY, BANK NIFTY, NIFTY IT, NYSE, NASDAQ, Bitcoin moves.", "parameters": {"type": "object", "properties": {}}},
     {"name": "news", "description": "Top headlines. topic: india_markets, global_markets, cricket, politics, or all.", "parameters": {"type": "object", "properties": {"topic": {"type": "string"}}}},
-    {"name": "master_report", "description": "Latest report from one master: jobs, web, world, trading, email, calendar, invest, news, traffic.", "parameters": {"type": "object", "properties": {"master": {"type": "string"}}, "required": ["master"]}},
+    {"name": "master_report", "description": "Latest report from one master: jobs, web, world (news, weather and flights), trading, email, calendar, invest, traffic, youtube, visa.", "parameters": {"type": "object", "properties": {"master": {"type": "string"}}, "required": ["master"]}},
     {"name": "pending_approvals", "description": "Things waiting for the user's OK, with ids.", "parameters": {"type": "object", "properties": {}}},
     {"name": "decide_approval", "description": "Approve or reject a pending item. Only when the user's latest message explicitly says so.", "parameters": {"type": "object", "properties": {"id": {"type": "integer"}, "decision": {"type": "string", "enum": ["approved", "rejected"]}}, "required": ["id", "decision"]}},
 ]
 
 STEP = {"status_overview": ("VISION", "Router"), "route_traffic": ("TRAFFIC DESK", "Traffic Poller"), "city_traffic": ("TRAFFIC DESK", "Incident Scout"),
-        "weather": ("NEWS DESK", "Weather Agent"), "calendar_day": ("CALENDAR MANAGER", "Calendar Reader"), "email_summary": ("EMAIL MANAGER", "Summarizer"),
+        "weather": ("WORLD WATCH", "Weather Agent"), "calendar_day": ("CALENDAR MANAGER", "Calendar Reader"), "email_summary": ("EMAIL MANAGER", "Summarizer"),
         "read_draft": ("EMAIL MANAGER", "Writer"), "portfolio": ("INVESTMENTS", "Daily P&L Reporter"), "markets": ("INVESTMENTS", "Index Tracker"),
-        "news": ("NEWS DESK", "News Summarizer"), "master_report": ("VISION", "Master report"), "pending_approvals": ("VISION", "Approvals"),
+        "news": ("WORLD WATCH", "News Summarizer"), "master_report": ("VISION", "Master report"), "pending_approvals": ("VISION", "Approvals"),
         "decide_approval": ("VISION", "Approval gate")}
 EXPLICIT_OK = re.compile(r"\b(approve|approved|send it|go ahead|yes|yep|yeah|accept|confirm|do it|reject|decline|don't send|cancel)\b", re.I)
 
@@ -116,7 +116,7 @@ class AskEngine:
             if name == "weather":
                 off = int(args.get("day_offset") or 0)
                 city = args.get("city") or self.cfg.vision.home_city
-                w = (rd.get("news") or {}).get("weather")
+                w = (rd.get("world") or {}).get("weather")
                 if not w or (args.get("city") and args["city"].split(",")[0].lower() not in w["city"].lower()):
                     w = await weather.forecast(city, self.cfg.vision.timezone)
                 d = w["daily"][min(off, len(w["daily"]) - 1)] if w.get("daily") else {}
@@ -138,7 +138,7 @@ class AskEngine:
             if name == "markets":
                 return {"markets": (rd.get("invest") or {}).get("mkts")}
             if name == "news":
-                hl = (rd.get("news") or {}).get("headlines") or []
+                hl = (rd.get("world") or {}).get("headlines") or []
                 topic = (args.get("topic") or "all").lower()
                 tag = {"india_markets": "INDIA MKT", "global_markets": "GLOBAL", "cricket": "CRICKET", "politics": "POLITICS"}.get(topic)
                 return [h for h in hl if not tag or h["tag"] == tag][:4]

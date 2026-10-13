@@ -704,8 +704,8 @@ def test_desk_web_jobs_reports_and_404(api, monkeypatch, tmp_path):
     assert {f["label"] for f in j["items"][0]["files"]} == {"resume.md", "cover_letter.md"}
 
     import asyncio
-    asyncio.run(store.record_report("news", "Quiet day", {}))
-    n = c.get("/api/desk/news").json()
+    asyncio.run(store.record_report("world", "Quiet day", {}))
+    n = c.get("/api/desk/world").json()
     assert [s["id"] for s in n["stages"]] == ["reports"] and n["items"][0]["title"] == "Quiet day" and n["items"][0]["body"] == ""
     assert c.get("/api/desk/youtube").json()["items"] == []
     assert c.get("/api/desk/nope").status_code == 404
@@ -785,3 +785,23 @@ def test_web_designer_style_choice_copy_guard_and_quality_gate(tmp_path, web_moc
     d = desk.build(o.store, "web")
     held = [i for i in d["items"] if i["stage"] == "held"]
     assert len(held) == 1 and "leftover text" in held[0]["body"] and held[0]["files"][0]["label"] == "Draft page"
+
+
+def test_world_watch_rests_when_opensky_refuses(tmp_path, monkeypatch):
+    import vision.masters.world as world
+    calls = []
+
+    def handler(req):
+        calls.append(1)
+        if len(calls) == 1:
+            return httpx.Response(200, json={"states": [["a1", "ACA1 ", "Canada", 0, 0, -82.5, 42.1, 9000, False, 200, 90]]})
+        return httpx.Response(429, headers={"X-Rate-Limit-Retry-After-Seconds": "7200"})
+    real = httpx.AsyncClient
+    monkeypatch.setattr(httpx, "AsyncClient", lambda *a, **kw: real(transport=httpx.MockTransport(handler)))
+    store = Store(tmp_path / "w.db")
+    agent = world.build_agents({"route_lookups": 0})["Flight Tracker"]
+    first = asyncio.run(agent.run({"store": store}))
+    second = asyncio.run(agent.run({"store": store}))          # refused: a wait with the last flights, not a failure
+    third = asyncio.run(agent.run({"store": store}))           # and nothing is asked again until the allowance is back
+    assert first.label == "1 TRACKED" and second.status == "done" and second.label == "RESTING" and "resume about" in second.summary
+    assert second.data["flights"][0]["cs"] == "ACA1" and third.label == "RESTING" and len(calls) == 2

@@ -1162,7 +1162,7 @@ class Component extends DCLogic {
       'Cricket News · score update',
       'Global Market News · US futures update',
       'Flight Tracker · 28 flights on the globe',
-      'Weather Agent (News Desk) · Leamington 22°C, cloudy',
+      'Weather Agent (World Watch) · Leamington 22°C, cloudy',
       'Telegram Bot · brief delivered to Mani',
       'Email Reader · 24 emails from all inboxes (last 24h)',
       'Email Writer · reply drafted, waiting for your approval',
@@ -1396,7 +1396,7 @@ class Component extends DCLogic {
     }
     if (it.kind === 'markets') return it.btc ? "Bitcoin's down about one and a half percent today." : "Nifty closed up about half a percent, and the Nasdaq's up a little too.";
     if (it.kind === 'news') {
-      const hl = (RD.news && RD.news.headlines) || [];
+      const hl = (RD.world && RD.world.headlines) || [];
       const h = hl.find((x) => (it.topic === 'cricket' ? x.tag === 'CRICKET' : it.topic === 'politics' ? x.tag === 'POLITICS' : x.tag !== 'WEATHER'));
       return h ? (it.topic === 'cricket' ? 'In cricket: ' : 'Top story: ') + h.text + '.' : "It's pretty quiet in the news. The full headlines are in your brief.";
     }
@@ -1435,7 +1435,7 @@ class Component extends DCLogic {
   // Preview: rule-based intent parser. Real build: the local LLM router (LM Studio, tool calling)
   // returns the same {kind, ...entities} list, and the same plan UI runs on the real agent results.
   static REPORTERS = { email: 'Summarizer', calendar: 'Scheduler', trading: 'Portfolio Manager', invest: 'Daily P&L Reporter',
-    news: 'News Summarizer', web: 'Proposal Drafter', jobs: 'Application Tracker', world: 'Flight Tracker', traffic: 'Incident Scout', youtube: 'Confessions Everywhere Director', visa: 'Slot Watcher' };
+    web: 'Proposal Drafter', jobs: 'Application Tracker', world: 'News Summarizer', traffic: 'Incident Scout', youtube: 'Confessions Everywhere Director', visa: 'Slot Watcher' };
   static HOLD = null;   // a master kept on hold (greyed out, skipped at boot); none right now
   titleCase(x) { return x.trim().replace(/\s+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()); }
   parseDay(q) {
@@ -1519,7 +1519,7 @@ class Component extends DCLogic {
     if (it.kind === 'weather') {
       const w = wxT[Math.min(15, it.day.off)], hi = it.day.off === 0 ? 22 : Math.round(22 - it.day.off * 0.45 + ((it.day.off * 7) % 5) - 2), lo = hi - 8;
       return { facts: { w, hi, lo }, chip: 'WEATHER · ' + it.city + ' · ' + it.day.label,
-        steps: [['NEWS DESK', 'Weather Agent', 'Forecast for ' + it.city + ', ' + it.day.label, wxW[w] + ' ' + hi + '°/' + lo + '°']],
+        steps: [['WORLD WATCH', 'Weather Agent', 'Forecast for ' + it.city + ', ' + it.day.label, wxW[w] + ' ' + hi + '°/' + lo + '°']],
         say: it.city + ' ' + it.day.label + ': ' + wxW[w] + ', high of ' + hi + ' and low of ' + lo + '.' + (w === 'rain' || w === 'storm' ? ' Take an umbrella.' : ''),
         follow: ['Will it rain this weekend?', 'Traffic between Windsor and Leamington'] };
     }
@@ -1543,7 +1543,7 @@ class Component extends DCLogic {
       steps: [['INVESTMENTS', 'Index Tracker', 'Nifty · Bank Nifty · Nifty IT · NYSE · NASDAQ', 'closed'], ['INVESTMENTS', 'Bitcoin Tracker', 'BTC 24h', '−1.35%']],
       say: it.btc ? 'Bitcoin is down 1.35 percent over 24 hours.' : 'Nifty closed up 0.44 percent, Bank Nifty down 0.21, Nifty IT up 1.08. In the US, NYSE up 0.12 and NASDAQ up 0.57.', follow: ["How's my portfolio?", 'Any news?'] };
     if (it.kind === 'news') return { chip: 'NEWS · ' + it.topic,
-      steps: [['NEWS DESK', it.topic === 'cricket' ? 'Cricket News' : it.topic === 'politics' ? 'Political News' : 'News Summarizer', 'Top stories', 'ready']],
+      steps: [['WORLD WATCH', it.topic === 'cricket' ? 'Cricket News' : it.topic === 'politics' ? 'Political News' : 'News Summarizer', 'Top stories', 'ready']],
       say: it.topic === 'cricket' ? 'Cricket desk has the latest scores ready in your brief.' : 'Your top headlines across India markets, global markets, cricket and politics are in the brief.', follow: ['Brief me', 'Weather tomorrow'] };
     if (it.kind === 'flights') return { chip: 'FLIGHTS', steps: [['WORLD WATCH', 'Flight Tracker', 'Live positions', '28 tracked']], say: 'Tracking 28 flights right now. Say show flights to see them on the globe.', follow: ['Show flights'] };
     if (it.kind === 'jobs') return { chip: 'JOB HUNT', steps: [['JOB HUNT', 'Job Scout', 'New postings', '12 new']], say: '12 new postings match your targets, and your resume is being tailored for one of them.', follow: ['Show job agents'] };
@@ -1658,7 +1658,7 @@ class Component extends DCLogic {
       return;
     }
     if (t.includes('weather')) {
-      this.setState({ mode: 'briefing', mind: false, master: 'news' });
+      this.setState({ mode: 'briefing', mind: false, master: 'world' });
       this.scrollToTop();
       return;
     }
@@ -1678,7 +1678,7 @@ class Component extends DCLogic {
       this.say('Mind closed.');
     } else if (this.pickMaster(t) || t.includes('agent') || t.includes('pipeline') || t.includes('slave')) {
       const mk = this.pickMaster(t);
-      const names = { youtube: 'YouTube Manager', trading: 'Trading Desk', jobs: 'Job Hunt', web: 'Web Designer', invest: 'Investments', news: 'News Desk', world: 'World Watch', email: 'Email Manager', calendar: 'Calendar Manager', traffic: 'Traffic Desk', visa: 'Visa Watch' };
+      const names = { youtube: 'YouTube Manager', trading: 'Trading Desk', jobs: 'Job Hunt', web: 'Web Designer', invest: 'Investments', world: 'World Watch', email: 'Email Manager', calendar: 'Calendar Manager', traffic: 'Traffic Desk', visa: 'Visa Watch' };
       if (mk) this.setState({ master: mk });
       this.say('Showing ' + names[mk || this.state.master] + ' agents.');
       setTimeout(() => this.scrollToGraph(), 60);
@@ -1693,7 +1693,7 @@ class Component extends DCLogic {
     if (t.includes('trad') || t.includes('forex') || t.includes('oanda')) return 'trading';
     if (t.includes('job') || t.includes('resume') || t.includes('career')) return 'jobs';
     if (t.includes('web') || t.includes('site') || t.includes('design')) return 'web';
-    if (t.includes('news') || t.includes('cricket') || t.includes('politic') || t.includes('headline')) return 'news';
+    if (t.includes('news') || t.includes('cricket') || t.includes('politic') || t.includes('headline')) return 'world';
     if (t.includes('traffic')) return 'traffic';
     if (t.includes('visa')) return 'visa';
     if (t.includes('calendar') || t.includes('meeting')) return 'calendar';
@@ -2111,11 +2111,9 @@ class Component extends DCLogic {
         ['Portfolio Aggregator','done','DONE'],['Allocation Analyst','idle','QUEUED'],['Risk Monitor','work','WATCHING'],
         ['Market Watcher','work','WATCHING'],['Tax & Records Keeper','idle','TFSA'],['Index Tracker','done','CLOSED'],
         ['Bitcoin Tracker','work','LIVE'],['Daily P&L Reporter','done','SENT 6:00']] },
-      news: { name: 'NEWS DESK', dot: 'd-work', agents: [
-        ['Indian Market News','work','SCANNING'],['Global Market News','work','SCANNING'],['Cricket News','done','UPDATED'],
-        ['Political News','idle','QUEUED'],['Weather Agent','work','LIVE'],['News Summarizer','idle','QUEUED']] },
       world: { name: 'WORLD WATCH', dot: 'd-work', agents: [
-        ['Flight Tracker','work','TRACKING']] },
+        ['Indian Market News','work','SCANNING'],['Global Market News','work','SCANNING'],['Cricket News','done','UPDATED'],
+        ['Political News','idle','QUEUED'],['Weather Agent','work','LIVE'],['Flight Tracker','work','TRACKING'],['News Summarizer','idle','QUEUED']] },
       email: { name: 'EMAIL MANAGER', dot: 'd-wait', agents: [
         ['Reader','done','24 READ'],['Categorizer','done','SORTED'],['Summarizer','done','DONE'],
         ['Writer','wait','2 DRAFTS'],['Sender','idle','WAITING']] },
@@ -2140,12 +2138,12 @@ class Component extends DCLogic {
       Object.keys(data).forEach((m) => { if (m !== Component.HOLD && !((LM[m] || {}).agents || []).length) data[m].agents = data[m].agents.map((a) => [a[0], 'idle', 'WAITING', a[3]]); });
       ((LM[s.master] || {}).agents || []).forEach((a) => { liveSum[a.name] = a.summary || ''; });
     }
-    const masters = ['email','calendar','trading','invest','news','web','jobs','world','traffic','youtube','visa'].map((id) => ({
+    const masters = ['email','calendar','trading','invest','web','jobs','world','traffic','youtube','visa'].map((id) => ({
       name: data[id].name.charAt(0) + data[id].name.slice(1).toLowerCase().replace(/ (\w)/, (m) => m.toUpperCase()).replace('Youtube', 'YouTube'),
       dot: data[id].dot,
       count: data[id].agents.length,
-      trust: ({ traffic: 'OBSERVE', calendar: 'SUGGEST', email: 'SUGGEST', trading: 'OBSERVE', invest: 'OBSERVE', news: 'OBSERVE', web: 'SUGGEST', jobs: 'ACT', world: 'OBSERVE', youtube: 'ACT', visa: 'OBSERVE' })[id],
-      trustColor: ({ traffic: '#67C7EB', calendar: '#FBCA03', email: '#FBCA03', trading: '#67C7EB', invest: '#67C7EB', news: '#67C7EB', web: '#FBCA03', jobs: '#67C7EB', world: '#67C7EB', youtube: '#67C7EB', visa: '#67C7EB' })[id],
+      trust: ({ traffic: 'OBSERVE', calendar: 'SUGGEST', email: 'SUGGEST', trading: 'OBSERVE', invest: 'OBSERVE', web: 'SUGGEST', jobs: 'ACT', world: 'OBSERVE', youtube: 'ACT', visa: 'OBSERVE' })[id],
+      trustColor: ({ traffic: '#67C7EB', calendar: '#FBCA03', email: '#FBCA03', trading: '#67C7EB', invest: '#67C7EB', web: '#FBCA03', jobs: '#67C7EB', world: '#67C7EB', youtube: '#67C7EB', visa: '#67C7EB' })[id],
       cls: s.master === id ? 'mst-on' : 'mst',
       id, agents: [],
       open: s.master === id && !!s.accOpen,   // its sub-agents and buttons show under it; a second click folds them away
@@ -2183,7 +2181,7 @@ class Component extends DCLogic {
       'All masters online. RAM is running high.'
     ];
     // ---- Orbit markers: one per master, hover = glass status card ----
-    const orbOrder = ['email','calendar','trading','invest','news','web','jobs','world','traffic','youtube','visa'];
+    const orbOrder = ['email','calendar','trading','invest','web','jobs','world','traffic','youtube','visa'];
     const SC = 430 / 440;
     const orbMarks = orbOrder.map((m, k) => {
       const an = (-90 + k * 360 / orbOrder.length) * Math.PI / 180 + s.orbA;
@@ -2232,8 +2230,8 @@ class Component extends DCLogic {
       ['jobs', 'Job Hunt', -18, [['Job Scout', 'Windsor roles'], ['Resume Tailor', 'Resume v7'], ['Outreach', 'Contacts'], ['Tracker', 'Applications']]],
       ['web', 'Web Designer', 18, [['Business Finder', 'Local leads'], ['Competitor Analyst', 'Competitor notes'], ['Website Builder', 'Demo sites'], ['Proposal Drafter', 'Proposals']]],
       ['invest', 'Investments', 54, [['Broker Syncs', 'Holdings'], ['Index Tracker', 'Index moves'], ['Bitcoin Tracker', 'BTC log'], ['P&L Reporter', 'Daily P&L']]],
-      ['news', 'News Desk', 90, [['India Markets', 'India mkt news'], ['Global Markets', 'Global news'], ['Cricket', 'Match updates'], ['Politics', 'Policy watch'], ['Weather', 'Leamington wx']]],
-      ['world', 'World Watch', 126, [['Flight Tracker', 'Live flights']]],
+      ['world', 'World Watch', 90, [['Markets News', 'India and global'], ['Cricket', 'Match updates'], ['Politics', 'Policy watch'], ['Weather', 'Leamington wx'], ['Flight Tracker', 'Live flights']]],
+      ['visa', 'Visa Watch', 126, [['Slot Watcher', 'Earlier dates']]],
       ['email', 'Email Manager', 162, [['Reader', 'Inbox digest'], ['Categorizer', 'Categories'], ['Writer', 'Drafts'], ['Sender', 'Sent log']]],
       ['calendar', 'Calendar Manager', 198, [['Scheduler', 'Meetings'], ['Reminder Agent', 'Reminders'], ['Email Liaison', 'Invites']]],
       ['traffic', 'Traffic Desk', 234, [['City Geocoder', 'City bbox'], ['Traffic Poller', 'Congestion log'], ['Incident Scout', 'Incidents']]]
@@ -2255,7 +2253,7 @@ class Component extends DCLogic {
         edges.push([mid, aid]); edges.push([aid, nid]);
       });
     });
-    const cross = [['youtube-n0', 'trading-n3'], ['youtube-n3', 'jobs-n1'], ['web-n0', 'jobs-n2'], ['invest-n1', 'news-n0'], ['news-n1', 'trading-n0'], ['email-n2', 'web-n3'], ['calendar-n2', 'email-n1']];
+    const cross = [['youtube-n0', 'trading-n3'], ['youtube-n3', 'jobs-n1'], ['web-n0', 'jobs-n2'], ['invest-n1', 'world-n0'], ['world-n0', 'trading-n0'], ['email-n2', 'web-n3'], ['calendar-n2', 'email-n1']];
     const pos = {};
     raw.forEach((n, i) => {
       const rr = (n.ang * Math.PI) / 180;
@@ -2300,8 +2298,7 @@ class Component extends DCLogic {
       visa: { loop: false, stages: [['CHECK', ['Canada Checker']], ['COMPARE', ['Slot Watcher']]] },
       calendar: { loop: false, stages: [['SYNC',['Calendar Reader']],['CHECK',['Conflict Checker']],['PLAN',['Scheduler','Reminder Agent']],['COORDINATE',['Email Liaison']],['APPROVAL',['YOU']],['HANDOFF',['Email Manager']]], xnote: { stage: 5, text: 'invites go out via Email Sender' } },
       email: { xnote: { stage: 1, text: 'meeting requests → Calendar Manager' }, loop: false, stages: [['READ',['Reader']],['SORT',['Categorizer']],['SUMMARIZE',['Summarizer']],['DRAFT',['Writer']],['APPROVAL',['YOU']],['SEND',['Sender']]] },
-      world: { loop: false, stages: [['TRACK',['Flight Tracker']],['VIEW',['Globe View']]] },
-      news: { loop: false, stages: [['GATHER',['Indian Market News','Global Market News','Cricket News','Political News','Weather Agent']],['CURATE',['News Summarizer']]] },
+      world: { loop: false, stages: [['GATHER',['Indian Market News','Global Market News','Cricket News','Political News','Weather Agent','Flight Tracker']],['CURATE',['News Summarizer']],['VIEW',['Globe View']]] },
       web: { loop: false, stages: [['FIND',['Business Finder']],['RESEARCH',['Information Collector','Competitor Analyst']],['ASSETS',['Images Downloader','Color Theme Decider']],['BUILD',['Website Builder']],['DEPLOY',['Cloudflare Deployer']],['PITCH',['Proposal Drafter']],['APPROVAL',['YOU']]] }
     };
     const meta = {
@@ -2447,7 +2444,7 @@ class Component extends DCLogic {
     if (RD.invest && RD.invest.mkts && RD.invest.mkts.length) bMkts = RD.invest.mkts.map((m) => m.pct == null ? noRow(m.name) : mk(m.name, m.pct));
     else if (bLive) bMkts = [noRow(RD.invest ? 'Markets unavailable' : 'Waiting for Investments')];
     // ---- Boot sequence: every agent reports in to VISION ----
-    const order = ['email','calendar','trading','invest','news','web','jobs','world','traffic','youtube','visa'];
+    const order = ['email','calendar','trading','invest','web','jobs','world','traffic','youtube','visa'];
     const flat = [];
     order.forEach((m) => data[m].agents.forEach((a2) => flat.push([m, a2[0]])));
     const total = flat.length;
@@ -2551,7 +2548,7 @@ class Component extends DCLogic {
       const dt = new Date(start.getTime() + i * dayMs);
       const diff = Math.round((dt - today0) / dayMs);
       const evs = diff < -7 ? [] : evFor(dt, i + 7);
-      const liveWx = s.live && s.live.report_data && s.live.report_data.news && s.live.report_data.news.weather;
+      const liveWx = s.live && s.live.report_data && s.live.report_data.world && s.live.report_data.world.weather;
       const ld = liveWx && liveWx.daily && diff >= 0 ? liveWx.daily[diff] : null;
       const hasWx = ld ? true : !liveWx && !bLive && diff >= 0 && diff < 16;
       const wt = ld ? ld.kind : !hasWx ? null : diff === 0 ? 'cloud' : wxTypes[diff];
@@ -2581,10 +2578,9 @@ class Component extends DCLogic {
       ['email', 'EMAIL', '24 new · 3 need you · 2 drafts'],
       ['trading', 'TRADING', 'Final call awaiting approval'],
       ['invest', 'INVEST', '+C$43 yesterday · CSV due'],
-      ['news', 'NEWS', '5 desks updated'],
       ['web', 'WEB DESIGN', 'Pitch ready for approval'],
       ['jobs', 'JOBS', '12 postings · resume tailoring'],
-      ['world', 'WORLD', '28 flights tracked'],
+      ['world', 'WORLD', '4 topics updated · 28 flights tracked'],
       ['calendar', 'CALENDAR', calTodayLine],
       ['traffic', 'TRAFFIC', s.traffic ? s.traffic.city + ' · ' + s.traffic.totalActive + ' incidents' : 'Ask: traffic in <city>'],
       ['youtube', 'YOUTUBE', '4 Shorts scheduled · 1 long video'],
@@ -2624,7 +2620,7 @@ class Component extends DCLogic {
       liveLines.length ? liveLines.length + ' of ' + mReports.length + ' masters have reported.' : 'No master has reported yet.',
       liveTot && liveTot.pct != null ? 'Portfolio ' + sgn(liveTot.pct) + '.' : '',
       liveMk.length ? 'Markets: ' + liveMk.join(', ') + '.' : '',
-      RD.news && RD.news.weather ? RD.news.weather.temp + '° and ' + RD.news.weather.words + '.' : '',
+      RD.world && RD.world.weather ? RD.world.weather.temp + '° and ' + RD.world.weather.words + '.' : '',
       liveWait ? liveWait + (liveWait === 1 ? ' thing needs you.' : ' things need you.') : 'Nothing needs you right now.'].filter(Boolean).join(' ');
     this.lastReply = replyText.replace(' [demo data]', '') + (bLive ? liveLines.map(([m, name]) => ' ' + name.charAt(0) + name.slice(1).toLowerCase() + ': ' + liveRp[m] + '.').join('') : '') + (T ? ' Traffic in ' + T.city + ': ' + T.totalActive + ' incidents' + (T.majorDelay && TMS ? ', major delay of ' + TMS.delayMinutes + ' minutes.' : ', no major delays.') : '');
     const LDr = s.live && s.live.report_data && s.live.report_data.email && s.live.report_data.email.drafts;
@@ -2650,7 +2646,7 @@ class Component extends DCLogic {
       const tot = RD.invest && RD.invest.ports ? RD.invest.ports.find((x) => x.total) : null;
       const pp = tot ? (tot.pct || 0) : 0.18;
       if (tot || !bLive) notables.push("your portfolio's " + (pp >= 0 ? 'up ' : 'down ') + (Math.abs(pp) < 0.5 ? 'a little' : Math.abs(pp) < 1.5 ? 'about ' + (Math.round(Math.abs(pp) * 10) / 10) + ' percent' : Math.round(Math.abs(pp)) + ' percent'));
-      const lw = RD.news && RD.news.weather;
+      const lw = RD.world && RD.world.weather;
       if (lw || !bLive) notables.push(lw ? "it's " + lw.temp + ' and ' + lw.words + ' out' : "it's 22 and cloudy out");
       this.statusModel = { needs, notables };
     }
@@ -2673,8 +2669,8 @@ class Component extends DCLogic {
       { tag: 'POLITICS', text: '[Political News agent headline]' },
       { tag: 'WEATHER', text: 'Leamington, ON · 22°C · Cloudy · [live via Open-Meteo]' }
     ];
-    const RDn = (s.live && s.live.report_data && s.live.report_data.news) || null;
-    if (bLive && !(RDn && RDn.headlines && RDn.headlines.length)) bNews.splice(0, bNews.length, { tag: 'NEWS', text: RDn ? 'No fresh headlines' : 'Waiting for News Desk' });
+    const RDn = (s.live && s.live.report_data && s.live.report_data.world) || null;
+    if (bLive && !(RDn && RDn.headlines && RDn.headlines.length)) bNews.splice(0, bNews.length, { tag: 'NEWS', text: RDn ? 'No fresh headlines' : 'Waiting for World Watch' });
     if (RDn && RDn.headlines && RDn.headlines.length) bNews.splice(0, bNews.length, ...RDn.headlines.slice(0, 6).map((x) => ({ tag: x.tag, text: x.text + (x.source && x.tag !== 'WEATHER' ? ' · ' + x.source : '') })));
     // ---- Holographic deck: the briefing (or agent issues) as cards projected from the core ----
     const spk = (x) => String(x).replace(/▲ \+/g, 'up ').replace(/▼ −/g, 'down ').replace(/(^|[\s(])[−-](?=[\d₹C$])/g, '$1minus ').replace(/\+(?=[\d₹C$])/g, 'plus ')
@@ -2762,7 +2758,7 @@ class Component extends DCLogic {
       const needs = (this.statusModel && this.statusModel.needs) || [];
       const intro = greet + ', Mani. ' + (bLive ? (liveLines.length ? liveLines.length + ' of ' + mReports.length + ' desks have reported.' : 'No desk has reported yet.') : onlineMasters + ' desks reporting.')
         + ' ' + (needs.length ? needs.length + (needs.length === 1 ? ' thing needs you.' : ' things need you.') : 'Nothing needs you right now.');
-      const wx = bLive ? (RD.news && RD.news.weather) : { city: 'Leamington', temp: 22, words: 'cloudy' };
+      const wx = bLive ? (RD.world && RD.world.weather) : { city: 'Leamington', temp: 22, words: 'cloudy' };
       const heads = bNews.filter((n) => n.tag !== 'WEATHER');
       deck = [{ key: 'sum', kick: 'BRIEFING · ' + briefDate, title: greet, rows: [], body: intro, say: intro }];
       if (needs.length) deck.push({ key: 'needs', kick: 'BRIEFING · NEEDS YOU', title: 'Waiting for you', rows: needs.map((n) => ({ a: this.cap1(n.text), b: '', ac: '#FF8A73', bc: '#EDE6D6' })),
@@ -2784,11 +2780,12 @@ class Component extends DCLogic {
         say: 'Ideas to consider, not advice. ' + inv.ideas.map((x) => String(x.idea).replace(/[.\s]+$/, '')).join('. ') + '.' });
       deck.push({ key: 'mkt', kick: 'BRIEFING · ' + bMktsTitle, title: 'Markets', rows: bMkts.map((m) => ({ a: m.name, b: m.val, ac: '#EDE6D6', bc: m.color })), say: 'Markets. ' + spk(bMkts.map((m) => m.name + ' ' + m.val).join('. ')) + '.' });
       // One card per desk (Mani's choice, 2026-10-13: no combined "Your desks" card). A desk with cards of its own is left
-      // out (Investments: portfolio; News: headlines and weather); a card does not say again what the "Waiting for you"
+      // out (Investments: portfolio), World Watch's card leaves its headlines and weather to their own cards; a card does not say again what the "Waiting for you"
       // card just said, and a desk with nothing to tell gets no card
-      const bDesks = bMasters.filter((x) => x.name !== 'INVEST' && !(x.name === 'NEWS' && heads.length) && !(x.name === 'TRAFFIC' && T))
+      const bDesks = bMasters.filter((x) => x.name !== 'INVEST' && !(x.name === 'TRAFFIC' && T))
         .map((x) => Object.assign({}, x, { parts: x.full.split(/ · |; /).map((p) => p.trim().replace(/,? waiting for you/i, ''))
-          .filter((p) => p && (!needs.length || !/(pitch(es)?|package(s)?|request(s)?) (waiting|awaiting)|awaiting ok|^waiting on:/i.test(p))).slice(0, 6) }))
+          .filter((p) => p && (!needs.length || !/(pitch(es)?|package(s)?|request(s)?) (waiting|awaiting)|awaiting ok|^waiting on:/i.test(p)))
+          .filter((p) => x.id !== 'world' || !((heads.length && /topics? updated|fresh headlines/i.test(p)) || (wx && /°C/.test(p)))).slice(0, 6) }))
         .filter((x) => x.parts.length && !/^(nothing today|no report yet)$/i.test(x.parts.join(' ')));
       bDesks.forEach((x) => { const nm = (masters.find((m) => m.id === x.id) || {}).name || x.name;
         deck.push({ key: 'desk:' + x.id, kick: 'BRIEFING · ' + x.name, title: nm, rows: x.parts.map((p) => ({ a: '›', b: p, ac: '#FBCA03', bc: x.color })),
@@ -3002,7 +2999,7 @@ class Component extends DCLogic {
         ask: () => this.setState({ visaAsk: a.id }), no: () => this.setState({ visaAsk: null }),
         yes: () => this.visaCall('DELETE', '/' + encodeURIComponent(a.id)) };
     });
-    const gtabs = [['email','Email'],['calendar','Calendar'],['traffic','Traffic'],['trading','Trading'],['invest','Invest'],['news','News'],['web','Web'],['jobs','Jobs'],['world','World'],['youtube','YouTube'],['visa','Visa']].map(([id, label]) => ({
+    const gtabs = [['email','Email'],['calendar','Calendar'],['traffic','Traffic'],['trading','Trading'],['invest','Invest'],['web','Web'],['jobs','Jobs'],['world','World'],['youtube','YouTube'],['visa','Visa']].map(([id, label]) => ({
       label, cls: s.master === id ? 'tab-on' : 'tab', pick: () => this.setState({ master: id })
     }));
 

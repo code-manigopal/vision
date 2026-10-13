@@ -12,7 +12,7 @@ from .config import ROOT
 
 ALLOWED = ("sites", "applications")   # folders under ROOT/data that /api/files may serve
 LIMIT = 60
-REPORT_MASTERS = ("invest", "news", "world", "traffic")
+REPORT_MASTERS = ("invest", "world", "traffic")
 CATALOG = Path(__file__).parent / "masters" / "catalog.json"
 
 

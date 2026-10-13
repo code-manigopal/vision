@@ -75,12 +75,17 @@ masters:
       targets: {}                         # optional, e.g. { india: 40, us: 40, crypto: 20 }
       ideas_tier: writer                  # who writes "ideas to consider": local (LM Studio) or writer (Groq: faster, but your movers' names and percentages leave the Mac)
       ideas_timeout: 45                   # seconds to wait for the model; after that the ideas come from plain rules
-  news:
+  world:                                  # World Watch: everything VISION watches in the world: news, weather and flights
     enabled: true
     trust: OBSERVE
     mode: live
-    cycle_minutes: 30
+    cycle_minutes: 15                     # OpenSky without an account allows about 100 world snapshots a day: 15 min = 96. With OPENSKY_CLIENT_ID/SECRET in .env (about 1,000 a day) 5 is fine
     options:
+      home: [42.05, -82.60]
+      max_flights: 60
+      near_km: 400
+      route_lookups: 25
+      news_minutes: 30                    # the news feeds are read again this often, however often the flights are
       max_age_hours: 30
       # topics: override any Google News search, e.g.
       #   cricket: { query: "India cricket", edition: IN }
@@ -136,16 +141,6 @@ masters:
       followup_days: 10                   # no reply this long after applying: a reminder, at most `followups` of them
       followups: 2
       stale_days: 60                      # after the reminders and this long with no reply, the application is set aside as closed
-  world:
-    enabled: true
-    trust: OBSERVE
-    mode: live
-    cycle_minutes: 5
-    options:
-      home: [42.05, -82.60]
-      max_flights: 60
-      near_km: 400
-      route_lookups: 25
   traffic:
     enabled: true
     trust: OBSERVE

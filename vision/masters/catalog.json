@@ -4,7 +4,6 @@
   "calendar",
   "trading",
   "invest",
-  "news",
   "web",
   "jobs",
   "world",
@@ -483,77 +482,6 @@
    "demo_report": "+C$43 yesterday · CSV due",
    "loop": false
   },
-  "news": {
-   "id": "news",
-   "name": "NEWS DESK",
-   "agents": [
-    {
-     "name": "Indian Market News",
-     "status": "work",
-     "label": "SCANNING",
-     "tier": "QUICK",
-     "note": "NSE/BSE headlines"
-    },
-    {
-     "name": "Global Market News",
-     "status": "work",
-     "label": "SCANNING",
-     "tier": "QUICK",
-     "note": "Wall St, Fed, oil"
-    },
-    {
-     "name": "Cricket News",
-     "status": "done",
-     "label": "UPDATED",
-     "tier": "QUICK",
-     "note": "scores & fixtures"
-    },
-    {
-     "name": "Political News",
-     "status": "idle",
-     "label": "QUEUED",
-     "tier": "QUICK",
-     "note": "balanced sources"
-    },
-    {
-     "name": "Weather Agent",
-     "status": "work",
-     "label": "LIVE",
-     "tier": "API",
-     "note": "Open-Meteo · Leamington"
-    },
-    {
-     "name": "News Summarizer",
-     "status": "idle",
-     "label": "QUEUED",
-     "tier": "DEEP",
-     "note": "top 4 → VISION"
-    }
-   ],
-   "stages": [
-    {
-     "title": "GATHER",
-     "agents": [
-      "Indian Market News",
-      "Global Market News",
-      "Cricket News",
-      "Political News",
-      "Weather Agent"
-     ],
-     "parallel": true
-    },
-    {
-     "title": "CURATE",
-     "agents": [
-      "News Summarizer"
-     ],
-     "parallel": false
-    }
-   ],
-   "reporter": "News Summarizer",
-   "demo_report": "5 desks updated",
-   "loop": false
-  },
   "web": {
    "id": "web",
    "name": "WEB DESIGNER",
@@ -769,24 +697,78 @@
    "name": "WORLD WATCH",
    "agents": [
     {
+     "name": "Indian Market News",
+     "status": "work",
+     "label": "SCANNING",
+     "tier": "QUICK",
+     "note": "NSE/BSE headlines"
+    },
+    {
+     "name": "Global Market News",
+     "status": "work",
+     "label": "SCANNING",
+     "tier": "QUICK",
+     "note": "Wall St, Fed, oil"
+    },
+    {
+     "name": "Cricket News",
+     "status": "done",
+     "label": "UPDATED",
+     "tier": "QUICK",
+     "note": "scores & fixtures"
+    },
+    {
+     "name": "Political News",
+     "status": "idle",
+     "label": "QUEUED",
+     "tier": "QUICK",
+     "note": "balanced sources"
+    },
+    {
+     "name": "Weather Agent",
+     "status": "work",
+     "label": "LIVE",
+     "tier": "API",
+     "note": "Open-Meteo · Leamington"
+    },
+    {
      "name": "Flight Tracker",
      "status": "work",
      "label": "TRACKING",
      "tier": "API",
      "note": "OpenSky · live ADS-B"
+    },
+    {
+     "name": "News Summarizer",
+     "status": "idle",
+     "label": "QUEUED",
+     "tier": "DEEP",
+     "note": "top 4 → VISION"
     }
    ],
    "stages": [
     {
-     "title": "TRACK",
+     "title": "GATHER",
      "agents": [
+      "Indian Market News",
+      "Global Market News",
+      "Cricket News",
+      "Political News",
+      "Weather Agent",
       "Flight Tracker"
+     ],
+     "parallel": true
+    },
+    {
+     "title": "CURATE",
+     "agents": [
+      "News Summarizer"
      ],
      "parallel": false
     }
    ],
-   "reporter": "Flight Tracker",
-   "demo_report": "28 flights tracked",
+   "reporter": "News Summarizer",
+   "demo_report": "4 topics updated · 28 flights tracked",
    "loop": false
   },
   "traffic": {

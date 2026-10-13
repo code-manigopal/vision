@@ -26,11 +26,11 @@ What you get: ☀️ 6:00 AM and 🌙 6:00 PM briefs (master reports only), inst
 The bot answers only your chat ID and ignores everyone else. No open ports: it uses long polling.
 Turn off instant alerts with `telegram: alerts: false` in config.yaml.
 
-## News Desk + Weather (Phase 3): nothing to set up
+## World Watch: news + weather (Phase 3): nothing to set up
 Live by default. Headlines come from Google News RSS searches (many outlets per topic) for
 India markets, global markets, cricket and politics; weather and a 16-day forecast come from
 Open-Meteo for your home city. The forecast also drives the Calendar tiles' weather icons.
-Change the searches or add publisher RSS feeds in `config.yaml → masters.news.options`.
+Change the searches or add publisher RSS feeds in `config.yaml → masters.world.options` (news, weather and flights are one master, World Watch).
 
 ## Investments (Phase 4): read-only, set up any time, in any order
 Any broker not set up yet simply shows *NOT SET UP* or *LOGIN*; the others still report.

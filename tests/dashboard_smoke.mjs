@@ -10,12 +10,11 @@ class DCLogic { constructor(p) { this.props = p; } setState(p) { Object.assign(t
 const Component = new Function('DCLogic', src + '\nreturn Component;')(DCLogic);
 const live = {
   empty: { masters: {}, reports: {}, report_data: {}, notices: {}, approvals: [], boot: { active: false, done: 0, total: 0 }, telegram: { connected: false }, voice: {} },
-  full: { masters: { news: { agents: [{ name: 'News Summarizer', status: 'done', label: '5 ITEMS', summary: '4 desks updated' }] },
+  full: { masters: { world: { agents: [{ name: 'News Summarizer', status: 'done', label: '5 ITEMS', summary: '4 topics updated' }] },
       traffic: { agents: [{ name: 'City Geocoder', status: 'error', label: 'ERROR', summary: 'Add TOMTOM_API_KEY to .env' }, { name: 'Traffic Poller', status: 'idle', label: 'BLOCKED', summary: 'Waiting on City Geocoder' }] } },
-    reports: { news: '4 desks updated', invest: 'Portfolio −C$227' },
+    reports: { world: '4 topics updated', invest: 'Portfolio −C$227' },
     report_data: { invest: { ports: [{ name: 'Total (CAD)', value: -227, pct: -1.32, sym: 'C$', total: true }], mkts: [{ name: 'NIFTY 50', pct: -0.88 }, { name: 'Bitcoin (24h)', pct: null }] },
-      news: { headlines: [{ tag: 'GLOBAL', text: 'A headline', source: 'CNBC' }], weather: { city: 'Leamington', temp: 20, words: 'cloudy', kind: 'cloud', daily: [{ kind: 'cloud', hi: 21 }] } },
-      calendar: { events: [{ title: 'Standup', start: new Date().toISOString(), all_day: false }] }, world: { flights: [], total_airborne: 0 } },
+      calendar: { events: [{ title: 'Standup', start: new Date().toISOString(), all_day: false }] }, world: { flights: [], total_airborne: 0, headlines: [{ tag: 'GLOBAL', text: 'A headline', source: 'CNBC' }], weather: { city: 'Leamington', temp: 20, words: 'cloudy', kind: 'cloud', daily: [{ kind: 'cloud', hi: 21 }] } } },
     notices: { kite: { text: 'Zerodha login needed', url: 'http://x' } }, approvals: [{ id: 1, master: 'web', title: 'Pitch to X · demo https://demo-x.workers.dev', payload: { kind: 'proposal', message: 'Hi X team', url: 'https://demo-x.workers.dev', phone: '519 555 0100' } },
       { id: 2, master: 'email', title: 'Reply to Anna: Meeting', payload: { kind: 'email_reply', draft: 'p:1' } },
       { id: 3, master: 'trading', title: 'Sell 352 EUR/USD @ ~1.12864', payload: { kind: 'trade', instrument: 'EUR_USD', units: -352, price: 1.12864, stop: 1.13258, tp: 1.12339, rating: 'Underweight', reason: 'Momentum is fading.', created: Date.now() / 1000 - 600 } },
@@ -115,7 +114,7 @@ kv2.deskStages[2].pick(); kc = dk.renderVals().deckCards.find((x) => x.center);
 if (kc.title !== '77 Bakery' || !/Hi 77 Bakery/.test(kc.body) || kc.atts.length !== 2 || !/519 326/.test(JSON.stringify(kc.rows))) fail('approved pitch card wrong', kc.title, kc.atts.length);
 kc.atts[0].open(); kc = dk.renderVals().deckCards.find((x) => x.center);
 if (!kc.showPrev || !kc.prevBox || kc.prevSrc !== '/api/files/sites/77-bakery/index.html' || kc.prevSandbox !== 'allow-scripts') fail('local demo page preview wrong');
-await dk.openDesk('news'); kc = dk.renderVals().deckCards.find((x) => x.center); if (!/Could not load/.test(kc.title)) fail('a desk that fails to load should say so', kc.title);
+await dk.openDesk('world'); kc = dk.renderVals().deckCards.find((x) => x.center); if (!/Could not load/.test(kc.title)) fail('a desk that fails to load should say so', kc.title);
 dk.runCommand('show my approved pitches'); if (dk.state.deskFor !== 'web' || dk.state.deskStage !== 'pitched') fail('"approved pitches" should open the Web Designer desk on Pitched');
 for (const q of ['how are we doing', 'hey vision, how are you', "what's up", 'How are you doing?', 'status report']) {
   const sq = mk({ liveUp: true, live: live.full }); sq.speak = () => {}; let asked = 0; sq.askLive = () => { asked++; }; sq.renderVals(); sq.runCommand(q);
