@@ -5,6 +5,7 @@ Quick checks:   python -m vision check      (validates config and keys, no serve
                 python -m vision fonts                (fetch the ten caption fonts into assets/fonts/)
                 python -m vision sfx [kind] [count]   (fetch sound effects into assets/sfx/)
                 python -m vision visa add|list|update|pause|resume|remove|check   (Visa Watch accounts)
+                python -m vision tour <photo folder> [--title "..."]   (walk-through tour from listing photos: web page + video)
 """
 
 import asyncio
@@ -64,6 +65,9 @@ def main() -> int:
         from .masters import visa
         load_config()
         return visa.cli(args[1:])
+    if args[:1] == ["tour"]:     # python -m vision tour <photo folder>: a walk-through tour (web page + video) from listing photos
+        from . import tour
+        return tour.cli(args[1:])
     if args[:1] == ["fonts"]:    # python -m vision fonts: download the caption fonts to assets/fonts/
         from .services import fonts
         for n in asyncio.run(fonts.fetch()):

@@ -1,0 +1,587 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>__TITLE__</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0b0c0e; color: #fff; overflow: hidden;
+    font: 15px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-user-select: none; user-select: none; }
+  [hidden] { display: none !important; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+  .shade { position: fixed; left: 0; right: 0; pointer-events: none; }
+  .shade.t { top: 0; height: 130px; background: linear-gradient(#000a, #0000); }
+  .shade.b { bottom: 0; height: 190px; background: linear-gradient(#0000, #000b); }
+  .top { position: fixed; top: 20px; left: 24px; right: 24px; display: flex; justify-content: space-between; align-items: baseline; gap: 16px; pointer-events: none; }
+  h1 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: .01em; text-shadow: 0 1px 8px #000a; }
+  .count { font-variant-numeric: tabular-nums; opacity: .8; white-space: nowrap; }
+  .room { position: fixed; left: 24px; bottom: 96px; font-size: 30px; font-weight: 600; text-shadow: 0 2px 12px #000c; pointer-events: none; }
+  .chips { position: fixed; left: 16px; right: 190px; bottom: 44px; display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding: 4px 8px; }
+  .chips::-webkit-scrollbar { display: none; }
+  button { font: inherit; color: #fff; background: #ffffff1f; border: 1px solid #ffffff33; border-radius: 999px; cursor: pointer;
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+  button:hover { background: #ffffff38; }
+  button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+  .chips button { padding: 6px 14px; white-space: nowrap; flex: none; }
+  .chips button.on { background: #fff; color: #111; border-color: #fff; }
+  .pad { position: fixed; right: 20px; bottom: 40px; display: grid; grid-template-columns: repeat(3, 46px); grid-template-rows: repeat(2, 46px); gap: 6px; }
+  .pad button { border-radius: 12px; font-size: 18px; padding: 0; touch-action: none; }
+  .pad .u { grid-column: 2; } .pad .l { grid-row: 2; } .pad .d { grid-row: 2; grid-column: 2; } .pad .r { grid-row: 2; grid-column: 3; }
+  .pad .a { grid-row: 1; grid-column: 3; font-size: 13px; }
+  .pad .a.on { background: #fff; color: #111; }
+  .foot { position: fixed; left: 24px; right: 190px; bottom: 14px; display: flex; gap: 18px; font-size: 12px; opacity: .7; pointer-events: none; white-space: nowrap; overflow: hidden; }
+  .plan { position: relative; display: block; line-height: 0; }
+  .plan img { display: block; width: 100%; border-radius: 8px; }
+  .plan i { position: absolute; width: 12px; height: 12px; margin: -8px 0 0 -8px; border-radius: 50%; background: #e5332a; border: 2px solid #fff;
+    box-shadow: 0 0 0 0 #e5332a99; animation: here 1.6s ease-out infinite; pointer-events: none; }
+  @keyframes here { to { box-shadow: 0 0 0 14px #e5332a00; } }
+  @media (prefers-reduced-motion: reduce) { .plan i { animation: none; } }
+  #map { position: fixed; top: 58px; right: 24px; width: 180px; padding: 4px; border-radius: 12px; background: #fffffff2; border: 0; }
+  #plans { position: fixed; inset: 0; background: #000d; display: none; align-items: center; justify-content: center; gap: 20px; flex-wrap: wrap;
+    padding: 24px; overflow: auto; cursor: zoom-out; }
+  #plans.on { display: flex; }
+  #plans .plan { cursor: pointer; flex: none; }
+  #plans p { position: fixed; top: 14px; left: 0; right: 0; margin: 0; text-align: center; font-size: 13px; opacity: .8; pointer-events: none; }
+  #tip { position: fixed; left: 0; right: 0; top: 46%; text-align: center; font-size: 15px; text-shadow: 0 1px 8px #000; pointer-events: none; opacity: 0; transition: opacity .3s; }
+  #tip.on { opacity: .95; }
+  .tools { position: fixed; top: 58px; left: 24px; display: flex; gap: 8px; }
+  .tools button { padding: 6px 14px; }
+  .tools button.on { background: #e5332a; border-color: #e5332a; }
+  #edit { position: fixed; top: 96px; left: 24px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; max-width: 70vw; }
+  #edit button { padding: 6px 12px; } #edit b { font-weight: 600; margin: 0 4px; text-shadow: 0 1px 6px #000; }
+  #edit span { flex-basis: 100%; font-size: 12px; opacity: .85; text-shadow: 0 1px 6px #000; }
+  .wait { position: fixed; inset: 0; display: grid; place-items: center; font-size: 16px; opacity: .8; pointer-events: none; }
+  @media (max-width: 640px) {
+    .chips { right: 16px; bottom: 150px; } .room { bottom: 196px; font-size: 24px; } .foot { right: 24px; } .foot .keys { display: none; }
+    .pad { right: 50%; transform: translateX(50%); bottom: 34px; }
+    #map { width: 110px; right: 16px; }
+  }
+</style>
+</head>
+<body>
+<canvas id="c" aria-label="Photo tour"></canvas>
+<div class="shade t"></div><div class="shade b"></div>
+<div class="top"><h1 id="title"></h1><div class="count" id="count"></div></div>
+<div class="room" id="room" aria-live="polite"></div>
+<nav class="chips" id="chips" aria-label="Rooms"></nav>
+<div class="pad" aria-label="Move">
+  <button class="u" data-k="up" aria-label="Walk forward">&#9650;</button>
+  <button class="a" id="auto" aria-label="Auto tour">Auto</button>
+  <button class="l" data-k="left" aria-label="Look left">&#9664;</button>
+  <button class="d" data-k="down" aria-label="Step back">&#9660;</button>
+  <button class="r" data-k="right" aria-label="Look right">&#9654;</button>
+</div>
+<div class="foot"><span class="keys" id="keys">Arrow keys to walk and look &middot; Space for the auto tour &middot; M for the floor plan</span><span id="note"></span></div>
+<button class="plan" id="map" hidden aria-label="Floor plan: open"><img id="mapimg" alt="Floor plan"></button>
+<div id="plans" role="dialog" aria-label="Floor plan"><p>Click a room to go there &middot; Esc to close</p></div>
+<div class="tools" id="tools" hidden>
+  <button id="back">Walk the model</button><button id="fix" hidden>Fix cameras</button><button id="floor" hidden>Floor</button><button id="rec">Record video</button>
+</div>
+<div id="edit" hidden>
+  <button id="eprev" aria-label="Previous photo">&#9664;</button><b id="ename"></b><button id="enext" aria-label="Next photo">&#9654;</button>
+  <button id="ealt">Another guess (C)</button><button id="eturn">Turn round (R)</button><button id="enar">Lens &minus;</button><button id="ewid">Lens +</button>
+  <button id="esave">Save</button><b id="esaid"></b>
+  <span>The tints are the model: purple floor, orange and green walls, blue windows, black line where wall meets floor. Move the camera until they sit on the photo's own floor, walls and windows. W A S D move it &middot; &larr; &rarr; turn it &middot; [ ] change photo.</span>
+</div>
+<div id="tip">Keep walking to step into the photo</div>
+<div class="wait" id="wait">Loading&hellip;</div>
+<script>
+const TOUR = __TOUR__;
+const S = TOUR.spots, N = S.length;
+// camera move, the same numbers as vision/tour.py
+const ZMAX = 0.24, NEAR = 0.4, FAR = 0.85, PIVOT = 0.45, OVERSCAN = 0.94, SPEED = 0.11, FADE = 0.7;
+const $ = id => document.getElementById(id);
+$('title').textContent = TOUR.title; $('note').textContent = TOUR.note;
+
+const cv = $('c'), gl = cv.getContext('webgl', {antialias: false, alpha: false});
+const VS = 'attribute vec2 p; varying vec2 v; void main(){ v = vec2(p.x * .5 + .5, .5 - p.y * .5); gl_Position = vec4(p, 0., 1.); }';
+const FS = `precision highp float;
+varying vec2 v;
+uniform sampler2D pA, dA, pB, dB;
+uniform vec4 a, b;      // push forward, look x, look y, centre x
+uniform vec2 kA, kB;    // the part of the photo that fills the screen
+uniform float fade;
+vec3 shot(sampler2D P, sampler2D D, vec4 s, vec2 k) {
+  vec2 c = vec2(s.w, .5), q = c + (v - .5) * k, p = q;
+  for (int i = 0; i < 4; i++) {   // where on the photo this point looks, given the depth there
+    float d = texture2D(D, clamp(p, 0., 1.)).r;
+    p = c + (q - c) / (1. + s.x * (${FAR.toFixed(2)} + ${NEAR.toFixed(2)} * d)) - s.yz * (d - ${PIVOT.toFixed(2)});
+  }
+  return texture2D(P, clamp(p, 0., 1.)).rgb;
+}
+void main() {
+  vec3 col = shot(pA, dA, a, kA);
+  if (fade > 0.) col = mix(col, shot(pB, dB, b, kB), fade);
+  gl_FragColor = vec4(col, 1.);
+}`;
+function shader(type, src) { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; }
+const pr = gl.createProgram();
+gl.attachShader(pr, shader(gl.VERTEX_SHADER, VS)); gl.attachShader(pr, shader(gl.FRAGMENT_SHADER, FS));
+gl.linkProgram(pr); gl.useProgram(pr);
+const quad = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, quad);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+const at = gl.getAttribLocation(pr, 'p');
+const U = {}; for (const n of ['pA', 'dA', 'pB', 'dB', 'a', 'b', 'kA', 'kB', 'fade']) U[n] = gl.getUniformLocation(pr, n);
+['pA', 'dA', 'pB', 'dB'].forEach((n, i) => gl.uniform1i(U[n], i));
+
+function texture(img) {
+  const t = gl.createTexture(); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, img);
+  for (const [k, val] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, val);
+  return t;
+}
+const spots = new Map();   // spot number -> {p, d, ready}; only the ones near the viewer stay in memory
+function load(i) {
+  if (i < 0 || i >= N) return null;
+  if (spots.has(i)) return spots.get(i);
+  const e = {ready: false}, pi = new Image(), di = new Image(); let n = 0;
+  const done = () => { if (++n === 2 && spots.get(i) === e) { e.p = texture(pi); e.d = texture(di); e.ready = true; } };
+  pi.onload = di.onload = done; pi.src = S[i].photo; di.src = S[i].depth;
+  spots.set(i, e); return e;
+}
+function tidy() {
+  for (const [i, e] of spots) if (Math.abs(i - cur) > 2 && !(go && go.to === i) && i !== want) {
+    if (e.ready) { gl.deleteTexture(e.p); gl.deleteTexture(e.d); } spots.delete(i);
+  }
+  load(cur + 1); load(cur - 1);
+}
+
+let cur = 0, z = 0, look = 0, lookTo = 0, mx = 0, my = 0, go = null, want = null, wantZ = 0, auto = false;
+const held = {up: false, down: false, left: false, right: false, sl: false, sr: false};
+let mode = 'photo';   // 'walk' = inside the model raised from the floor plan; 'photo' = inside one photo
+
+// chips: one per run of the same room
+const chips = $('chips'), runs = [];
+S.forEach((s, i) => { if (!i || S[i - 1].label !== s.label) runs.push({at: i, label: s.label}); });
+runs.forEach(r => { const b = document.createElement('button'); b.textContent = r.label; b.onclick = () => { stopAuto(); show(r.at); }; chips.appendChild(r.el = b); });
+function show(i) { if (mode === 'photo') walkTo(i, 0); else { pending = i; load(i); } }   // open photo i, from either view
+// floor plans: a small map with a dot on the room being shown; opened, a click on a room walks there
+const P = TOUR.plans || [], big = $('plans'), sheets = [];
+function dots(el, plan, room) {
+  for (const d of el.querySelectorAll('i')) d.remove();
+  for (const r of plan.rooms) if (r.room === room) { const d = document.createElement('i'); d.style.left = r.x * 100 + '%'; d.style.top = r.y * 100 + '%'; el.appendChild(d); }
+}
+function openPlans(on) { big.classList.toggle('on', on); }
+P.forEach(plan => {
+  const el = document.createElement('div'), img = new Image(); el.className = 'plan'; el.style.width = `min(92vw, ${Math.round(82 * plan.aspect)}vh, 900px)`; img.src = plan.image; img.alt = 'Floor plan'; el.appendChild(img);
+  el.onclick = e => {
+    e.stopPropagation(); const b = el.getBoundingClientRect(), x = (e.clientX - b.left) / b.width, y = (e.clientY - b.top) / b.height;
+    let best = null, far = 0.15;   // the nearest named room that has a photo
+    for (const r of plan.rooms) { const d = Math.hypot(r.x - x, r.y - y), at = S.findIndex(s => s.room === r.room); if (d < far && at >= 0) { far = d; best = at; } }
+    if (mode === 'edit') { const b = posed[ed]; if (P.indexOf(plan) === b.plan) [b.x, b.z] = world(plan, x, y); openPlans(false); return; }
+    if (plan.shell) {      // a plan with a model: stand at the spot clicked, if it is open floor
+      const i = P.indexOf(plan), [wx, wz] = world(plan, x, y); stopAuto(); setFloor(i);
+      const [fx, fz] = nearFree(scenes[i], wx, wz); cam.x = fx; cam.z = fz; mode = 'walk'; pending = null; openPlans(false); hud(); return;
+    }
+    if (best !== null) { stopAuto(); show(best); openPlans(false); }
+  };
+  big.appendChild(el); sheets.push(el);
+});
+if (P.length) { $('map').hidden = false; $('map').onclick = () => openPlans(true); big.onclick = () => openPlans(false); }
+let shown = 0;
+function mapHud() {
+  if (!P.length) return;
+  if (mode !== 'photo') {   // in the model the dot is where the walker stands
+    const sh = P[floor].shell, m = $('map'); $('mapimg').src = P[floor].image;
+    let d = m.querySelector('i'); for (const x of [...m.querySelectorAll('i')].slice(1)) x.remove();
+    if (!d) { d = document.createElement('i'); m.appendChild(d); }
+    d.style.left = (sh.x0 + cam.x / (sh.w * sh.cell) * (sh.x1 - sh.x0)) * 100 + '%'; d.style.top = (sh.y0 + cam.z / (sh.h * sh.cell) * (sh.y1 - sh.y0)) * 100 + '%';
+    sheets.forEach((el, i) => dots(el, P[i], null)); return;
+  }
+  const room = S[cur].room, at = P.findIndex(p => p.rooms.some(r => r.room === room));
+  if (at >= 0) shown = at;
+  $('mapimg').src = P[shown].image; dots($('map'), P[shown], room);
+  sheets.forEach((el, i) => dots(el, P[i], room));
+}
+function hud() {
+  mapHud();
+  $('back').hidden = mode !== 'photo'; $('tip').classList.remove('on');
+  if (mode === 'edit') { $('room').textContent = ''; $('count').textContent = ''; return; }
+  $('keys').innerHTML = mode === 'walk' ? 'W A S D to walk &middot; arrows or drag to turn &middot; E where a photo was taken &middot; Space: auto tour &middot; M: floor plan'
+    : (WALK ? 'Up to move in &middot; Down or Esc to step back out &middot; ' : 'Arrow keys to walk and look &middot; ') + 'Space: auto tour &middot; M: floor plan';
+  if (mode === 'walk') {
+    let best = '', far = 2.5; for (const r of P[floor].rooms) { const [x, y] = world(P[floor], r.x, r.y), d = Math.hypot(x - cam.x, y - cam.z); if (d < far) { far = d; best = r.name; } }
+    $('room').textContent = best; $('count').textContent = P.length > 1 ? 'Floor ' + (WALKS.indexOf(floor) + 1) + ' / ' + WALKS.length : '';
+    for (const r of runs) { r.el.classList.remove('on'); r.el.removeAttribute('aria-current'); } return;
+  }
+  $('room').textContent = S[cur].label; $('count').textContent = (cur + 1) + ' / ' + N;
+  let on = runs[0]; for (const r of runs) if (r.at <= cur) on = r;
+  for (const r of runs) { r.el.classList.toggle('on', r === on); r.el.setAttribute('aria-current', r === on); }
+  on.el.scrollIntoView({block: 'nearest', inline: 'nearest'});
+}
+function walkTo(i, zIn) { if (i < 0 || i >= N || i === cur) return; want = i; wantZ = zIn; load(i); }   // asked mid-step, it waits for the step to end
+function stopAuto() { auto = false; trip = null; route = null; $('auto').classList.remove('on'); if (rec) rec.stop(); }
+function startAuto() { auto = true; $('auto').classList.add('on'); if (WALK) { trip = {i: mode === 'photo' ? cur : 0}; if (mode !== 'photo') tripNext(true); } }
+
+function shape(i) {   // the part of photo i that fills the screen, and how far the view can turn sideways
+  const sc = cv.width / cv.height, a = S[i].aspect;
+  const kx = (a > sc ? sc / a : 1) * OVERSCAN, ky = (a > sc ? 1 : a / sc) * OVERSCAN;
+  return {kx, ky, turn: Math.max(0, (1 - kx) / 2 - 0.03)};
+}
+function bind(unit, e) { gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, e.p); gl.activeTexture(gl.TEXTURE0 + unit + 1); gl.bindTexture(gl.TEXTURE_2D, e.d); }
+function draw() {
+  const A = spots.get(cur); if (!A || !A.ready) return;
+  $('wait').style.display = 'none';
+  gl.useProgram(pr); gl.disable(gl.DEPTH_TEST); gl.bindBuffer(gl.ARRAY_BUFFER, quad);
+  for (let i = 0; i < 4; i++) gl.disableVertexAttribArray(i);
+  gl.enableVertexAttribArray(at); gl.vertexAttribPointer(at, 2, gl.FLOAT, false, 0, 0);
+  const sa = shape(cur), ox = -look * 0.03 - mx * 0.012, oy = -my * 0.008;
+  bind(0, A); gl.uniform4f(U.a, z, ox, oy, 0.5 + look * sa.turn); gl.uniform2f(U.kA, sa.kx, sa.ky);
+  if (go) {
+    const sb = shape(go.to), m = Math.min(1, go.t); bind(2, spots.get(go.to));
+    gl.uniform4f(U.b, go.z, ox, oy, 0.5 + look * sb.turn); gl.uniform2f(U.kB, sb.kx, sb.ky); gl.uniform1f(U.fade, m * m * (3 - 2 * m));
+  } else gl.uniform1f(U.fade, 0);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+}
+function size() {
+  const r = Math.min(2, devicePixelRatio || 1), w = Math.round(innerWidth * r), h = Math.round(innerHeight * r);
+  if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; gl.viewport(0, 0, w, h); }
+}
+
+// ================= the walk-in model: the floor plan's walls raised into 3D =================
+const WALKS = P.map((p, i) => p.shell ? i : -1).filter(i => i >= 0), WALK = WALKS.length > 0;
+const EYE = 1.45, WALL = 2.5, FOV = 70 * Math.PI / 180, BODY = 0.2, BW = 0.6;   // metres; BW = half a photo's width
+const cam = {x: 0, z: 0, yaw: 0, pitch: 0};
+let here = null, floor = WALK ? WALKS[0] : 0, glide = null, route = null, trip = null, pending = null, rec = null, tick = 0;
+const scenes = [], boards = [], boardOf = [];
+function world(plan, fx, fy) { const sh = plan.shell; return [(fx - sh.x0) / (sh.x1 - sh.x0) * sh.w * sh.cell, (fy - sh.y0) / (sh.y1 - sh.y0) * sh.h * sh.cell]; }
+
+function program(vs, fs, names) {
+  const p = gl.createProgram(); gl.attachShader(p, shader(gl.VERTEX_SHADER, vs)); gl.attachShader(p, shader(gl.FRAGMENT_SHADER, fs)); gl.linkProgram(p);
+  const u = {}; for (const n of names) u[n] = gl.getUniformLocation(p, n); return {p, u, a: n => gl.getAttribLocation(p, n)};
+}
+const SKY = [.62, .69, .77], FOG = 'vec3 fog(vec3 c, float d) { return mix(c, vec3(' + SKY + '), smoothstep(9., 30., d)); }';
+const NP = 4;   // photos painted at once: the ones taken nearest the walker
+const PAINT = `uniform sampler2D grid; uniform vec2 gsize; uniform float paintOn, tint;
+${[0, 1, 2, 3].map(k => `uniform sampler2D ph${k}; uniform vec4 cam${k}; uniform vec2 lens${k};`).join(' ')}
+float open(vec2 a, vec2 b) {   // 1 when no wall stands between the camera and this point
+  vec2 d = b - a; float stop = 1. - .16 / max(length(d), .2);
+  for (int i = 1; i < 26; i++) if (texture2D(grid, (a + d * (float(i) / 26. * stop)) / gsize).r > .5) return 0.;
+  return 1.;
+}
+vec4 throwOn(sampler2D ph, vec4 c, vec2 lens, vec3 w, vec3 n) {   // the photo's colour at this point, and how well the photo covers it
+  if (lens.x <= 0.) return vec4(0.);
+  vec2 d = w.xz - c.xy, f = vec2(sin(c.z), -cos(c.z)), r = vec2(cos(c.z), sin(c.z));
+  float zc = dot(d, f); if (zc < .05) return vec4(0.);
+  float u = dot(d, r) / (zc * lens.x), v = (w.y - c.w) / (zc * lens.y);
+  if (abs(u) >= 1. || abs(v) >= 1.) return vec4(0.);
+  float facing = abs(n.y) > .5 ? 1. : step(.02, -dot(normalize(d), n.xz));
+  float wgt = (1. - pow(abs(u), 6.)) * (1. - pow(abs(v), 6.)) * facing / (1. + .2 * zc);
+  if (wgt <= 0.) return vec4(0.);
+  return vec4(texture2D(ph, vec2(u * .5 + .5, .5 - v * .5)).rgb, wgt * open(c.xy, w.xz));
+}
+vec3 paint(vec3 base, vec3 w, vec3 n) {
+  if (paintOn < .5) return base;
+  vec4 best = vec4(base, 0.), t;
+  ${[0, 1, 2, 3].map(k => `t = throwOn(ph${k}, cam${k}, lens${k}, w, n); if (t.a > best.a) best = t;`).join(' ')}
+  return mix(base, best.rgb, smoothstep(0., .1, best.a));
+}`;
+const PNAMES = ['grid', 'gsize', 'paintOn', 'tint'].concat(...[0, 1, 2, 3].map(k => ['ph' + k, 'cam' + k, 'lens' + k]));
+const solid = WALK && program(
+  'attribute vec3 p, n, c; uniform mat4 m; uniform vec3 eye; varying vec3 col, wp, nn; varying float d; void main(){ float l = .62 + .38 * abs(dot(n, normalize(vec3(.8, .55, .22)))); col = c * l; wp = p; nn = n; d = distance(p, eye); gl_Position = m * vec4(p, 1.); }',
+  'precision highp float; varying vec3 col, wp, nn; varying float d; ' + FOG + PAINT + ' void main(){ if (tint > .5) { vec3 t = abs(nn.x) > .5 ? vec3(1., .5, .05) : vec3(.15, .8, .3); float a = abs(nn.y) > .5 ? 0. : .3; if (col.b > col.r * 1.05) { t = vec3(.05, .35, 1.); a = .5; } if (wp.y > .001 && wp.y < .1 && abs(nn.y) < .5) { t = vec3(0.); a = .9; } gl_FragColor = vec4(t, a); return; } float base = (wp.y > .001 && wp.y < .1) ? .5 : 1.; gl_FragColor = vec4(fog(paint(col * base * (.9 + .1 * clamp(wp.y / 2.5, 0., 1.)), wp, nn), d), 1.); }', ['m', 'eye'].concat(PNAMES));
+const flat = WALK && program(
+  'attribute vec3 p; attribute vec2 t; uniform mat4 m; uniform vec3 eye; varying vec2 v; varying vec3 wp; varying float d; void main(){ v = t; wp = p; d = distance(p, eye); gl_Position = m * vec4(p, 1.); }',
+  'precision highp float; uniform sampler2D s; uniform float dim; varying vec2 v; varying vec3 wp; varying float d; ' + FOG + PAINT + ' void main(){ if (tint > .5) { gl_FragColor = vec4(.6, .15, .85, .22); return; } gl_FragColor = vec4(fog(paint(texture2D(s, v).rgb * dim, wp, vec3(0., 1., 0.)), d), 1.); }', ['m', 'eye', 's', 'dim'].concat(PNAMES));
+const dyn = WALK && gl.createBuffer();
+
+function scene(i) {   // build floor i once: wall boxes, the plan as the floor, and where a walker may stand
+  if (scenes[i]) return scenes[i];
+  const plan = P[i], sh = plan.shell, {w, h, cell, grid} = sh, v = [];
+  const face = (a, b, c, d, n, col) => { for (const q of [a, b, c, a, c, d]) v.push(q[0], q[1], q[2], n[0], n[1], n[2], col[0], col[1], col[2]); };
+  const box = (x0, y0, z0, x1, y1, z1, col, top) => {
+    face([x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1], [0, 0, 1], col); face([x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0], [0, 0, -1], col);
+    face([x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1], [1, 0, 0], col); face([x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0], [-1, 0, 0], col);
+    face([x0, y1, z1], [x1, y1, z1], [x1, y1, z0], [x0, y1, z0], [0, 1, 0], top);
+  };
+  let open = new Map();   // runs of wall squares along a row, joined to the same run in the row above: a few hundred boxes, not thousands
+  for (let y = 0; y <= h; y++) {
+    const now = new Map();
+    if (y < h) for (let x = 0; x < w;) {
+      const t = grid.charCodeAt(y * w + x) - 48; if (!t) { x++; continue; }
+      let e = x; while (e < w && grid.charCodeAt(y * w + e) - 48 === t) e++;
+      const k = x + ',' + e + ',' + t, o = open.get(k); if (o) { o.y1 = y + 1; now.set(k, o); } else now.set(k, {x0: x, x1: e, y0: y, y1: y + 1, t}); x = e;
+    }
+    for (const [k, o] of open) if (now.get(k) !== o) {
+      const X0 = o.x0 * cell, X1 = o.x1 * cell, Z0 = o.y0 * cell, Z1 = o.y1 * cell;
+      if (o.t === 1) box(X0, 0, Z0, X1, WALL, Z1, [.93, .91, .87], [.2, .21, .23]);
+      else { box(X0, 0, Z0, X1, .9, Z1, [.93, .91, .87], [.7, .8, .9]); box(X0, .9, Z0, X1, 2.1, Z1, [.7, .82, .93], [.7, .8, .9]); box(X0, 2.1, Z0, X1, WALL, Z1, [.93, .91, .87], [.2, .21, .23]); }   // a window: a pale blue pane, which a photo of the room paints over
+    }
+    open = now;
+  }
+  const G = 40; face([-G, -.02, G], [w * cell + G, -.02, G], [w * cell + G, -.02, -G], [-G, -.02, -G], [0, 1, 0], [.3, .36, .3]);
+  let a0 = w, a1 = 0, b0 = h, b1 = 0;   // a ceiling over the house, so a room reads as a room
+  for (let k = 0; k < w * h; k++) if (grid.charCodeAt(k) !== 48) { const x = k % w, y = (k - x) / w; a0 = Math.min(a0, x); a1 = Math.max(a1, x + 1); b0 = Math.min(b0, y); b1 = Math.max(b1, y + 1); }
+  face([a0 * cell, WALL, b0 * cell], [a1 * cell, WALL, b0 * cell], [a1 * cell, WALL, b1 * cell], [a0 * cell, WALL, b1 * cell], [0, -1, 0], [.9, .89, .86]);
+  const sb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, sb); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(v), gl.STATIC_DRAW);
+  const fb = gl.createBuffer(), W = w * cell, H = h * cell; gl.bindBuffer(gl.ARRAY_BUFFER, fb);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0, 0, 0, sh.x0, sh.y0, W, 0, 0, sh.x1, sh.y0, W, 0, H, sh.x1, sh.y1, 0, 0, 0, sh.x0, sh.y0, W, 0, H, sh.x1, sh.y1, 0, 0, H, sh.x0, sh.y1]), gl.STATIC_DRAW);
+  const sc = scenes[i] = {sb, n: v.length / 9, fb, w, h, cell, tex: null, wall: new Uint8Array(w * h), tight: new Uint8Array(w * h)};
+  const img = new Image(); img.onload = () => { sc.tex = texture(img); }; img.src = plan.image;
+  for (let k = 0; k < w * h; k++) sc.wall[k] = grid.charCodeAt(k) !== 48 ? 1 : 0;
+  sc.grid = gl.createTexture(); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, sc.grid); gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, w, h, 0, gl.LUMINANCE, gl.UNSIGNED_BYTE, sc.wall.map(v => v * 255)); gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
+  for (const [k, val] of [[gl.TEXTURE_MIN_FILTER, gl.NEAREST], [gl.TEXTURE_MAG_FILTER, gl.NEAREST], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, val);
+  const R = Math.ceil((BODY + .08) / cell), row = new Uint8Array(w * h);   // `tight`: too close to a wall for the auto tour's path
+  for (let y = 0; y < h; y++) for (let x = 0, run = -1e9; x < w; x++) { if (sc.wall[y * w + x]) run = x; if (x - run <= R) row[y * w + x] = 1; }
+  for (let y = 0; y < h; y++) for (let x = w - 1, run = 1e9; x >= 0; x--) { if (sc.wall[y * w + x]) run = x; if (run - x <= R) row[y * w + x] = 1; }
+  for (let x = 0; x < w; x++) for (let y = 0, run = -1e9; y < h; y++) { if (row[y * w + x]) run = y; if (y - run <= R) sc.tight[y * w + x] = 1; }
+  for (let x = 0; x < w; x++) for (let y = h - 1, run = 1e9; y >= 0; y--) { if (row[y * w + x]) run = y; if (run - y <= R) sc.tight[y * w + x] = 1; }
+  return sc;
+}
+function hit(sc, x, z) { const cx = Math.floor(x / sc.cell), cz = Math.floor(z / sc.cell); return cx >= 0 && cz >= 0 && cx < sc.w && cz < sc.h && sc.wall[cz * sc.w + cx] === 1; }
+function clear(sc, x, z) { for (let k = 0; k < 8; k++) if (hit(sc, x + Math.cos(k * Math.PI / 4) * BODY, z + Math.sin(k * Math.PI / 4) * BODY)) return false; return !hit(sc, x, z); }
+function cellOf(sc, x, z) { return [Math.max(0, Math.min(sc.w - 1, Math.floor(x / sc.cell))), Math.max(0, Math.min(sc.h - 1, Math.floor(z / sc.cell)))]; }
+function nearFree(sc, x, z) {   // the nearest place with room to stand
+  const [cx, cz] = cellOf(sc, x, z);
+  for (let r = 0; r < Math.max(sc.w, sc.h); r++) for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) {
+    if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;
+    const X = cx + dx, Z = cz + dz; if (X >= 0 && Z >= 0 && X < sc.w && Z < sc.h && !sc.tight[Z * sc.w + X]) return [(X + .5) * sc.cell, (Z + .5) * sc.cell];
+  }
+  return [x, z];
+}
+function sight(sc, ax, az, bx, bz) { const n = Math.ceil(Math.hypot(bx - ax, bz - az) / (sc.cell * .5)); for (let i = 0; i <= n; i++) { const [cx, cz] = cellOf(sc, ax + (bx - ax) * i / n, az + (bz - az) * i / n); if (sc.tight[cz * sc.w + cx]) return false; } return true; }
+function pathTo(sc, ax, az, bx, bz) {   // through the doorways: shortest way over the open squares, then straightened
+  const [sx, sz] = cellOf(sc, ...nearFree(sc, ax, az)), [gx, gz] = cellOf(sc, ...nearFree(sc, bx, bz)), {w, h} = sc;
+  const from = new Int32Array(w * h).fill(-1), q = new Int32Array(w * h); let qh = 0, qt = 0; q[qt++] = sz * w + sx; from[sz * w + sx] = sz * w + sx;
+  while (qh < qt) { const c = q[qh++]; if (c === gz * w + gx) break; const x = c % w, y = (c - x) / w;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const X = x + dx, Y = y + dy, k = Y * w + X; if (X >= 0 && Y >= 0 && X < w && Y < h && from[k] < 0 && !sc.tight[k]) { from[k] = c; q[qt++] = k; } } }
+  if (from[gz * w + gx] < 0) return null;
+  const cells = []; for (let c = gz * w + gx; ; c = from[c]) { cells.push(c); if (from[c] === c) break; } cells.reverse();
+  const pts = cells.map(c => [(c % w + .5) * sc.cell, (Math.floor(c / w) + .5) * sc.cell]), out = [pts[0]];
+  for (let i = 0; i < pts.length - 1;) { let j = pts.length - 1; while (j > i + 1 && !sight(sc, pts[i][0], pts[i][1], pts[j][0], pts[j][1])) j = Math.max(i + 1, j - Math.max(1, (j - i) >> 3)); out.push(pts[j]); i = j; }
+  return out;
+}
+function start(i) { const p = P[i], r = p.rooms.find(r => r.room === 'entry') || p.rooms.find(r => r.room === 'living') || p.rooms[0]; const sc = scene(i);
+  return nearFree(sc, ...(r ? world(p, r.x, r.y) : [sc.w * sc.cell / 2, sc.h * sc.cell / 2])); }
+function setFloor(i, again) { if (i === floor && !again) return; floor = i; const sc = scene(i), [x, z] = start(i); cam.x = x; cam.z = z; cam.pitch = 0; cam.yaw = face(sc.w * sc.cell / 2, sc.h * sc.cell / 2); }
+function face(x, z) { return Math.atan2(x - cam.x, -(z - cam.z)); }
+const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
+
+if (WALK) {   // stand each photo in its room: where the plan prints that room's name (two bedrooms: the photos are shared out in order, a guess)
+  const count = {}, turn = {};
+  S.forEach((s, i) => { const k = WALKS.find(f => P[f].rooms.some(r => r.room === s.room)); if (k !== undefined) count[s.room] = (count[s.room] || 0) + 1; });
+  S.forEach((s, i) => {
+    const f = WALKS.find(f => P[f].rooms.some(r => r.room === s.room)); if (f === undefined) return;
+    const rooms = P[f].rooms.filter(r => r.room === s.room), n = turn[s.room] = (turn[s.room] || 0) + 1, per = Math.ceil(count[s.room] / rooms.length);
+    const r = rooms[Math.min(rooms.length - 1, Math.floor((n - 1) / per))], sc = scene(f), k = (n - 1) % per, [x0, z0] = world(P[f], r.x, r.y);
+    let x = x0, z = z0; if (per > 1) { const a = k / per * Math.PI * 2 + .6, X = x0 + Math.cos(a) * .75, Z = z0 + Math.sin(a) * .75; if (!sc.tight[cellOf(sc, X, Z)[1] * sc.w + cellOf(sc, X, Z)[0]]) { x = X; z = Z; } }
+    const b = {spot: i, plan: f, x, z, hh: BW / s.aspect, tex: null};
+    if (s.camera && P[s.camera.plan] && P[s.camera.plan].shell) {   // where the photo was taken: it is thrown onto the walls from here
+      const c = s.camera, t = Math.tan(c.fov * Math.PI / 360); [b.x, b.z] = world(P[c.plan], c.x, c.y);
+      Object.assign(b, {plan: c.plan, yaw: c.yaw, lens: [t, t / s.aspect], posed: true});
+    } const img = new Image(); img.onload = () => { b.tex = texture(img); }; img.src = s.photo.replace('photos/', 'thumbs/');
+    boards.push(b); boardOf[i] = b;
+  });
+  mode = 'walk'; setFloor(floor, true); $('tools').hidden = false; $('floor').hidden = WALKS.length < 2;
+}
+function fill(b) { const t = Math.tan(FOV / 2); return Math.min(b.hh / t, BW / (t * cv.width / cv.height)) * OVERSCAN; }   // how close a photo fills the screen
+function stepIn(b) {   // glide up to the photo until it fills the view, then open it
+  route = null; load(b.spot);
+  if (b.posed) { glide = {x0: cam.x, z0: cam.z, y0: cam.yaw, p0: cam.pitch, x1: b.x, z1: b.z, y1: b.yaw, t: 0, dur: 1.1, then: () => { pending = b.spot; }}; return; }   // stand where the camera stood, look where it looked
+  const L = Math.hypot(cam.x - b.x, cam.z - b.z) || 1, d = fill(b), tx = b.x + (cam.x - b.x) / L * d, tz = b.z + (cam.z - b.z) / L * d;
+  glide = {x0: cam.x, z0: cam.z, y0: cam.yaw, p0: cam.pitch, x1: tx, z1: tz, y1: Math.atan2(b.x - tx, -(b.z - tz)), t: 0, dur: .55, then: () => { pending = b.spot; }};
+}
+function stepOut() {   // from a photo back into the model, standing in front of it
+  const b = boardOf[cur]; mode = 'walk'; z = 0; go = null; want = null; lookTo = 0;
+  if (b && b.posed) { if (b.plan !== floor) setFloor(b.plan); const sc = scene(b.plan);
+    [cam.x, cam.z] = clear(sc, b.x, b.z) ? [b.x, b.z] : nearFree(sc, b.x, b.z); cam.yaw = b.yaw; cam.pitch = 0;
+  } else if (b) { if (b.plan !== floor) setFloor(b.plan);
+    let dx = cam.x - b.x, dz = cam.z - b.z, L = Math.hypot(dx, dz); const sc = scene(b.plan);
+    if (L < .05 || L > 2.5) { dx = 0; dz = 1; L = 1; for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4; if (clear(sc, b.x + Math.cos(a) * 1.3, b.z + Math.sin(a) * 1.3)) { dx = Math.cos(a); dz = Math.sin(a); break; } } }
+    const d = fill(b); cam.x = b.x + dx / L * d; cam.z = b.z + dz / L * d; cam.yaw = face(b.x, b.z); cam.pitch = 0;
+    const bx = b.x + dx / L * 1.5, bz = b.z + dz / L * 1.5; if (clear(sc, bx, bz)) glide = {x0: cam.x, z0: cam.z, y0: cam.yaw, p0: 0, x1: bx, z1: bz, y1: cam.yaw, t: 0, dur: .5, then: null};
+  }
+  hud();
+}
+function tripNext(first) {   // the auto tour: walk to the next photo's place and step in; a photo with no place in the model just opens
+  if (!trip) return; if (!first) trip.i++;
+  if (trip.i >= N) { stopAuto(); return; }
+  const b = boardOf[trip.i];
+  if (!b) { show(trip.i); return; }
+  if (mode === 'photo' && boardOf[cur] && S[cur].room === S[trip.i].room) { walkTo(trip.i, 0); return; }   // same room: fade straight to its next photo
+  if (mode === 'photo') { stepOut(); glide = null; }
+  if (b.plan !== floor) setFloor(b.plan);
+  route = {pts: pathTo(scene(floor), cam.x, cam.z, b.x, b.z) || [[b.x, b.z]], i: 0, b};
+}
+
+let vfov = FOV;
+function mvp() {
+  const f = 1 / Math.tan(vfov / 2), asp = cv.width / cv.height, n = .05, fr = 90, sy = Math.sin(cam.yaw), cy = Math.cos(cam.yaw), sp = Math.sin(cam.pitch), cp = Math.cos(cam.pitch);
+  const r = [cy, 0, sy], u = [-sy * sp, cp, cy * sp], b = [-sy * cp, -sp, cy * cp], e = [cam.x, EYE, cam.z], dot = a => -(a[0] * e[0] + a[1] * e[1] + a[2] * e[2]);
+  const V = [r[0], u[0], b[0], 0, r[1], u[1], b[1], 0, r[2], u[2], b[2], 0, dot(r), dot(u), dot(b), 1];
+  const Pm = [f / asp, 0, 0, 0, 0, f, 0, 0, 0, 0, (fr + n) / (n - fr), -1, 0, 0, 2 * fr * n / (n - fr), 0], o = new Float32Array(16);
+  for (let c = 0; c < 4; c++) for (let k = 0; k < 4; k++) o[c * 4 + k] = Pm[k] * V[c * 4] + Pm[4 + k] * V[c * 4 + 1] + Pm[8 + k] * V[c * 4 + 2] + Pm[12 + k] * V[c * 4 + 3];
+  return o;
+}
+function drawWalk(only) {
+  const sc = scene(floor), m = mvp(); $('wait').style.display = 'none';
+  const near = only ? [only] : boards.filter(b => b.posed && b.plan === floor && b.tex).sort((a, b) => Math.hypot(a.x - cam.x, a.z - cam.z) - Math.hypot(b.x - cam.x, b.z - cam.z)).slice(0, NP);
+  const lit = pg => {   // hand a program the wall grid and the photos to paint with
+    gl.uniform1f(pg.u.paintOn, 1); gl.uniform1f(pg.u.tint, 0); gl.uniform1i(pg.u.grid, 1); gl.uniform2f(pg.u.gsize, sc.w * sc.cell, sc.h * sc.cell); gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, sc.grid);
+    for (let k = 0; k < NP; k++) { const b = near[k]; gl.uniform1i(pg.u['ph' + k], 2 + k);
+      if (b) { gl.activeTexture(gl.TEXTURE2 + k); gl.bindTexture(gl.TEXTURE_2D, b.tex); gl.uniform4f(pg.u['cam' + k], b.x, b.z, b.yaw, EYE); gl.uniform2f(pg.u['lens' + k], b.lens[0], b.lens[1]); }
+      else gl.uniform2f(pg.u['lens' + k], 0, 0); }
+    gl.activeTexture(gl.TEXTURE0);
+  };
+  gl.enable(gl.DEPTH_TEST); gl.clearColor(SKY[0], SKY[1], SKY[2], 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  for (let i = 0; i < 4; i++) gl.disableVertexAttribArray(i);
+  gl.useProgram(solid.p); lit(solid); gl.uniformMatrix4fv(solid.u.m, false, m); gl.uniform3f(solid.u.eye, cam.x, EYE, cam.z); gl.bindBuffer(gl.ARRAY_BUFFER, sc.sb);
+  [['p', 0], ['n', 12], ['c', 24]].forEach(([n, off]) => { const a = solid.a(n); gl.enableVertexAttribArray(a); gl.vertexAttribPointer(a, 3, gl.FLOAT, false, 36, off); });
+  gl.drawArrays(gl.TRIANGLES, 0, sc.n);
+  for (let i = 0; i < 4; i++) gl.disableVertexAttribArray(i);
+  gl.useProgram(flat.p); lit(flat); gl.uniformMatrix4fv(flat.u.m, false, m); gl.uniform3f(flat.u.eye, cam.x, EYE, cam.z); gl.uniform1i(flat.u.s, 0); gl.activeTexture(gl.TEXTURE0);
+  const ap = flat.a('p'), at2 = flat.a('t'); gl.enableVertexAttribArray(ap); gl.enableVertexAttribArray(at2);
+  if (sc.tex) { gl.bindBuffer(gl.ARRAY_BUFFER, sc.fb); gl.vertexAttribPointer(ap, 3, gl.FLOAT, false, 20, 0); gl.vertexAttribPointer(at2, 2, gl.FLOAT, false, 20, 12);
+    gl.bindTexture(gl.TEXTURE_2D, sc.tex); gl.uniform1f(flat.u.dim, .8); gl.drawArrays(gl.TRIANGLES, 0, 6); }
+  gl.bindBuffer(gl.ARRAY_BUFFER, dyn); gl.vertexAttribPointer(ap, 3, gl.FLOAT, false, 20, 0); gl.vertexAttribPointer(at2, 2, gl.FLOAT, false, 20, 12); gl.uniform1f(flat.u.dim, 1); gl.uniform1f(flat.u.paintOn, 0);
+  if (only) {   // the bare model again, as see-through tints
+    gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthFunc(gl.LEQUAL);
+    gl.uniform1f(flat.u.tint, 1); if (sc.tex) { gl.bindBuffer(gl.ARRAY_BUFFER, sc.fb); gl.vertexAttribPointer(ap, 3, gl.FLOAT, false, 20, 0); gl.vertexAttribPointer(at2, 2, gl.FLOAT, false, 20, 12); gl.drawArrays(gl.TRIANGLES, 0, 6); }
+    for (let i = 0; i < 4; i++) gl.disableVertexAttribArray(i);
+    gl.useProgram(solid.p); gl.uniform1f(solid.u.tint, 1); gl.bindBuffer(gl.ARRAY_BUFFER, sc.sb);
+    [['p', 0], ['n', 12], ['c', 24]].forEach(([n, off]) => { const a = solid.a(n); gl.enableVertexAttribArray(a); gl.vertexAttribPointer(a, 3, gl.FLOAT, false, 36, off); });
+    gl.drawArrays(gl.TRIANGLES, 0, sc.n); gl.disable(gl.BLEND); gl.depthFunc(gl.LESS); return;
+  }
+  const rx = Math.cos(cam.yaw) * BW, rz = Math.sin(cam.yaw) * BW;   // each photo turns to face the walker
+  for (const b of boards) if (b.plan === floor && b.tex && !b.posed) {   // a photo with no camera found stands as a board
+    if (route && b !== route.b && Math.hypot(b.x - cam.x, b.z - cam.z) < 1.1) continue;   // the auto tour walks past other photos, not through them
+    const L = [b.x - rx, b.z - rz], R = [b.x + rx, b.z + rz], T = EYE + b.hh, B = EYE - b.hh;
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([L[0], T, L[1], 0, 0, R[0], T, R[1], 1, 0, R[0], B, R[1], 1, 1, L[0], T, L[1], 0, 0, R[0], B, R[1], 1, 1, L[0], B, L[1], 0, 1]), gl.DYNAMIC_DRAW);
+    gl.bindTexture(gl.TEXTURE_2D, b.tex); gl.drawArrays(gl.TRIANGLES, 0, 6);
+  }
+}
+function walk(dt) {
+  const sc = scene(floor);
+  if (pending !== null && !glide) { const e = load(pending); if (e && e.ready) { cur = pending; pending = null; mode = 'photo'; z = 0; look = lookTo = 0; hud(); tidy(); return; } }
+  if (glide) {
+    glide.t = Math.min(1, glide.t + dt / glide.dur); const k = glide.t * glide.t * (3 - 2 * glide.t);
+    cam.x = glide.x0 + (glide.x1 - glide.x0) * k; cam.z = glide.z0 + (glide.z1 - glide.z0) * k; cam.yaw = glide.y0 + wrap(glide.y1 - glide.y0) * k; cam.pitch = glide.p0 * (1 - k);
+    if (glide.t >= 1) { const then = glide.then; glide = null; if (then) then(); }
+  } else if (route) {   // the auto tour's walk: turn toward the next corner, slow down while turning
+    const b = route.b; if (b.posed ? Math.hypot(b.x - cam.x, b.z - cam.z) < .6 : Math.hypot(b.x - cam.x, b.z - cam.z) < 1.5 && Math.abs(wrap(face(b.x, b.z) - cam.yaw)) < .5) { stepIn(b); return; }
+    const end = route.i >= route.pts.length, [tx, tz] = end ? [b.x, b.z] : route.pts[route.i], dx = tx - cam.x, dz = tz - cam.z, L = Math.hypot(dx, dz);
+    const err = wrap(Math.atan2(dx, -dz) - cam.yaw); cam.yaw += Math.max(-2.2 * dt, Math.min(2.2 * dt, err)); cam.pitch *= 1 - Math.min(1, dt * 4);
+    if (end) { if (b.posed || Math.abs(err) < .5) stepIn(b); }
+    else if (L < .25) route.i++;
+    else { const v = 1.5 * Math.max(.12, Math.cos(Math.min(1.45, Math.abs(err) * 1.3))) * dt; cam.x += dx / L * Math.min(L, v); cam.z += dz / L * Math.min(L, v); }
+  } else if (pending === null) {
+    const fw = (held.up ? 1 : 0) - (held.down ? 1 : 0), st = (held.sr ? 1 : 0) - (held.sl ? 1 : 0), sy = Math.sin(cam.yaw), cy = Math.cos(cam.yaw);
+    cam.yaw += ((held.right ? 1 : 0) - (held.left ? 1 : 0)) * 1.9 * dt;
+    const k = 1.9 * dt / (fw && st ? Math.SQRT2 : 1), nx = cam.x + (sy * fw + cy * st) * k, nz = cam.z + (-cy * fw + sy * st) * k;
+    if (clear(sc, nx, cam.z)) cam.x = nx; if (clear(sc, cam.x, nz)) cam.z = nz;   // a wall stops one direction, the other slides along it
+    const G = 6; cam.x = Math.max(-G, Math.min(sc.w * sc.cell + G, cam.x)); cam.z = Math.max(-G, Math.min(sc.h * sc.cell + G, cam.z));
+    let near = null, far = 2.8; for (const b of boards) if (b.plan === floor) { const d = Math.hypot(b.x - cam.x, b.z - cam.z); if (d < (b.posed ? 1.1 : far) && d < far && (b.posed || Math.cos(wrap(face(b.x, b.z) - cam.yaw)) > .7)) { far = d; near = b; } }
+    here = near && near.posed ? near : null; $('tip').textContent = here ? 'A photo was taken here: press E to see it' : 'Keep walking to step into the photo';
+    $('tip').classList.toggle('on', !!near); if (near && !near.posed && far < 1.35 && fw > 0) stepIn(near);
+  }
+  if (++tick % 12 === 0) hud();
+  vfov = FOV; drawWalk();
+}
+
+// ---- the camera editor (?edit): put each photo's camera where the photo was really taken
+const EDIT = WALK && /[?&]edit\b/.test(location.search), posed = boards.filter(b => b.posed);
+let ed = 0;
+for (const b of posed) { const c = S[b.spot].camera; b.fov = c.fov; b.tries = [{plan: c.plan, x: c.x, y: c.y, yaw: c.yaw, fov: c.fov}].concat((c.alts || []).map(a => ({plan: c.plan, ...a}))); b.try = 0; }
+function lens(b) { const t = Math.tan(b.fov * Math.PI / 360); b.lens = [t, t / S[b.spot].aspect]; }
+function frac(b) { const sh = P[b.plan].shell; return [sh.x0 + b.x / (sh.w * sh.cell) * (sh.x1 - sh.x0), sh.y0 + b.z / (sh.h * sh.cell) * (sh.y1 - sh.y0)]; }
+function edShow(i) { ed = (i + posed.length) % posed.length; const b = posed[ed]; if (b.plan !== floor) setFloor(b.plan); $('ename').textContent = S[b.spot].file + ' · ' + S[b.spot].label + ' (' + (ed + 1) + '/' + posed.length + ')'; $('esaid').textContent = ''; }
+function edAlt() { const b = posed[ed]; b.try = (b.try + 1) % b.tries.length; const t = b.tries[b.try]; [b.x, b.z] = world(P[b.plan], t.x, t.y); b.yaw = t.yaw; b.fov = t.fov; lens(b); $('esaid').textContent = 'guess ' + (b.try + 1) + ' of ' + b.tries.length; }
+function edKey(k) {
+  const b = posed[ed];
+  if (k === 'c' || k === 'C') edAlt(); else if (k === 'r' || k === 'R') b.yaw += Math.PI; else if (k === '[') edShow(ed - 1); else if (k === ']') edShow(ed + 1);
+  else if (k === '-' || k === '=' || k === '+') { b.fov = Math.max(50, Math.min(130, b.fov + (k === '-' ? -2 : 2))); lens(b); $('esaid').textContent = 'lens ' + b.fov + '°'; } else return false;
+  return true;
+}
+function edSave() {
+  const out = {}; for (const b of posed) { const [x, y] = frac(b); out[S[b.spot].file] = {plan: b.plan, x, y, yaw: wrap(b.yaw) + (wrap(b.yaw) < 0 ? Math.PI * 2 : 0), fov: b.fov}; }
+  fetch('cameras', {method: 'POST', body: JSON.stringify(out)}).then(r => r.ok ? r.json() : Promise.reject()).then(j => { $('esaid').textContent = 'Saved ' + j.saved + ' cameras'; })
+    .catch(() => { $('esaid').textContent = 'Could not save here: open the tour with  python -m vision tour open'; });
+}
+function editFrame(dt) {
+  const b = posed[ed], fw = (held.up ? 1 : 0) - (held.down ? 1 : 0), st = (held.sr ? 1 : 0) - (held.sl ? 1 : 0), sy = Math.sin(b.yaw), cy = Math.cos(b.yaw), k = .7 * dt;
+  b.yaw += ((held.right ? 1 : 0) - (held.left ? 1 : 0)) * .5 * dt; b.x += (sy * fw + cy * st) * k; b.z += (-cy * fw + sy * st) * k;
+  cam.x = b.x; cam.z = b.z; cam.yaw = b.yaw; cam.pitch = 0;
+  vfov = 2 * Math.atan(Math.max(b.lens[1], b.lens[0] / (cv.width / cv.height)));   // wide enough to see the whole photo
+  if (++tick % 12 === 0) mapHud();
+  if (b.tex) drawWalk(b);
+}
+if (EDIT) {
+  $('fix').hidden = false; $('eprev').onclick = () => edShow(ed - 1); $('enext').onclick = () => edShow(ed + 1); $('ealt').onclick = edAlt; $('eturn').onclick = () => edKey('r');
+  $('enar').onclick = () => edKey('-'); $('ewid').onclick = () => edKey('='); $('esave').onclick = edSave;
+  $('fix').onclick = () => { stopAuto(); const on = mode !== 'edit'; mode = on ? 'edit' : 'walk'; $('edit').hidden = !on; $('fix').textContent = on ? 'Done fixing' : 'Fix cameras'; $('fix').classList.toggle('on', on); if (on) edShow(ed); hud(); };
+}
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now; size();
+  if (mode === 'edit') { editFrame(dt); requestAnimationFrame(frame); return; }
+  if (mode === 'walk') { walk(dt); requestAnimationFrame(frame); return; }
+  const fwd = held.up || auto;
+  if (held.left || held.sl) lookTo = Math.max(-1, lookTo - 1.6 * dt);
+  if (held.right || held.sr) lookTo = Math.min(1, lookTo + 1.6 * dt);
+  look += (lookTo - look) * Math.min(1, dt * 8);
+  if (go) {
+    go.t += dt / FADE; if (go.fwd) z += SPEED * dt;
+    if (go.t >= 1) { cur = go.to; z = go.z; go = null; hud(); tidy(); }
+  } else if (want === cur) { want = null;
+  } else if (want !== null) {
+    const e = load(want);
+    if (e && e.ready) { go = {to: want, t: 0, z: wantZ, fwd: want > cur}; want = null; lookTo = 0; }
+  } else if (fwd) {
+    z += SPEED * dt;
+    if (z >= ZMAX) { z = ZMAX;
+      if (trip) tripNext();                                                                   // auto tour in a home with a model
+      else if (WALK) { if (cur < N - 1 && S[cur + 1].room === S[cur].room) walkTo(cur + 1, 0); }   // by hand: on to the room's next photo, no further
+      else if (cur < N - 1) walkTo(cur + 1, 0); else if (auto) walkTo(0, 0); }
+  } else if (held.down) {
+    z -= SPEED * dt;
+    if (z <= 0) { z = 0; if (WALK) stepOut(); else walkTo(cur - 1, ZMAX * 0.6); }
+  }
+  draw(); requestAnimationFrame(frame);
+}
+
+const KEYS = {ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', w: 'up', s: 'down', a: 'sl', d: 'sr', W: 'up', S: 'down', A: 'sl', D: 'sr'};
+addEventListener('keydown', e => {
+  if (e.key === 'Escape') { if (big.classList.contains('on')) return openPlans(false); if (WALK && mode === 'photo') { stopAuto(); stepOut(); } return; }
+  if (e.key === 'm' && P.length) return openPlans(!big.classList.contains('on'));
+  if (mode === 'edit') { if (e.key === ' ' || edKey(e.key)) { e.preventDefault(); return; } }
+  if (e.key === ' ') { e.preventDefault(); auto ? stopAuto() : startAuto(); return; }
+  if ((e.key === 'e' || e.key === 'E' || e.key === 'Enter') && mode === 'walk' && here && !glide) { stopAuto(); stepIn(here); return; }
+  const k = KEYS[e.key]; if (!k) return; e.preventDefault(); stopAuto(); held[k] = true;
+});
+addEventListener('keyup', e => { const k = KEYS[e.key]; if (k) held[k] = false; });
+addEventListener('blur', () => { for (const k in held) held[k] = false; });
+for (const b of document.querySelectorAll('.pad [data-k]')) {
+  const k = b.dataset.k, off = () => { held[k] = false; };
+  b.addEventListener('pointerdown', e => { e.preventDefault(); stopAuto(); held[k] = true; b.setPointerCapture(e.pointerId); });
+  b.addEventListener('pointerup', off); b.addEventListener('pointercancel', off);
+}
+$('auto').onclick = () => { auto ? stopAuto() : startAuto(); };
+$('back').onclick = () => { stopAuto(); stepOut(); };
+$('floor').onclick = () => { stopAuto(); if (mode === 'photo') { mode = 'walk'; } setFloor(WALKS[(WALKS.indexOf(floor) + 1) % WALKS.length]); hud(); };
+$('rec').onclick = () => {   // record the auto tour from the start, straight off the canvas, and save it when the tour ends
+  if (rec) return stopAuto();
+  const type = ['video/mp4;codecs=avc1', 'video/webm;codecs=vp9', 'video/webm'].find(t => window.MediaRecorder && MediaRecorder.isTypeSupported(t)); if (!type) return;
+  const parts = [], r = new MediaRecorder(cv.captureStream(30), {mimeType: type, videoBitsPerSecond: 12e6});
+  r.ondataavailable = e => { if (e.data.size) parts.push(e.data); };
+  r.onstop = () => { rec = null; $('rec').classList.remove('on'); $('rec').textContent = 'Record video';
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(parts, {type})); a.download = 'walkthrough.' + (type.includes('mp4') ? 'mp4' : 'webm'); a.click(); };
+  stopAuto(); if (WALK) { if (mode === 'photo') { mode = 'walk'; } setFloor(WALKS[0], true); } else { cur = 0; z = 0; }
+  rec = r; r.start(); $('rec').classList.add('on'); $('rec').textContent = 'Stop recording'; startAuto();
+};
+let drag = null;
+cv.addEventListener('pointerdown', e => { drag = e.clientX; cv.setPointerCapture(e.pointerId); cv.style.cursor = 'grabbing'; });
+cv.addEventListener('pointermove', e => {
+  if (drag !== null && mode === 'walk') { cam.yaw -= (e.clientX - drag) / innerWidth * 2.2; cam.pitch = Math.max(-.5, Math.min(.5, cam.pitch + e.movementY / innerHeight * 1.5)); drag = e.clientX; }
+  else if (drag !== null) { lookTo = Math.max(-1, Math.min(1, lookTo - (e.clientX - drag) / innerWidth * 2.5)); drag = e.clientX; }
+  else if (e.pointerType === 'mouse') { mx = e.clientX / innerWidth * 2 - 1; my = e.clientY / innerHeight * 2 - 1; }
+});
+const drop = () => { drag = null; cv.style.cursor = 'grab'; };
+cv.addEventListener('pointerup', drop); cv.addEventListener('pointercancel', drop);
+
+if (!WALK) load(0); hud(); tidy(); requestAnimationFrame(frame);
+</script>
+</body>
+</html>

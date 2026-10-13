@@ -34,6 +34,7 @@ bash scripts/setup.sh                     # venv + deps + .env from template + c
 .venv/bin/python -m vision fonts          # fetch the ten caption fonts + write the sample sheet data/shorts/_sample/caption-fonts.png
 .venv/bin/python -m vision sfx            # add 3 sound effects per kind to assets/sfx/ (or: sfx whoosh 5)
 .venv/bin/python -m vision visa list      # Visa Watch accounts: add | list | update | pause | resume | remove | check <id>
+.venv/bin/python -m vision tour <folder> --title "12 Main St"   # walk-through tour from listing photos (first: tour model; view: tour open <slug>)
 .venv/bin/python -m pytest -q             # 27 tests, all external services mocked
 bash scripts/install_launchagent.sh       # auto-start at login + restart on crash
 tail -f logs/vision.log
@@ -51,6 +52,7 @@ vision/
                    approval actions (watches approval_decided -> APPROVAL_HANDLERS[kind])
   server.py        FastAPI: dashboard, /ws, /api/*, OAuth + Fyers login callbacks
   ask.py           AskEngine: LLM tool-calling over master data; session memory 30 min
+  tour.py          standalone tool (not a master): listing photos -> data/tours/<slug>/ web tour + video; page template tour_viewer.html
   voice/           TTS (kokoro | piper | macos), STT (mlx-whisper), WakeWord (openWakeWord)
   channels/telegram.py   briefs, alerts, reminders, notices, /commands, approve/reject buttons
   services/        llm.py (LM Studio OpenAI-compatible + Anthropic + a hosted "writer" tier on Groq), oauth.py (Google/Microsoft),
@@ -213,6 +215,69 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   to three other styles; a page that still fails is kept as `draft.html` with status `qa_failed` (desk stage "Held back"),
   never deployed or pitched. `scripts/site_contact_sheet.py` renders every style for sample businesses into
   `data/sites/_contact/index.html`.
+- Photo tours (`vision/tour.py`, a pitch demo for realty firms, **not a master**: no catalog or dashboard entry). A folder of
+  listing photos becomes standing spots in walking order (`ROOMS`): the local vision model names each photo's room (no model
+  or `--keep-order` = file-name order, and a file name like `03-kitchen.jpg` labels itself); near-duplicates are left out.
+  Depth per photo from Depth Anything V2 **Small** (`services/depth.py`, ONNX, Apache 2.0; the larger models are
+  non-commercial, don't swap them in). The page (`tour_viewer.html`, one WebGL shader, no library) pushes forward with Up,
+  steps back with Down, looks with Left/Right, fades to the next spot, Space = auto tour; `video()` renders the same move
+  with torch into `tour.mp4` (`--upright` for 1080x1920). The camera numbers (`ZMAX`, `NEAR`, `FAR`, `PIVOT`) are in both
+  files and must match. **Every pixel comes from the photo, only shifted by depth; no generative fill, and the page and the
+  video say "Motion generated from listing photos".** It reads a folder and fetches nothing: **Mani's photos must be ones he
+  may use (no scraping realtor.ca).** A floor plan among the photos (the model answers "plan") stays out of the walk:
+  `read_plan` has the model give each printed room name and its point, `path` turns those into the walk order (from the
+  entry or living room, each time the nearest room; outside first, backyard last), the page shows the plan as a map with a
+  dot on the room in view (two same-named rooms get two dots: which bedroom a photo shows is not known), a click on the
+  opened plan walks to that room, and the video ends on the plans. The local 8B model reads plans well but cannot tell
+  empty rooms apart (it called an empty dining room "living"; listing its plan's rooms in the question made it worse), so
+  each run writes `data/tours/<slug>/rooms.txt` (`13.jpg = dining`): corrected by hand, it is used on the next run
+  instead of the model, as is what was read off the plans (`--fresh` asks again). First real listing: 461 Lauzon Road
+  (2026-10-12), private test only, its photos carry the brokerage's watermark.
+  **Walk-in model (Mani wanted WASD walking and a cameraman-style walk, free only, OpenArt ruled out):** `shell()` turns a
+  plan's black walls into a grid (windows = the blue strips; lettering and thin lines dropped; size judged from wall
+  thickness, `WALL_M`, approximate) and the page raises it into a plain 3D model: W A S D to walk with wall collision,
+  arrows or drag to turn, the plan as the floor, a ceiling, each photo standing where the plan prints its room's name
+  (`boards`). Walking into a photo opens it (`stepIn`), Down or Esc steps back out (`stepOut`). Space = auto tour
+  (`tripNext`): outside photos, then a walk through the doorways (`pathTo`) room to room, stepping into each photo.
+  "Record video" saves that tour from the canvas (MediaRecorder; the labels are page elements and are not in the file).
+  **Photos painted onto the model (Mani: "the images are like wall posters, not blended"):** `Finder` works out where
+  each photo was taken with no camera data: for every open square of the plan it knows the distance to the walls all
+  round, and the photo's depth along its eye line is matched against that (within the photo's own room; windows vs
+  colour above eye level as a second clue; lens width tried at 88-118 degrees). The page then throws each photo from its
+  camera onto walls, floor and ceiling (`PAINT` in the shaders: the four cameras nearest the walker, a wall-grid test so
+  a photo does not paint through walls), so from where the photo was taken the model looks like the photo, and it
+  stretches as the walker moves away. Windows are closed panes the photo paints over. E at a camera's spot opens the
+  real photo; the auto tour walks from camera to camera. **Known weakness: a boxy empty room looks alike from opposite
+  corners, so a camera can come out mirrored**; each run writes `cameras.txt` (plan, x, y, direction, lens) and a later
+  run keeps what it says. Rooms with no photo stay white. **Camera editor** (`tour open <slug>`, then `?edit` → "Fix
+  cameras"): one photo at a time, the bare model drawn over it as tints (purple floor, orange/green walls, blue windows,
+  black line where wall meets floor); W A S D and arrows move and turn the camera, C steps through the finder's
+  runner-up guesses (`alts`, the best of each of 8 directions), R turns it round, Save posts to the local server
+  (`save_cameras`, this machine only), which rewrites tour.json, the page and cameras.txt. On 461 Lauzon the finder had
+  11 of 13 cameras facing the right way unaided; the utility room and the attic (sloped roof, not a box) were set by hand.
+  **Blender films it** (`vision/tour_model.py`, `scripts/tour_film.py`; Blender 5.2 installed by Homebrew 2026-10-12).
+  `tour bake <slug>` writes `model/`: `model.obj` + three textures (floor, ceiling, one atlas of every stretch of wall
+  face) with the photos painted on in numpy the way the page's shader does it (`Painter`; the better-placed photo wins an
+  overlap outright, an even mix printed things twice; `mend` fills what no photo saw from the nearest colour), and
+  `path.json`, the camera's walk from photo to photo through the doorways, smoothed. `tour film <slug>` has Blender render
+  it unlit (the photos already hold the light) frame by frame and ffmpeg join `walk.mp4` (`--quick`: 14 s at 640x360).
+  One floor per bake (the first plan with a model); outside photos and the attic are not in the film. The .obj opens in
+  any 3D program. Unreal was considered and dropped (too heavy for this Mac, and a buyer can't open it from a link).
+  **Dummy home, where the truth is known** (`scripts/dummy_home.py` writes the spec, the plan drawing and truth.json;
+  `scripts/dummy_home_render.py` builds a furnished 10 x 8 m six-room house in Blender and photographs it;
+  `scripts/dummy_home_test.py` marks the finder in metres and degrees; data in `data/dummy_home/`, tours `dummy-one`,
+  `dummy-four`). Results 2026-10-12 (rooms and plan names given, so the marks are the finder's alone): one corner shot
+  per room: **2 of 6** right (within 0.75 m and 20 degrees). Four shots per room each placed alone: 8 of 24. Four shots
+  per room **placed together** (`Finder.find_group`; files named `<name>-1 .. -4` in one room are a set from one spot, a
+  quarter turn to the right each): **20 of 24**, 5 rooms of 6 within 0.06-0.28 m and 3 degrees; the bedroom (near-square,
+  a tall wardrobe) came out a quarter turn off. So Lauzon's "11 of 13 by eye" was lenient or lucky (empty rooms, real
+  photos): **a single photo per room is not reliable; a four-shot set is.** And furniture is the open problem: baked
+  onto flat walls and floor it smears badly away from the camera (see dummy-four's model/floor.jpg). Rendered rooms are
+  plainer than real photos, so the depth model may do better or worse on real furnished homes: untested.
+  **Mani now wants to sell this, not use it as a job pitch (2026-10-12).** Not yet tried: a furnished home, any second
+  listing, real-speed viewing, the Record button.
+  It is still the plan's shape, **not a capture of the interior**: a true photoreal walk needs a paid video model or a
+  capture of the house. `tour.mp4` from Python is still the photo-by-photo video. Tier 2 (free walking from a phone video, Gaussian splat) is discussed, not built.
 - Trading: practice account default; live needs OANDA_ENV=live AND options.live_trading: true;
   approval TTL 30 min; refuse if price moved > 0.5 ATR; units capped.
 - Weather Agent belongs to News Desk; World Watch is flights only (the globe's weather icons are a plain data endpoint, not an agent).
