@@ -229,6 +229,11 @@ div:has(>.barglow){height:8px!important;background:rgba(255,255,255,.07)!importa
 .mlist-open{gap:1px}
 .mlist-open .mst,.mlist-open .mst-on{min-height:26px!important;font-size:13px}
 .acc{display:flex;flex-direction:column;gap:6px;padding:5px 0 7px 14px;margin:1px 0 3px 5px;border-left:1px solid rgba(251,202,3,.35)}
+.mrow{display:flex;flex-direction:column}
+.mst,.mst-on{transition:min-height .3s ease,font-size .3s ease}
+.acc-wrap{display:grid;grid-template-rows:0fr;opacity:0;visibility:hidden;transition:grid-template-rows .3s ease,opacity .25s ease,visibility 0s linear .3s}
+.acc-wrap.acc-open{grid-template-rows:1fr;opacity:1;visibility:visible;transition:grid-template-rows .3s ease,opacity .25s ease .05s,visibility 0s}
+.acc-in{overflow:hidden;min-height:0}
 .acc-list{display:grid;grid-template-columns:1fr 1fr;column-gap:12px}
 .acc-row{display:flex;align-items:center;gap:8px;height:19px;min-width:0;font-size:12px;font-weight:600;color:#EDE6D6}
 .acc-row span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -351,6 +356,7 @@ div:has(>.barglow){height:8px!important;background:rgba(255,255,255,.07)!importa
         </div>
         <div class="{{mlistCls}}">
         <sc-for list="{{masters}}" as="ms" hint-placeholder-count="3">
+          <div class="mrow">
           <button class="{{ms.cls}}" onClick="{{ms.pick}}">
             <div class="{{ms.dot}}"></div>
             <span style="flex-grow: 1">{{ms.name}}</span>
@@ -359,7 +365,7 @@ div:has(>.barglow){height:8px!important;background:rgba(255,255,255,.07)!importa
               <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #B97D10; width: 22px; text-align: right">{{ms.count}}</span>
             </sc-if>
           </button>
-          <sc-if value="{{ms.open}}" hint-placeholder-val="{{ false }}">
+          <div class="{{ms.accCls}}"><div class="acc-in">
             <div class="acc">
               <div class="acc-list">
                 <sc-for list="{{ms.agents}}" as="a" hint-placeholder-count="6">
@@ -371,7 +377,8 @@ div:has(>.barglow){height:8px!important;background:rgba(255,255,255,.07)!importa
                 <button class="qa" onClick="{{scrollGraph}}">Agent graph ›</button>
               </div>
             </div>
-          </sc-if>
+          </div></div>
+          </div>
         </sc-for>
         </div>
       </div>
@@ -2140,7 +2147,9 @@ class Component extends DCLogic {
       trust: ({ traffic: 'OBSERVE', calendar: 'SUGGEST', email: 'SUGGEST', trading: 'OBSERVE', invest: 'OBSERVE', news: 'OBSERVE', web: 'SUGGEST', jobs: 'ACT', world: 'OBSERVE', youtube: 'ACT', visa: 'OBSERVE' })[id],
       trustColor: ({ traffic: '#67C7EB', calendar: '#FBCA03', email: '#FBCA03', trading: '#67C7EB', invest: '#67C7EB', news: '#67C7EB', web: '#FBCA03', jobs: '#67C7EB', world: '#67C7EB', youtube: '#67C7EB', visa: '#67C7EB' })[id],
       cls: s.master === id ? 'mst-on' : 'mst',
+      id, agents: [],
       open: s.master === id && !!s.accOpen,   // its sub-agents and buttons show under it; a second click folds them away
+      accCls: s.master === id && s.accOpen ? 'acc-wrap acc-open' : 'acc-wrap',
       pick: () => { if (this.state.mode === 'desk') this.openDesk(id); else this.setState({ master: id, accOpen: this.state.master === id ? !this.state.accOpen : true }); }
     }));
     const sel = data[s.master];
@@ -2149,7 +2158,9 @@ class Component extends DCLogic {
     if (s.agHold == null) this.agPg = Math.floor(s.tick / 5) % pgN;
     const agPgI = Math.min(this.agPg || 0, pgN - 1);
     const agents = allAg;
-    masters.forEach((m) => { if (m.open) m.agents = allAg; });
+    // the list stays in a master while it folds away, so it closes smoothly instead of emptying first
+    if (s.accOpen) this.accLast = { id: s.master, agents: allAg };
+    masters.forEach((m) => { m.agents = m.id === s.master ? allAg : this.accLast && this.accLast.id === m.id ? this.accLast.agents : []; });
     const agDots = Array.from({ length: pgN }, (_, k) => ({ cls: k === agPgI ? 'pgdot-on' : 'pgdot' }));
 
     const g = (label, v, hot) => ({ label, short: label.split(' · ')[0].replace('UNIFIED MEMORY', 'MEMORY'), val: v + '%', pct: v + '%', color: v >= hot ? '#AA0505' : '#FBCA03' });
@@ -2597,8 +2608,9 @@ class Component extends DCLogic {
       // Investments has its own cards just before this one: here only what they don't say (a login or CSV it waits on)
       if (m === 'invest' && RD.invest && RD.invest.ports && RD.invest.ports.length) { const wt = /waiting on: [^·]+/.exec(line); line = wt ? wt[0].trim() : 'In the portfolio card'; }
       // one short line per desk, so all eleven fit the card and none is read out at length
+      const full = line;
       line = line.split('; ')[0]; if (line.length > 96) line = line.slice(0, 96).replace(/[\s·,]+\S*$/, '') + '…';
-      return { name, line, color: m === Component.HOLD ? '#6E6654' : w ? '#FF8A73' : '#C9C0AC', border: w ? '#6A0C0B' : '#262A33' };
+      return { id: m, name, line, full, color: m === Component.HOLD ? '#6E6654' : w ? '#FF8A73' : '#C9C0AC', border: w ? '#6A0C0B' : '#262A33' };
     });
     const spokenMasters = 'Email: 24 new in the last day, 3 need your attention, 2 replies drafted. Calendar: ' + calSpoken + ' Trading: the final call is waiting for your approval. Investments: portfolio up 43 dollars yesterday. Web Designer: a pitch is ready. Jobs: 12 new postings. ';
     const demoReply = greet + ', Mani. ' + onlineMasters + ' masters reporting. ' + spokenMasters + 'Markets: NIFTY +0.44%, NASDAQ +0.57%, Bitcoin −1.35%. Leamington 22° and cloudy. ' + waits.length + ' things need you: ' + waits.join(', ') + '. [demo data]';
@@ -2771,12 +2783,16 @@ class Component extends DCLogic {
       if (inv.ideas && inv.ideas.length) deck.push({ key: 'ideas', kick: 'BRIEFING · IDEAS TO CONSIDER', title: 'What you could do', rows: inv.ideas.map((x, i) => ({ a: String(i + 1), b: x.idea + (x.why ? '  (' + x.why + ')' : ''), ac: '#FBCA03', bc: '#EDE6D6' })),
         say: 'Ideas to consider, not advice. ' + inv.ideas.map((x) => String(x.idea).replace(/[.\s]+$/, '')).join('. ') + '.' });
       deck.push({ key: 'mkt', kick: 'BRIEFING · ' + bMktsTitle, title: 'Markets', rows: bMkts.map((m) => ({ a: m.name, b: m.val, ac: '#EDE6D6', bc: m.color })), say: 'Markets. ' + spk(bMkts.map((m) => m.name + ' ' + m.val).join('. ')) + '.' });
-      // the desks card leaves out what has cards of its own (Investments: portfolio; News: headlines and weather)
-      // and it does not say again what the "Waiting for you" card just said, nor list a desk with nothing to tell
+      // One card per desk (Mani's choice, 2026-10-13: no combined "Your desks" card). A desk with cards of its own is left
+      // out (Investments: portfolio; News: headlines and weather); a card does not say again what the "Waiting for you"
+      // card just said, and a desk with nothing to tell gets no card
       const bDesks = bMasters.filter((x) => x.name !== 'INVEST' && !(x.name === 'NEWS' && heads.length) && !(x.name === 'TRAFFIC' && T))
-        .map((x) => Object.assign({}, x, { line: !needs.length ? x.line : x.line.split(' · ').filter((p) => !/(pitch(es)?|package(s)?|request(s)?) (waiting|awaiting)|awaiting ok|^waiting on:/i.test(p)).join(' · ').replace(/,? waiting for you/i, '') }))
-        .filter((x) => x.line && !/^(nothing today|no report yet)$/i.test(x.line));
-      deck.push({ key: 'desk', kick: 'BRIEFING · DESKS', title: 'Your desks', rows: bDesks.map((x) => ({ a: x.name, b: x.line, ac: '#FBCA03', bc: x.color })), say: 'Your desks. ' + spk(bDesks.map((x) => x.name.toLowerCase() + ': ' + x.line).join('. ')) + '.' });
+        .map((x) => Object.assign({}, x, { parts: x.full.split(/ · |; /).map((p) => p.trim().replace(/,? waiting for you/i, ''))
+          .filter((p) => p && (!needs.length || !/(pitch(es)?|package(s)?|request(s)?) (waiting|awaiting)|awaiting ok|^waiting on:/i.test(p))).slice(0, 6) }))
+        .filter((x) => x.parts.length && !/^(nothing today|no report yet)$/i.test(x.parts.join(' ')));
+      bDesks.forEach((x) => { const nm = (masters.find((m) => m.id === x.id) || {}).name || x.name;
+        deck.push({ key: 'desk:' + x.id, kick: 'BRIEFING · ' + x.name, title: nm, rows: x.parts.map((p) => ({ a: '›', b: p, ac: '#FBCA03', bc: x.color })),
+          say: nm + '. ' + spk(x.parts.join('. ')) + '.' }); });
       if (heads.length) deck.push({ key: 'news', kick: 'BRIEFING · NEWS', title: 'Headlines', rows: heads.map((n) => ({ a: n.tag, b: n.text, ac: '#FBCA03', bc: '#EDE6D6' })), say: 'In the news. ' + heads.slice(0, 4).map((n) => n.text).join('. ') + '.' });
       if (wx) deck.push({ key: 'wx', kick: 'BRIEFING · WEATHER', title: wx.city || 'Weather', rows: [{ a: 'Now', b: wx.temp + '° · ' + wx.words, ac: '#C9C0AC', bc: '#EDE6D6' }],
         say: "It's " + wx.temp + ' degrees and ' + wx.words + (wx.city ? ' in ' + wx.city : '') + '.' });

@@ -122,7 +122,8 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   (MediaRecorder + silence detection) when available, else browser speech recognition. `wake` event opens the mic.
 - Holographic deck (`deckOn`, modes `briefing` and `issues`): cards projected from a small copy of the core, cover-flow
   carousel (centre card full, neighbours dimmed and title-only), ← → to step, space to pause. The briefing narrates one
-  card at a time (`startBrief` / `deckSpeak`); clicking a red agent or asking "what's wrong" opens issue cards and VISION
+  card at a time (`startBrief` / `deckSpeak`); each desk with something to tell has its own card (key `desk:<id>`, one row
+  per part of its report; Mani's choice, 2026-10-13: no combined "Your desks" card); clicking a red agent or asking "what's wrong" opens issue cards and VISION
   explains via `/api/issues/explain`. Tilt, scan lines and tint are switches in the voice menu (`vision-holo`).
   Mode `decide` is the decision deck: one wide card per approval (Review button, or "show my decisions"); an email reply
   shows the original beside the draft with attachment chips (`/api/approvals/{id}/email`, previewed in the card), a pitch
@@ -149,7 +150,8 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   underline tabs, no glow). Delete that block to get the earlier look back.
 - Ambient layout (Mani's choice, 2026-10-12): left = Instruments in one row, then Master Agents; clicking a master opens its
   sub-agents (two columns, name + status diamond, status word on hover) and its Desk / Agent graph buttons right under it
-  (`accOpen`, `ms.open`, `.acc`); a second click folds them. Right = Needs Approval (each notice has Close) then the Activity
+  (`accOpen`, `ms.open`, `.acc`); a second click folds them. Opening and folding are a 0.3 s transition: every master
+  carries its `.acc-wrap` (grid rows 0fr → 1fr, class `acc-open`), and `accLast` keeps a folding master's list until it has closed. Right = Needs Approval (each notice has Close) then the Activity
   Log (14 lines). Bottom = the 24h timeline alone. The trust badge and agent count show on the selected master only; the
   "Agent graph" side tab is gone (the button does it).
 - Design system: palette #FBCA03 gold, #B97D10 bronze, #AA0505 red, #6A0C0B dark red, #67C7EB blue
