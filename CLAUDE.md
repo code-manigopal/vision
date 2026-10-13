@@ -213,6 +213,11 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   to three other styles; a page that still fails is kept as `draft.html` with status `qa_failed` (desk stage "Held back"),
   never deployed or pitched. `scripts/site_contact_sheet.py` renders every style for sample businesses into
   `data/sites/_contact/index.html`.
+- Photo tours (a walk-through of a home from its listing photos and floor plan) were tried on 2026-10-12 and **parked**:
+  the code is on branch `parked/photo-tour` (commit ad8ea3f), not on main; its CLAUDE.md there has the full write-up. Why
+  parked: one photo per room places the camera right only about a third of the time, furniture smears when painted onto
+  flat walls, and capture-based tours (Matterport, iGUIDE, Zillow) already do it properly. Left on this Mac: the tours in
+  `data/tours/`, the test home in `data/dummy_home/`, `models/depth-anything-v2-small.onnx` (99 MB), and Blender.
 - Trading: practice account default; live needs OANDA_ENV=live AND options.live_trading: true;
   approval TTL 30 min; refuse if price moved > 0.5 ATR; units capped.
 - Weather Agent belongs to News Desk; World Watch is flights only (the globe's weather icons are a plain data endpoint, not an agent).
