@@ -170,12 +170,14 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
 - Zerodha via hosted Kite MCP (read-only); Fyers via API v3 with daily login (PIN refresh optional).
 - Job Hunt: **never touch Indeed** (not even alert emails). Sources: Job Bank alert emails,
   Adzuna, Greenhouse/Lever/Ashby boards. Never auto-applies; never invents resume content.
-  **LinkedIn (Mani's choice, 2026-10-12, reversing the earlier "never"):** `linkedin: true` reads LinkedIn's public job search
+  **LinkedIn (Mani's choice, 2026-10-12, reversing the earlier "never"; switched off the same day, `linkedin: false`: the
+  first live request was answered 429, so a browser's user agent alone does not get in, and going further was not pursued):**
+  `linkedin: true` reads LinkedIn's public job search
   as a signed-out visitor with a browser's user agent (`jobs.linkedin`, `LI_UA`; against LinkedIn's terms, his call). Limits
   in code, keep them: never signed in and no cookies (so his account is not involved), `linkedin_titles` (4) result pages and
   `linkedin_details` (10) posting texts a run, `linkedin_delay` (4 s) apart, and a 403/429/999 or a redirect to the sign-in
   wall stops it for a day (kv `job_state` `linkedin`): no retry, no proxy, no CAPTCHA handling. LinkedIn alert emails are
-  still not read. The page parsing was written from the known page layout and has not run against the live site.
+  still not read. The page parsing was written from the known page layout and has never read a live page.
   Borrowed after reviewing five open-source job hunters (2026-10-12; career-ops, ai-job-hunter-app, ai-job-search):
   `masters/job_match.py` (plain rules, no model): whole-word skill matching with other spellings (`has`, `ALIASES`; "Excel"
   is not in "excellent"), `coverage` (skills the posting names that the resume shows, and `gaps` it doesn't: shown on the

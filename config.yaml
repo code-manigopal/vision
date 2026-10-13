@@ -126,7 +126,7 @@ masters:
       target_companies: []   # e.g. - { name: Shopify, ats: greenhouse, slug: shopify }   (ats: greenhouse | lever | ashby)
       discover_companies: true            # a posting whose link sits on one of those boards adds that company to the list read on later runs
       discover_max: 40                    # at most this many found companies are read each run
-      linkedin: true                      # LinkedIn's public job search, read signed out with a browser's user agent (against its terms; false = off)
+      linkedin: false                     # LinkedIn's public job search, read signed out with a browser's user agent (against its terms; true = on). Off: it answered 429 to the first request on 2026-10-12
       linkedin_titles: 4                  # the first four titles, one results page each, every run
       linkedin_details: 10                # at most this many postings' full text a run
       linkedin_delay: 4                   # seconds between its requests; a refusal stops LinkedIn for a day
