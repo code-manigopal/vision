@@ -1,12 +1,19 @@
 """Job Hunt (live): Job Scout -> Resume Tailor + Cover Letter Writer -> YOU -> Outreach -> Application Tracker
 (reporter) -> Interview Prep.
 
-Sources (no LinkedIn, no Indeed):
+Sources (no Indeed):
 - Job Bank Canada alert emails (set up alerts at jobbank.gc.ca; the Email Manager reads them)
 - Adzuna API (ADZUNA_APP_ID / ADZUNA_APP_KEY; 25 test calls free, then £8 a month as of 2026-10)
 - Company career pages on Greenhouse, Lever, Ashby, Workable and SmartRecruiters (public job feeds), listed in config
 - Free public feeds, no key (`free_sources`): Job Bank's own search feed (Ontario, the last couple of days), Himalayas and
   Jobicy (remote jobs open to Canada). Any of them may change or close; each fails on its own.
+- LinkedIn's public job search (`linkedin: true`; Mani's choice, 2026-10-12): the pages anyone sees signed out, asked for
+  with a browser's user agent. Never signed in, a few requests a run spaced apart, and a refusal stops it for a day.
+- Companies found along the way: a posting whose link sits on one of those career-page boards adds that company to the
+  list read on later runs (`discover_companies`, kv `job_companies`).
+
+Before scoring, a posting must pass the gates in `job_match.gate` and must not be a job already seen from another source
+(`job_match.same_keys`, kv `job_keys`). A reworded resume must pass `job_facts.unsupported` or it goes in as written.
 
 Resumes: vault/resume/analyst.md, software.md and ai.md, picked by the posting's title (`resume_for`); master.md is the fallback.
 
@@ -20,6 +27,7 @@ import asyncio
 import hashlib
 import re
 import time
+from html import unescape
 from pathlib import Path
 from typing import Any
 
@@ -28,8 +36,14 @@ import httpx
 from ..agents import AgentResult, SubAgent, request_approval
 from ..config import ROOT, secret
 from ..services.llm import LLMUnavailable
+from .job_facts import unsupported
+from .job_match import FENCE_RULE, ats_ref, coverage, fence, gate, has, same_keys
 
 UA = {"User-Agent": "VISION job scout (personal use)"}
+# LinkedIn turns away anything that doesn't say it is a browser, so its requests (and only its) carry a browser's user agent.
+LI_UA = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36",
+         "Accept-Language": "en-CA,en;q=0.9"}
+LI = "https://www.linkedin.com/jobs-guest/jobs/api/"
 
 
 def jid(source: str, key: str) -> str:
@@ -156,6 +170,94 @@ async def jobicy(c: httpx.AsyncClient, days: int, geo: str = "canada") -> list[d
     return out
 
 
+async def linkedin(c: httpx.AsyncClient, store, titles: list[str], days: int, where: str = "Ontario, Canada",
+                   details: int = 10, delay: float = 4.0) -> list[dict]:
+    """LinkedIn's public job search, as a signed-out visitor sees it: one page of results per title, then the text of up to
+    `details` postings not seen before. Requests are `delay` seconds apart. Being refused (a 403, 429 or 999, or a redirect to
+    the sign-in wall) stops LinkedIn for a day: no retry, no proxy, no sign-in."""
+    if (store.kv_get("job_state", "linkedin") or {}).get("paused_until", 0) > time.time():
+        return []
+    found: dict[str, dict] = {}
+    asked = 0
+
+    async def get(path: str, **params):
+        nonlocal asked
+        if asked:
+            await asyncio.sleep(delay)
+        asked += 1
+        r = await c.get(LI + path, params=params or None, headers=LI_UA)
+        if r.status_code in (403, 429, 999) or re.search(r"authwall|/login|/checkpoint", str(r.url)):
+            store.kv_put("job_state", "linkedin", {"paused_until": time.time() + 86400, "why": f"refused ({r.status_code})"})
+            raise PermissionError("linkedin refused")
+        return r.text if r.status_code == 200 else ""
+
+    try:
+        for t in titles:
+            page = await get("seeMoreJobPostings/search", keywords=t, location=where, f_TPR=f"r{days * 86400}", start=0)
+            for card in page.split("<li")[1:]:
+                num = re.search(r"jobPosting:(\d+)", card)
+                part = lambda cls, tag: unescape(_text((re.search(cls + r"[^>]*>(.*?)</" + tag + ">", card, re.S) or [None, ""])[1]))
+                if not num or not part("base-search-card__title", "h3"):
+                    continue
+                found.setdefault(num.group(1), {
+                    "id": jid("linkedin", num.group(1)), "source": "LinkedIn", "title": part("base-search-card__title", "h3"),
+                    "company": part("base-search-card__subtitle", "h4"), "location": part("job-search-card__location", "span"),
+                    "url": f"https://www.linkedin.com/jobs/view/{num.group(1)}", "description": "",
+                    "posted": (re.search(r'datetime="(\d{4}-\d\d-\d\d)"', card) or [None, ""])[1]})
+        ends = [t.split()[-1].lower() for t in titles]
+        fresh = [n for n, j in found.items() if not store.kv_has("jobs", j["id"]) and any(e in j["title"].lower() for e in ends)]
+        for n in fresh[:details]:
+            m = re.search(r"show-more-less-html__markup[^>]*>(.*?)</div>", await get(f"jobPosting/{n}"), re.S)
+            found[n]["description"] = unescape(_text(m.group(1)))[:6000] if m else ""
+    except PermissionError:
+        pass
+    except Exception:
+        pass
+    return list(found.values())
+
+
+async def still_open(c: httpx.AsyncClient, job: dict) -> bool:
+    """False only when the posting's own page says it is gone (404 or 410); anything unclear counts as open."""
+    url = job.get("url") or ""
+    if not url.startswith("http") or "linkedin.com" in url:
+        return True
+    try:
+        return (await c.get(url)).status_code not in (404, 410)
+    except Exception:
+        return True
+
+
+def known_companies(store, prof: dict) -> list[dict]:
+    """The career pages to read: the ones in config, then the ones found from postings' own links."""
+    listed = list(prof.get("target_companies", []))
+    have = {(c.get("ats", "greenhouse"), c["slug"].lower()) for c in listed}
+    more = [c for c in store.kv_list("job_companies", limit=500) if (c.get("ats"), str(c.get("slug", "")).lower()) not in have]
+    return listed + [{"name": c.get("name") or c["slug"], "ats": c["ats"], "slug": c["slug"]} for c in more[:int(prof.get("discover_max", 40))]]
+
+
+def note_companies(store, jobs: list[dict]) -> int:
+    added = 0
+    for j in jobs:
+        ref = ats_ref(j.get("url", ""))
+        if ref and not store.kv_has("job_companies", f"{ref[0]}:{ref[1].lower()}"):
+            store.kv_put("job_companies", f"{ref[0]}:{ref[1].lower()}", {"ats": ref[0], "slug": ref[1], "name": j.get("company") or ref[1], "found": time.time()})
+            added += 1
+    return added
+
+
+def seen_before(store, job: dict) -> str:
+    """The id of an earlier posting that is this same job (another source, another link, or listed again), or "".
+    A job not seen before is written down under its keys."""
+    keys = same_keys(job)
+    for k in keys:
+        was = store.kv_get("job_keys", k)
+        if was and was.get("id") != job["id"] and was.get("at", 0) > time.time() - 90 * 86400:
+            return was["id"]
+    for k in keys:
+        store.kv_put("job_keys", k, {"id": job["id"], "at": time.time()})
+    return ""
+
+
 async def jobbank_alerts(c: httpx.AsyncClient, store, cfg) -> list[dict]:
     """Job Bank alert emails (categorised 'jobs' by the Email Manager) -> posting links -> posting pages."""
     from ..services import mailcal
@@ -204,16 +306,21 @@ def in_ontario(job: dict, remote_ok: bool = True) -> bool:
 def rule_score(job: dict, prof: dict) -> int:
     t, d = job["title"].lower(), (job["title"] + " " + job.get("description", "")).lower()
     title = 40 if any(w.lower() in t for w in prof.get("target_titles", [])) else 15 if any(w.split()[-1].lower() in t for w in prof.get("target_titles", [])) else 0
-    skills = min(40, 8 * sum(1 for s in prof.get("skills", []) if s.lower() in d))
+    skills = min(40, 8 * sum(1 for s in prof.get("skills", []) if has(s, job["title"] + " " + job.get("description", ""))))
+    if len(job.get("description") or "") < 200:           # a feed that gives the title only: half marks until the text is known
+        skills = max(20, skills)
     locs = [l.split(",")[0].lower() for l in prof.get("locations", [])]
     loc = 20 if any(l in (job.get("location", "") + " " + d[:400]).lower() for l in locs + ["remote"]) else 0
     bad = any(x.lower() in d for x in prof.get("exclude", []))
     return 0 if bad else title + skills + loc
 
 
+FEEDS = ("Job Bank", "LinkedIn", "Himalayas", "Jobicy", "Adzuna")
+
+
 # ---------- agents ----------
 class JobScout(SubAgent):
-    name, tier, note = "Job Scout", "API", "Job Bank · Adzuna · career pages"
+    name, tier, note = "Job Scout", "API", "Job Bank · LinkedIn · career pages"
 
     async def run(self, ctx):
         prof, store, llm = ctx["options"], ctx["store"], ctx.get("llm")
@@ -221,33 +328,65 @@ class JobScout(SubAgent):
         free = prof.get("free_sources", ["jobbank", "himalayas", "jobicy"])
         async with httpx.AsyncClient(timeout=25, headers=UA, follow_redirects=True) as c:
             found = (await adzuna(c, titles[:int(prof.get("adzuna_titles", 4))], prof.get("adzuna_where", "Ontario"), days)
-                     + await company_boards(c, prof.get("target_companies", [])) + await jobbank_alerts(c, store, ctx.get("cfg"))
+                     + await company_boards(c, known_companies(store, prof)) + await jobbank_alerts(c, store, ctx.get("cfg"))
+                     + (await linkedin(c, store, titles[:int(prof.get("linkedin_titles", 4))], days, prof.get("linkedin_where", "Ontario, Canada"),
+                                       int(prof.get("linkedin_details", 10)), float(prof.get("linkedin_delay", 4))) if prof.get("linkedin") else [])
                      + (await jobbank_feed(c, titles) if "jobbank" in free else [])
                      + (await himalayas(c, titles, days) if "himalayas" in free else [])
                      + (await jobicy(c, days) if "jobicy" in free else []))
-        if not found and not (free or secret("ADZUNA_APP_ID") or prof.get("target_companies")):
+        if not found and not (free or secret("ADZUNA_APP_ID") or prof.get("target_companies") or prof.get("linkedin")):
             return AgentResult("idle", "NOT SET UP", "Job Hunt: add Adzuna keys, target companies, or Job Bank alerts")
         found = list({j["id"]: j for j in found}.values())  # same posting from two searches counts once
         if str(prof.get("region", "")).lower() == "ontario":    # Mani's rule: Ontario only
             found = [j for j in found if in_ontario(j, bool(prof.get("remote_ok", True)))]
-        new = [j for j in found if not store.kv_has("jobs", j["id"])]
+        if prof.get("discover_companies", True):
+            note_companies(store, found)
+        fresh = sorted((j for j in found if not store.kv_has("jobs", j["id"])), key=lambda j: -len(j.get("description") or ""))
+        new, again, gated = [], 0, 0
+        for j in fresh:
+            first = seen_before(store, j)
+            if first:                                           # the same job from another source, or listed again
+                again += 1
+                was = store.kv_get("jobs", first) or {}
+                if was and time.time() - was.get("found", time.time()) > 7 * 86400:
+                    store.kv_put("jobs", first, {**was, "reposts": was.get("reposts", 0) + 1})
+                store.kv_put("jobs", j["id"], {"id": j["id"], "title": j["title"], "company": j["company"], "source": j["source"],
+                                               "status": "duplicate", "of": first, "found": time.time()})
+                continue
+            stop = gate(j, prof)
+            if stop:                                            # read from the posting's own wording, before any scoring
+                gated += 1
+                store.kv_put("jobs", j["id"], {**j, "score": 0, "why": stop, "status": "skipped", "found": time.time()})
+                continue
+            new.append(j)
         for j in new:
-            j["score"], j["why"] = rule_score(j, prof), "rules"
+            fit = coverage(j, _master_resume(j["title"]) or "", prof.get("skills", []))
+            j.update(score=rule_score(j, prof), why="rules", matched=fit["matched"], gaps=fit["gaps"], provisional=fit["provisional"])
         cand = sorted(new, key=lambda j: -j["score"])[:15]
         if llm and cand:
             try:
-                res = await llm.json("Score each job 0-100 for this candidate and give a 10-word reason.\nCandidate: " + str(
-                    {k: prof.get(k) for k in ("target_titles", "skills", "locations", "seniority")}) + "\nJobs: " + str(
-                    [{"i": i, "title": j["title"], "company": j["company"], "location": j["location"], "desc": j["description"][:700]} for i, j in enumerate(cand)])
+                res = await llm.json("Score each job 0-100 for this candidate and give a 10-word reason. " + FENCE_RULE + "\nCandidate: " + str(
+                    {k: prof.get(k) for k in ("target_titles", "skills", "locations", "seniority")}) + "\nJobs:\n" + fence(str(
+                    [{"i": i, "title": j["title"], "company": j["company"], "location": j["location"], "has": j["matched"], "lacks": j["gaps"],
+                      "desc": j["description"][:700]} for i, j in enumerate(cand)]))
                     + "\nReturn [{i, score, why}].", tier="local", max_tokens=1500)
                 for r in res or []:
-                    cand[int(r["i"])].update(score=int(r["score"]), why=r.get("why", ""))
+                    if not cand[int(r["i"])]["provisional"]:      # with no text to read, the rules' half marks stand
+                        cand[int(r["i"])].update(score=int(r["score"]), why=r.get("why", ""))
             except (LLMUnavailable, Exception):
                 pass
         keep = [j for j in new if j["score"] >= int(prof.get("min_match", 70))]
         for j in new:
             store.kv_put("jobs", j["id"], {**j, "status": "match" if j in keep else "skipped", "found": time.time()})
-        return AgentResult("done", f"{len(keep)} MATCHES", f"{len(found)} postings scanned · {len(keep)} new matches",
+        by: dict[str, int] = {}
+        for j in found:
+            src = j["source"] if j["source"] in FEEDS else "career pages"
+            by[src] = by.get(src, 0) + 1
+        paused = prof.get("linkedin") and (store.kv_get("job_state", "linkedin") or {}).get("paused_until", 0) > time.time()
+        return AgentResult("done", f"{len(keep)} MATCHES", f"{len(found)} postings scanned"
+                           + (" (" + ", ".join(f"{k} {v}" for k, v in by.items()) + ")" if by else "") + f" · {len(keep)} new matches"
+                           + (f" · {again} already seen" if again else "") + (f" · {gated} ruled out" if gated else "")
+                           + (" · LinkedIn refused a request and rests for a day" if paused else ""),
                            {"matches": [{"title": j["title"], "company": j["company"], "score": j["score"]} for j in keep[:5]]})
 
 
@@ -308,33 +447,51 @@ class ResumeTailor(SubAgent):
             return AgentResult("done", "UP TO DATE", "No new matches to tailor")
         opts = ctx["options"]
         tier, wait = opts.get("tailor_tier", "cloud"), float(opts.get("tailor_timeout", 150))
-        tailored = 0
-        for j in todo:
+        tailored, gone, notes = 0, 0, []
+        async with httpx.AsyncClient(timeout=15, headers=UA, follow_redirects=True) as c:
+            alive = [await still_open(c, j) for j in todo]
+        for j, open_ in zip(todo, alive):
+            if not open_:                                       # taken down since it was found: no package for a closed posting
+                gone += 1
+                j["status"] = "expired"
+                store.kv_put("jobs", j.pop("_key"), {k: v for k, v in j.items() if k != "_ts"})
+                continue
             # The resume for this kind of role is the package's resume as it stands. A model may reorder and reword it for the
             # posting; if it doesn't answer in time, fails, or hands back a cut-down text, the resume goes in as Mani wrote it.
             base = _master_resume(j["title"]) or master
             head, body = split_contact(base)
-            md, did = base, False
-            if llm:
+            md, did, why = base, False, "the model didn't answer in time"
+            gaps = j.get("gaps") or []
+            if not (j.get("description") or "").strip():
+                why = "the posting came with no description"
+            elif llm:
                 try:
                     out = await asyncio.wait_for(llm.complete(
                         "Tailor this resume to the job. Reorder and reword bullets to bring forward the relevant experience; keep every "
-                        "section, role, date and project. Do NOT add any skill, job, degree, number or claim that isn't in the original. "
-                        "Return the whole resume in Markdown, nothing else.\n\n"
-                        f"JOB: {j['title']} at {j['company']}\n{j['description'][:3500]}\n\nRESUME:\n{body}", tier=tier, max_tokens=3200), wait)
-                    if len(out.split()) >= 0.6 * len(body.split()):
+                        "section, role, date and project, and every heading line exactly as it is. Do NOT add any skill, job, degree, number "
+                        "or claim that isn't in the original." + (f" The resume does not show these, so never claim them: {', '.join(gaps)}." if gaps else "")
+                        + " Return the whole resume in Markdown, nothing else. " + FENCE_RULE + "\n\n"
+                        f"JOB: {j['title']} at {j['company']}\n{fence(j['description'][:3500])}\n\nRESUME:\n{body}", tier=tier, max_tokens=3200), wait)
+                    wrong = unsupported(body, out) if len(out.split()) >= 0.6 * len(body.split()) else ["comes back cut down"]
+                    if wrong:                                   # it says something the resume doesn't: the resume as written goes in
+                        why = "the reworded one " + "; ".join(wrong[:3])
+                    else:
                         md, did = head + out.strip() + "\n", True
                 except Exception:   # no model, a timeout, a refused request: the resume as written still makes a package
                     pass
             tailored += did
+            if not did:
+                notes.append(why)
             d = _app_dir(j)
             (d / "resume.md").write_text(md)
             _write_docx(d / "resume.docx", md)
-            j.update(status="tailored", folder=str(d), resume=resume_for(j["title"]), reworded=did)
+            j.update(status="tailored", folder=str(d), resume=resume_for(j["title"]), reworded=did, tailor_note="" if did else why)
             store.kv_put("jobs", j.pop("_key"), {k: v for k, v in j.items() if k != "_ts"})
-        plain = len(todo) - tailored
-        return AgentResult("done", f"{len(todo)} READY", f"{len(todo)} resumes ready: {tailored} reworded for the posting"
-                           + (f", {plain} as written (the model didn't answer in time)" if plain else ""))
+        made = len(todo) - gone
+        plain = made - tailored
+        return AgentResult("done", f"{made} READY", f"{made} resumes ready: {tailored} reworded for the posting"
+                           + (f", {plain} as written ({'; '.join(dict.fromkeys(notes))})" if plain else "")
+                           + (f" · {gone} posting(s) taken down since, dropped" if gone else ""))
 
 
 def split_contact(md: str) -> tuple[str, str]:
@@ -354,9 +511,16 @@ class CoverLetterWriter(SubAgent):
             return AgentResult("idle" if not (master and llm) else "done", "WAITING" if not (master and llm) else "UP TO DATE", "nothing to write")
         done = 0
         for j in await_t:
+            resume = _master_resume(j["title"]) or master
+            ask = (f"Write a 180-word cover letter from {ctx['cfg'].vision.owner} for {j['title']} at {j['company']}. Specific, warm, "
+                   "no clichés, only facts from the resume. " + FENCE_RULE + "\n\nJOB:\n" + fence(j["description"][:3000]) + "\n\nRESUME:\n" + resume)
             try:
-                letter = await llm.complete(f"Write a 180-word cover letter from {ctx['cfg'].vision.owner} for {j['title']} at {j['company']}. Specific, warm, "
-                                            "no clichés, only facts from the resume.\n\nJOB:\n" + j["description"][:3000] + "\n\nRESUME:\n" + (_master_resume(j["title"]) or master), tier="cloud", max_tokens=600)
+                letter = await llm.complete(ask, tier="cloud", max_tokens=600)
+                wrong = unsupported(resume, letter, structure=False, numbers=False, names=False)
+                if wrong:                                       # one more try with the slip named; what still stands is shown to Mani
+                    letter = await llm.complete(ask + "\n\nYour last letter " + "; ".join(wrong) + ". Leave those out.", tier="cloud", max_tokens=600)
+                    wrong = unsupported(resume, letter, structure=False, numbers=False, names=False)
+                j["letter_note"] = "; ".join(wrong)
             except LLMUnavailable:
                 break
             d = _app_dir(j)
@@ -388,9 +552,10 @@ class ApplicationTracker(SubAgent):
     name, tier, note = "Application Tracker", "QUICK", "stages from inbox + calendar"
 
     async def run(self, ctx):
-        store = ctx["store"]
+        store, bus, opts, now = ctx["store"], ctx.get("bus"), ctx.get("options") or {}, time.time()
         jobs = store.kv_list("jobs", limit=2000)
         mail = store.kv_list("emails", since=time.time() - 14 * 86400)
+        wait, most, stale, nudged = float(opts.get("followup_days", 10)) * 86400, int(opts.get("followups", 2)), float(opts.get("stale_days", 60)) * 86400, 0
         for j in jobs:
             if j.get("status") in ("applied", "interview") and j.get("company"):
                 for e in mail:
@@ -400,6 +565,22 @@ class ApplicationTracker(SubAgent):
                             j["status"] = "interview"
                         elif re.search(r"unfortunately|not moving forward|other candidates", txt):
                             j["status"] = "rejected"
+                # No word since applying: a reminder after `followup_days`, at most `followups` of them, then the job is set aside.
+                since, sent = j.get("followup_at") or j.get("applied_at") or j.get("found") or now, j.get("followups", 0)
+                applied = j.get("applied_at") or j.get("found") or now
+                if j["status"] != "applied":
+                    if sent and bus:
+                        bus.clear_notice(f"followup:{j['_key']}")
+                elif sent < most and now - since >= wait and nudged < 3:
+                    nudged += 1
+                    j.update(followups=sent + 1, followup_at=now)
+                    if bus:
+                        bus.notice(f"followup:{j['_key']}", f"No reply in {int((now - applied) / 86400)} days: a follow-up note to "
+                                                           f"{j['company']} ({j['title']}) may help", j.get("url"))
+                elif sent >= most and now - applied >= stale:
+                    j["status"] = "stale"
+                    if bus:
+                        bus.clear_notice(f"followup:{j['_key']}")
                 store.kv_put("jobs", j["_key"], {k: v for k, v in j.items() if k not in ("_key", "_ts")})
         stages = {s: sum(1 for j in jobs if j.get("status") == s) for s in ("match", "tailored", "awaiting_ok", "applied", "interview", "rejected")}
         recent = [j for j in jobs if j.get("found", 0) > time.time() - 86400 and j.get("status") != "skipped"]
@@ -422,7 +603,7 @@ class InterviewPrep(SubAgent):
             return AgentResult("idle", "NEEDS AI", "Prep needs LM Studio or a cloud model")
         for j in todo[:1]:
             notes = await llm.complete("Prepare interview notes: company snapshot, 8 likely questions, and STAR answers using only this resume.\n\n"
-                                       f"JOB: {j['title']} at {j['company']}\n{j['description'][:3000]}\n\nRESUME:\n{_master_resume(j['title']) or ''}", tier="cloud", max_tokens=1800)
+                                       + FENCE_RULE + f"\n\nJOB: {j['title']} at {j['company']}\n{fence(j['description'][:3000])}\n\nRESUME:\n{_master_resume(j['title']) or ''}", tier="cloud", max_tokens=1800)
             p = ROOT / "vault" / "interviews"
             p.mkdir(parents=True, exist_ok=True)
             (p / f"{re.sub(r'[^A-Za-z0-9]+', '-', j['company'])}.md").write_text(notes)
@@ -440,7 +621,7 @@ async def approve_package(row: dict, decision: str, ctx: dict) -> str:
         j["status"] = "passed"
         store.kv_put("jobs", p["job"], j)
         return "skipped"
-    j["status"] = "applied"
+    j.update(status="applied", applied_at=time.time())
     store.kv_put("jobs", p["job"], j)
     ctx["bus"].notice(f"apply:{p['job']}", f"Submit your application: {j['title']} @ {j['company'] or j['source']} (files in {p.get('folder')})", p["url"])
     return "package ready: open the posting and submit"

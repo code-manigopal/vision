@@ -280,6 +280,8 @@ def router(req: httpx.Request) -> httpx.Response:
             return httpx.Response(201, json={"orderFillTransaction": {"id": "77", "price": "1.1", "tradeOpened": {"tradeID": "78"}}})
     if h == "news.google.com":
         return httpx.Response(200, text="<?xml version='1.0'?><rss><channel><title>x</title></channel></rss>")
+    if h in ("adzuna", "gh"):                                             # a posting's own page, still up
+        return httpx.Response(200, text="posting")
     return httpx.Response(404)
 
 

@@ -168,8 +168,29 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   local model, else from plain rules in `rule_ideas`; `ideas_by` says which). Ideas are wording only, never orders; nothing trades.
   The briefing deck shows them as cards (Top gainers, Top losers, What you could do).
 - Zerodha via hosted Kite MCP (read-only); Fyers via API v3 with daily login (PIN refresh optional).
-- Job Hunt: **never touch LinkedIn or Indeed** (not even alert emails). Sources: Job Bank alert emails,
+- Job Hunt: **never touch Indeed** (not even alert emails). Sources: Job Bank alert emails,
   Adzuna, Greenhouse/Lever/Ashby boards. Never auto-applies; never invents resume content.
+  **LinkedIn (Mani's choice, 2026-10-12, reversing the earlier "never"):** `linkedin: true` reads LinkedIn's public job search
+  as a signed-out visitor with a browser's user agent (`jobs.linkedin`, `LI_UA`; against LinkedIn's terms, his call). Limits
+  in code, keep them: never signed in and no cookies (so his account is not involved), `linkedin_titles` (4) result pages and
+  `linkedin_details` (10) posting texts a run, `linkedin_delay` (4 s) apart, and a 403/429/999 or a redirect to the sign-in
+  wall stops it for a day (kv `job_state` `linkedin`): no retry, no proxy, no CAPTCHA handling. LinkedIn alert emails are
+  still not read. The page parsing was written from the known page layout and has not run against the live site.
+  Borrowed after reviewing five open-source job hunters (2026-10-12; career-ops, ai-job-hunter-app, ai-job-search):
+  `masters/job_match.py` (plain rules, no model): whole-word skill matching with other spellings (`has`, `ALIASES`; "Excel"
+  is not in "excellent"), `coverage` (skills the posting names that the resume shows, and `gaps` it doesn't: shown on the
+  desk and given to the tailor as never-claim), `gate` (ruled out before scoring, from the posting's own wording, silence
+  never fails: citizens-only or PR-only against `work_status`, a required clearance, required French), `same_keys` (one
+  identity for a job seen from two sources or listed again: kv `job_keys`, the later one is stored as `duplicate`, the
+  first gets `reposts`), `ats_ref` (a posting link on Greenhouse/Lever/Ashby/Workable/SmartRecruiters adds that company to
+  kv `job_companies`, read on later runs: `known_companies`) and `fence` (posting text marked as data in every prompt).
+  `masters/job_facts.py` `unsupported`: a reworded resume must keep every heading and add no skill, number or name the
+  original lacks, or the resume goes in as written with the reason (`tailor_note`); a cover letter naming a skill the
+  resume lacks is rewritten once, and what remains is shown (`letter_note`). A posting with under 200 characters of text
+  is `provisional` (title only: half marks for skills, "~" on the desk, no model score). The Tailor drops a posting whose
+  page answers 404/410 (`expired`). The Tracker reminds after `followup_days` (10) with no reply, `followups` (2) times,
+  then sets the application aside after `stale_days` (60). `work_status: permit` (Mani holds a post-graduation work permit, 2026-10-12): postings open to citizens only, or to
+  citizens and permanent residents only, are ruled out; update it when his status changes.
   Adzuna is no longer free (25 test calls, then £8 a month, seen 2026-10-12): `adzuna_titles: 0` keeps it unused. Free feeds
   with no key (`free_sources`): Job Bank's search feed (Ontario, only the last couple of days, its own job names), Himalayas
   and Jobicy (remote jobs open to Canada); company pages also on Workable and SmartRecruiters (titles only, no description).

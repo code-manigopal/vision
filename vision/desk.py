@@ -144,14 +144,21 @@ def web(store):
 
 def jobs(store):
     stages = [("match", "Matched"), ("tailored", "Tailored"), ("awaiting_ok", "Awaiting you"), ("applied", "Applied"), ("interview", "Interview"), ("closed", "Closed")]
-    of = {"match": "match", "tailored": "tailored", "awaiting_ok": "awaiting_ok", "applied": "applied", "interview": "interview", "rejected": "closed", "passed": "closed"}
+    of = {"match": "match", "tailored": "tailored", "awaiting_ok": "awaiting_ok", "applied": "applied", "interview": "interview", "rejected": "closed", "passed": "closed",
+          "expired": "closed", "stale": "closed"}
 
     def one(j):
         st = of.get(j.get("status"))
         if not st:
             return None
-        rows = _rows(("Company", j.get("company")), ("Location", j.get("location")), ("Fit", j.get("score")), ("Source", j.get("source")),
-                     ("Why", j.get("why")), ("Status", j.get("status")))
+        fit = j.get("score")
+        rows = _rows(("Company", j.get("company")), ("Location", j.get("location")),
+                     ("Fit", f"~{fit} (title only: the posting gave no description)" if j.get("provisional") and fit is not None else fit),
+                     ("Source", j.get("source")), ("Why", j.get("why")), ("You have", ", ".join(j.get("matched") or [])),
+                     ("Not on your resume", ", ".join(j.get("gaps") or [])),
+                     ("Resume", j.get("tailor_note") and "as you wrote it: " + j["tailor_note"]), ("Check the letter", j.get("letter_note")),
+                     ("Listed again", j.get("reposts") and f"{j['reposts']} time(s): it may not be a live opening"),
+                     ("Follow-ups", j.get("followups")), ("Status", j.get("status")))
         return _item(j.get("_key") or j.get("id"), st, j.get("title"), j.get("company") or j.get("source") or "", j.get("found") or j.get("_ts"), rows,
                      _text_file(j.get("folder"), "cover_letter.md", "cover_letter.txt"), _links(("Job posting", j.get("url"))), folder_files(j.get("folder")))
     return stages, _each(_kv(store, "jobs", 2000), one)
