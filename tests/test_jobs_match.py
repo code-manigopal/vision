@@ -41,6 +41,7 @@ def test_fact_check():
     text = " ".join(bad)
     assert "adds" in text and "terraform" in text and "12" in text and "Shopify" in text
     assert unsupported(src, "I used Python and SQL at Shopify since 2019.", structure=False, numbers=False, names=False) == []
+    assert unsupported(src + "\n- Wrote an API", src + "\n- Wrote several APIs") == []
     assert unsupported(src, "I know Kubernetes.", structure=False, numbers=False, names=False)
 
 

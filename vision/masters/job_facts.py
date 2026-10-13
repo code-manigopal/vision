@@ -54,6 +54,6 @@ def unsupported(source: str, out: str, structure: bool = True, numbers: bool = T
         notes += [f"gives the number {n}, which the resume doesn't" for n in sorted(_numbers(out) - _numbers(source))[:4]]
     if names:
         words = _words(source)
-        new = sorted(w for w in _names(out) if not _words(w) <= words)
+        new = sorted(w for w in _names(out) if not (_words(w) <= words or _words(re.sub(r"e?s$", "", w)) <= words))   # "APIs" is "API"
         notes += [f"names {w}, which the resume doesn't" for w in new[:4] if w.lower() not in (s.lower() for s in extra)]
     return notes
