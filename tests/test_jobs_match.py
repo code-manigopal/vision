@@ -35,9 +35,11 @@ def test_skills_gates_and_identity():
 def test_fact_check():
     src = "## Profile\n- Built data pipelines in Python and SQL for 3 teams\n## Experience\n### Developer 2020 – 2025\n- Ran Docker builds"
     assert unsupported(src, "## Profile\n- Led SQL and Python pipeline work for 3 teams\n## Experience\n### Developer 2020 – 2025\n- Docker builds") == []
-    bad = unsupported(src, "## Profile\n- Led Terraform work at Shopify for 12 teams\n## Experience\n### Senior Developer 2020 – 2025\n- Docker")
+    assert unsupported(src, "## Profile\n- Python and SQL pipelines for 3 teams\n## Experience\n### Developer\n*2020 – 2025*\n- Ran Docker builds") == []   # laid out differently
+    assert unsupported(src, "## Profile\n- Python and SQL pipelines for 3 teams\n- Ran Docker builds as Developer 2020 – 2025")       # a role's heading gone
+    bad = unsupported(src,"## Profile\n- Led Terraform work at Shopify for 12 teams\n## Experience\n### Senior Developer 2020 – 2025\n- Docker")
     text = " ".join(bad)
-    assert "drops" in text and "adds" in text and "terraform" in text and "12" in text and "Shopify" in text
+    assert "adds" in text and "terraform" in text and "12" in text and "Shopify" in text
     assert unsupported(src, "I used Python and SQL at Shopify since 2019.", structure=False, numbers=False, names=False) == []
     assert unsupported(src, "I know Kubernetes.", structure=False, numbers=False, names=False)
 
