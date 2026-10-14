@@ -59,15 +59,29 @@ def load(identifier: str, run=_run, key: str = "", context: int = 0, ttl_ms: int
     return _call(args, run) is not None
 
 
+_set_aside = 0       # how many freed() blocks are open: while any is, VISION must not ask the local model anything
+
+
+def set_aside() -> bool:
+    """True while the local model is unloaded for other work. LM Studio loads a model again by itself the moment a request
+    reaches its server (just-in-time loading: seen on 2026-10-13, a master's request reloaded it two minutes after the
+    unload, so the cloned voice ran beside it), so the LLM client asks this before it calls LM Studio at all."""
+    return _set_aside > 0
+
+
 @contextlib.asynccontextmanager
 async def freed(run=_run):
-    """Inside: nothing is loaded. After: what was loaded before is loaded again, whatever happened inside."""
+    """Inside: nothing is loaded, and VISION's own requests stay away from LM Studio (set_aside). After: what was loaded
+    before is loaded again, whatever happened inside."""
+    global _set_aside
+    _set_aside += 1
     held = _models(run)
     if held:
         unload_all(run)
     try:
         yield [m["identifier"] for m in held]
     finally:
+        _set_aside -= 1
         for m in held:
             if not load(m["identifier"], run, m.get("modelKey") or "", int(m.get("contextLength") or 0), int(m.get("ttlMs") or 0)):
                 log.warning("lms: could not load %s again", m["identifier"])

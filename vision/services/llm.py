@@ -39,6 +39,9 @@ class LLM:
 
     # ---------- availability ----------
     async def local_available(self) -> bool:
+        from . import lmstudio
+        if lmstudio.set_aside():                         # unloaded for a video's voice: any request would make LM Studio load it again
+            return False
         if self._local_ok and time.time() - self._local_ok[0] < 60:
             return self._local_ok[1]
         ok = False

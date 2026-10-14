@@ -97,3 +97,31 @@ def test_a_line_made_at_another_speed_is_made_again(tmp_path):
     clone.speak(LINES[:1], tmp_path, speed=clone.SHORT_SPEED, make=engine(second), check=ok, log=lambda m: None)
     clone.speak(LINES[:1], tmp_path, speed=clone.SHORT_SPEED, make=engine(third), check=ok, log=lambda m: None)
     assert (len(first), len(second), len(third)) == (1, 1, 0) and clone.SHORT_SPEED == 1.2
+
+
+def test_while_the_local_model_is_set_aside_no_request_reaches_lm_studio(monkeypatch):
+    """LM Studio reloads a model the moment a request reaches it, so during a video's voice VISION must not ask it anything:
+    a local request then falls to the cloud model if there is one, else the caller hears "no model" (never Groq: what the
+    owner keeps local stays local)."""
+    import asyncio
+    import httpx
+    from vision.config import Config
+    from vision.services import lmstudio
+    from vision.services.llm import LLM, LLMUnavailable
+    calls = []
+
+    def handler(req):
+        calls.append(str(req.url))
+        return httpx.Response(200, json={"data": []})
+    llm = LLM(Config(), client_factory=lambda: httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+    monkeypatch.setattr(lmstudio, "_models", lambda run: [])
+
+    async def go():
+        async with lmstudio.freed(run=lambda *a, **k: None):
+            assert lmstudio.set_aside() and not await llm.local_available()
+            monkeypatch.setattr(llm, "cloud_available", lambda: False)
+            with pytest.raises(LLMUnavailable):
+                await llm.pick("local")
+        assert not lmstudio.set_aside() and await llm.local_available()
+    asyncio.run(go())
+    assert len(calls) == 1                                  # only the check after the block reached the local server
