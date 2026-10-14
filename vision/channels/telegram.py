@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import html
 import logging
+import re
 import time
 from typing import Any
 
@@ -32,6 +33,7 @@ HELP = (
     "/status – same, short form\n"
     "/traffic &lt;city&gt; – live traffic (e.g. /traffic Windsor)\n"
     "/approvals – what's waiting for you\n"
+    "/say &lt;word&gt; = &lt;Tamil spelling&gt; – fix how the voice says a word (/say &lt;word&gt; shows it; /say! forces)\n"
     "Or just type: <i>what's up</i>"
 )
 
@@ -197,7 +199,9 @@ class TelegramChannel:
 
     async def on_command(self, text: str) -> None:
         t = text.lower()
-        if t.startswith("/start") or t.startswith("/help"):
+        if re.match(r"/say!?(\s|$)", t):
+            await self.send(self._say(text))
+        elif t.startswith("/start") or t.startswith("/help"):
             await self.send(HELP)
         elif t.startswith("/brief") or t.startswith("/status") or any(w in t for w in ("what's up", "whats up", "how are we doing", "status")):
             await self.send_brief("now")
@@ -214,6 +218,19 @@ class TelegramChannel:
             await self.send(await self._traffic(city))
         else:
             await self.send("I can do /brief, /traffic &lt;city&gt; and /approvals for now. Full conversation arrives with the Ask engine.")
+
+    def _say(self, text: str) -> str:
+        """/say word = Tamil spelling saves Mani's fix (data/voice_fixes.json); /say word shows what the voice uses and where it comes from; /say! forces a word of the approved reference."""
+        from ..masters import tamil_say
+        force = text.lower().startswith("/say!")
+        body = text.split(None, 1)[1].strip() if len(text.split(None, 1)) > 1 else ""
+        word, eq, spelling = body.partition("=")
+        if not word.strip():
+            return "Use /say &lt;word&gt; = &lt;Tamil spelling&gt;, or /say &lt;word&gt; to see it."
+        if not eq:
+            src, sp = tamil_say.source(word)
+            return f"<b>{esc(word.strip())}</b> → {esc(sp)} ({src})" if sp else f"<b>{esc(word.strip())}</b>: no spelling set ({src}); the voice reads it as written."
+        return esc(tamil_say.set_fix(word, spelling, force)["message"])
 
     async def _traffic(self, city: str) -> str:
         from ..services.traffic_api import TrafficError, get_city_traffic

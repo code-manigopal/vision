@@ -352,6 +352,22 @@ def create_app(*, boot_on_start: bool = True, schedules: bool = True, telegram_o
             raise HTTPException(404, "No such account")
         return acc
 
+    @app.get("/api/voice/fix")
+    async def voice_fix_get(word: str = ""):
+        from .masters import tamil_say
+        src, spelling = tamil_say.source(word)
+        return {"word": tamil_say.fix_key(word), "source": src, "spelling": spelling}
+
+    @app.post("/api/voice/fix")
+    async def voice_fix_set(request: Request):
+        from .masters import tamil_say
+        _visa(request)                                                          # the same local-origin rule as the visa accounts
+        b = await request.json()
+        r = tamil_say.set_fix(str(b.get("word") or ""), str(b.get("spelling") or ""), bool(b.get("force")))
+        if not r["ok"]:
+            raise HTTPException(400, r["message"])
+        return r
+
     def _visa_list() -> dict:
         return {"accounts": [{**visa.public(a), "signing": a["id"] in signing} for a in visa.accounts(app.state.store)]}
 

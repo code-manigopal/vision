@@ -13,10 +13,14 @@ says it (FY27 -> ட்வென்டி சிக்ஸ் ட்வென்�
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 from pathlib import Path
 
+log = logging.getLogger("vision.tamil_say")
+FIXES = Path(__file__).resolve().parent.parent.parent / "data" / "voice_fixes.json"        # Mani's own spellings {english word or phrase: Tamil letters}; they win over everything (see fixes())
+GOLDEN = Path(__file__).resolve().parent.parent.parent / "tests" / "golden_voice.json"     # the approved reference lines a fix must not change without force
 LEARNED = Path(__file__).resolve().parent.parent.parent / "data" / "voice_words.json"      # words a model has said how a Tamil speaker pronounces (see learn()); Mani checks them by ear
 
 SOUNDS = {
@@ -216,8 +220,87 @@ def learned_in(text: str) -> dict[str, str]:
     return {w.lower(): have[w.lower()] for w in re.findall(r"[A-Za-z]+", text) if w.lower() in have}
 
 
+_fix_cache: dict = {"stamp": None, "words": {}, "rx": None}
+
+
+def fix_key(word: object) -> str:
+    """The word or phrase a fix is for, tidied and lower case; empty if it is not plain English letters (digits, & and ' allowed after the first letter)."""
+    w = " ".join(word.lower().split()) if isinstance(word, str) else ""
+    return w if len(w) <= 40 and re.fullmatch(r"[a-z][a-z0-9&']*(?: [a-z0-9&']+)*", w) else ""
+
+
+def _phrase(w: str) -> str:
+    return r"(?<![A-Za-z])" + re.escape(w).replace(r"\ ", r"\s+") + r"(?![A-Za-z])"
+
+
+def fixes() -> dict[str, str]:
+    """Mani's pronunciation fixes from data/voice_fixes.json (lower case English word or phrase -> Tamil letters). Only an entry whose value is Tamil letters (and spaces) counts."""
+    try:
+        st = FIXES.stat()
+    except OSError:
+        return {}
+    if _fix_cache["stamp"] == (str(FIXES), st.st_mtime_ns):
+        return _fix_cache["words"]
+    try:
+        raw = json.loads(FIXES.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        raw = {}
+    words = {fix_key(k): v.strip() for k, v in raw.items() if fix_key(k) and valid_tamil(v)} if isinstance(raw, dict) else {}
+    rx = re.compile("|".join(_phrase(k) for k in sorted(words, key=len, reverse=True)), re.I) if words else None
+    _fix_cache.update(stamp=(str(FIXES), st.st_mtime_ns), words=words, rx=rx)
+    return words
+
+
+def golden_lines(word: str) -> list[str]:
+    """The approved reference lines (tests/golden_voice.json) that use the word: a fix for it would change how they are voiced."""
+    try:
+        gold = json.loads(GOLDEN.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    rx = re.compile(_phrase(word), re.I)
+    return [g["say"] for g in gold if isinstance(g, dict) and rx.search(g.get("say", ""))]
+
+
+def source(word: str) -> tuple[str, str]:
+    """(where the word's spelling comes from, the spelling): fix, table (SOUNDS), learned or none."""
+    w = fix_key(word)
+    for name, tab in (("fix", fixes()), ("table", SOUNDS), ("learned", learned())):
+        if w in tab:
+            return name, tab[w]
+    return "none", ""
+
+
+def set_fix(word: str, spelling: str, force: bool = False) -> dict:
+    """Saves Mani's spelling for a word: {ok, message}. Refused when the value is not Tamil letters, and when the word is in the approved reference lines unless force
+    (the golden file is never changed here: tests/test_voice.py then fails until the reference is re-recorded)."""
+    w = fix_key(word)
+    if not w:
+        return {"ok": False, "message": "The word must be plain English letters (a phrase is fine)."}
+    if not valid_tamil(spelling):
+        return {"ok": False, "message": "The spelling must be Tamil letters and spaces only."}
+    note = ""
+    hit = golden_lines(w)
+    if hit:
+        if not force:
+            return {"ok": False, "message": f"This word is in the approved HDFC reference; change it there first. Line: {hit[0][:80]}"}
+        note = " tests/test_voice.py will now fail until the reference is re-recorded."
+        log.warning("voice fix %r forced although it is in the approved reference line %r", w, hit[0][:60])
+    try:
+        raw = json.loads(FIXES.read_text(encoding="utf-8")) if FIXES.exists() else {}
+    except (OSError, ValueError):
+        raw = {}
+    raw = {**(raw if isinstance(raw, dict) else {}), w: spelling.strip()}
+    FIXES.parent.mkdir(parents=True, exist_ok=True)
+    tmp = FIXES.with_suffix(".tmp")
+    tmp.write_text(json.dumps(dict(sorted(raw.items())), ensure_ascii=False, indent=1), encoding="utf-8")
+    os.replace(tmp, FIXES)
+    return {"ok": True, "message": f"{w} → {spelling.strip()} saved." + note}
+
+
 def voiced(text: str) -> str:
-    """The line as the voice should be given it. What is not in SOUNDS or the learned words stays as written."""
+    """The line as the voice should be given it. Mani's fixes first (his word wins, longest match first), then SOUNDS; what neither has, or the learned words, stays as written."""
+    if fixes() and _fix_cache["rx"]:
+        text = _fix_cache["rx"].sub(lambda m: fixes()[" ".join(m.group(0).lower().split())], text)
     text = re.sub(r"\bFY\s?(\d{2})\b", lambda m: f"{_year(int(m.group(1)) - 1)} {_year(int(m.group(1)))} financial year", text)
     text = _WORDS.sub(lambda m: SOUNDS[m.group(1).lower()], text)
     extra = learned()
