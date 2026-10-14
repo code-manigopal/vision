@@ -456,6 +456,24 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   reconcile and is not forced); the note says "net of excise duty" or "as filed". The quarterly results table still shows revenue and margin as filed. ITC's
   FY25 profit includes about Rs 15,016 cr from the hotels demerger (discontinued operations), so profit growth FY26 vs FY25 (-40 %) is not like for like and
   its note says so (`years[].disc`).
+  **Filing forms (2026-10-14):** NSE files results in five XBRL forms, told apart by the file name `INTEGRATED_FILING_<FORM>_...` (else the `IntegratedFinance_<FORM>` taxonomy
+  named inside, else the tags): INDAS, BANKING, NBFC (30 index members: lenders, but also asset managers and holding companies), LI (life insurers), GI (general insurers); MCX lists none and is
+  skipped quietly. `nse.parse(xml, url)` gives `kind` (indas | bank | nbfc | life | general) and `lender`; `nse.shape(x)` is how it is read: company, bank, **lender** (an NBFC whose
+  interest earned is 50 % or more of its revenue: interest income, finance costs, net interest income = interest earned less finance costs (computed, key `lnii`), credit cost = impairment on
+  financial instruments, profit, EPS; its quarterly filing states no stage-3 or capital-adequacy figure, so none is shown), **plain** (an NBFC-form company that does not lend: revenue, profit,
+  EPS; no operating margin, no debt readings), **life** (net, first-year and renewal premium, profit = the shareholders' account's `ProfitLossAfterTax...`, not the policyholders' `NetSurplusDeficit`,
+  solvency ratio, EPS) and **general** (gross premium written, net premium earned, profit, combined ratio, solvency, EPS). Lower is better: finance costs, credit cost, combined ratio. Solvency and
+  combined ratio are filed as fractions and shown as percentages only inside a range a real one has (`SANE`): some filings state them scaled differently (LICI 0.0242, ICICIGI 0.0271, GICRE
+  0.0432), and such a figure is left out, never rescaled. A consolidated filing is read first (insurers carry the same figures in both), the standalone one when the consolidated yields no row
+  (banks always, for their NPAs). `fundamentals.ratios` by shape: lender like a bank (no ROCE, debt, margin; net interest margin left out, the filings give no earning-assets base), insurer
+  (premium, profit, ROE, book value, solvency, combined ratio; shares = quarter profit / quarter EPS, no face value is filed; no ROCE, ROA, debt, margin, EV/EBITDA), EV/EBITDA for a company only;
+  `fundamentals.minimum(f)` is 8 ratios for a company and 7 (`MIN_FINANCIAL`) for the others. `market`: `MEANS`/`MEANS_EN` for every new term, `KEY` key ratios per shape, `ROW_OF` maps a
+  reason's metric to a form's own row, takeaways per form, `SlideEditor.title` e.g. "Premium, Profit, Solvency" / "NII, Profit, Asset Quality". **Scout coverage:** `nse.recent(c, days)` reads
+  `integrated-filing-results` with `size=100` and `page=1..` (NSE honours both; a date range is ignored) until a page reaches back past `within_days` (the first page of 20 had scrolled off in
+  results season); a row just filed has no `broadcast_Date`, its `creation_Date` stands in. The Scout lines up up to 3 unfinished results (`CANDIDATES`); the Analyst takes the first with rows,
+  marks one without (`skip`: reason "no figures" + `parser`) and goes on, never an error (UNREADABLE only when none reads). **Retry rule:** a skip in kv `mm_done` made by an older parser
+  (`nse.PARSER`, bump it when a parser change can turn "no figures" into figures; no `parser` key counts as old) is ignored (`market_crew.done_at`), so ICICIPRULI Q2 FY27 is filmed on the next
+  run; the same goes for "too few ratios" analysis skips.
   **Pre-market and post-market Shorts (Mani, 2026-10-14; `services/world.py`, `market.report_deck/report_lines/report_react`, 1080x1920 slide kind `board`):** two
   Shorts on every NSE trading day (`world.trading_day`: Mon-Fri, not in NSE's `holiday-master` CM list, kept 7 days in kv `mm_hol`), **made from templates only, no
   model anywhere**. Pre-market is made at 07:00-08:15 IST (the run at `07:02 Asia/Kolkata`): how the US (S&P 500, Dow Jones, Nasdaq) and Europe (FTSE, DAX, CAC)

@@ -9,7 +9,7 @@
     analysis_lines(f, ratios, d) its spoken lines: what each ratio means, its value, and where a plain rule of thumb gives one, a reading of it
     reasons(llm, result, text)   why the numbers moved, in the company's own words: the model finds them in the company's press release or presentation and
                                  code keeps only those whose quote is in the document, whose numbers are in the quote and whose direction fits our figures
-    key_ratios(rows, bank)       the four filing-based ratios the results video shows;  news_pick / news_gists  headlines about the result (never about the price)
+    key_ratios(rows, shape)      the three or four filing-based ratios the results video shows;  news_pick / news_gists  headlines about the result (never about the price)
 
 Mani's rule for the humour: Tamil cinema comedy, the feeling said out loud, the way a friend reacts; tease, but never
 disrespectful and never abusive. The reactions are a bank written here (REACT), not the model's: the model, asked for
@@ -32,9 +32,11 @@ from pathlib import Path
 
 from zoneinfo import ZoneInfo
 
-from ..services import world
+from ..services import nse, world
 from ..services.filings_text import norm
 from .fundamentals import GROUPS
+
+FINANCIAL = ("bank", "lender", "life", "general")
 
 def nse_time(text: str) -> datetime:
     """NSE's "08-Oct-2026 22:07:33" as an Indian-time datetime (datetime.min, in that zone, when it cannot be read)."""
@@ -119,6 +121,19 @@ MEANS = {
     "provisions": "Provisions-னா, திரும்பி வராம போகக்கூடிய கடனுக்காக bank ஒதுக்கி வைக்கிற பணம்.",
     "gnpa": "Gross NPA-னா, மொத்த கடன்ல திரும்பி வராம நிக்கிற கடனோட சதவீதம். இது குறைஞ்சா நல்லது.",
     "nnpa": "Net NPA-னா, ஒதுக்கின பணத்த கழிச்ச பிறகு மிஞ்சுற வராக்கடன் சதவீதம்.",
+    # a lender (an NBFC): it lends out money it has borrowed
+    "interest": "Interest income-னா, கடன் குடுத்து company வாங்குற வட்டி. lender-ஓட முக்கிய வருமானம் இதுதான்.",
+    "fin": "Finance costs-னா, company தான் கடன் வாங்குனதுக்கு கட்டுற வட்டி. இது குறைஞ்சா நல்லது.",
+    "lnii": "Net interest income-னா, கடன் குடுத்து வாங்குற வட்டிக்கும், கடன் வாங்கி கட்டுற வட்டிக்கும் உள்ள வித்தியாசம். இத filing-ல இருக்கிற ரெண்டு numbers-ல இருந்து கணக்கு போட்டிருக்கோம்.",
+    "impair": "Credit cost-னா, குடுத்த கடன்ல திரும்பி வராம போற ஆபத்து இருக்கிறதுக்காக, company ஒதுக்கி வைக்கிற பணம். இது குறைஞ்சா நல்லது.",
+    # insurers
+    "premium": "Net premium income-னா, மக்கள் insurance policy-க்காக கட்டுற premium-ல, reinsurance கழிச்சு மிஞ்சுறது. இதுதான் insurance company-ஓட முக்கிய வருமானம்.",
+    "fyp": "First year premium-னா, புதுசா எடுத்த policy-க்கு, முதல் வருஷம் கட்டுற premium. புது business எவ்ளோ வருதுன்னு இது காட்டுது.",
+    "renewal": "Renewal premium-னா, ஏற்கனவே இருக்கிற policy-ய தொடர்ந்து வச்சுக்க, மக்கள் ஒவ்வொரு வருஷமும் கட்டுற premium.",
+    "solvency": "Solvency ratio-னா, insurance company-கிட்ட claim குடுக்க எவ்வளவு பணம் இருக்குன்னு காட்டுறது. IRDAI, குறைஞ்சது 150 percent இருக்கணும்னு சொல்லுது.",
+    "gwp": "Gross premium written-னா, அந்த quarter-ல எழுதின policy-களுக்காக வந்த மொத்த premium.",
+    "earned": "Net premium earned-னா, reinsurance கழிச்சு, அந்த காலத்துக்கு உண்மையாவே company சம்பாதிச்ச premium.",
+    "combined": "Combined ratio-னா, நூறு ரூபாய் premium-ல claim-க்கும் செலவுக்கும் எவ்வளவு போகுதுன்னு காட்டுறது. நூறுக்கு கீழ இருந்தா, underwriting-ல லாபம்.",
 }
 MEANS_EN = {
     "opm": "Operating margin shows how much is left out of every hundred rupees of revenue after all the costs.",
@@ -128,10 +143,33 @@ MEANS_EN = {
     "provisions": "Provisions are the money a bank sets aside for loans that are at risk of not coming back.",
     "gnpa": "Gross NPA is the percentage of all loans that are stuck and not being repaid. Lower is better.",
     "nnpa": "Net NPA is the percentage of stuck loans that is left after the money set aside is taken off.",
+    "interest": "Interest income is the interest the company earns on the loans it gives. It is a lender's main income.",
+    "fin": "Finance costs are the interest the company pays on the money it has borrowed. Lower is better.",
+    "lnii": "Net interest income is the difference between the interest earned on loans and the interest paid on borrowings. We worked it out from two numbers in the filing.",
+    "impair": "Credit cost is the money the company sets aside for loans that are at risk of not coming back. Lower is better.",
+    "premium": "Net premium income is what people pay for insurance policies, after reinsurance is taken off. It is an insurer's main income.",
+    "fyp": "First year premium is what people pay in the first year for newly bought policies. It shows how much new business is coming in.",
+    "renewal": "Renewal premium is what people pay every year to keep their existing policies going.",
+    "solvency": "Solvency ratio shows how well an insurer can pay its claims. IRDAI asks for at least 150 percent.",
+    "gwp": "Gross premium written is the total premium that came in for the policies written in the quarter.",
+    "earned": "Net premium earned is the premium the company has really earned for the period, after reinsurance is taken off.",
+    "combined": "Combined ratio shows how much of every hundred rupees of premium goes on claims and costs. Below a hundred means an underwriting profit.",
 }
 SAY = {"revenue": "Revenue", "opm": "Operating margin", "profit": "Net profit", "eps": "EPS", "nii": "Net interest income", "op": "Operating profit",
-       "provisions": "Provisions", "gnpa": "Gross NPA", "nnpa": "Net NPA"}
+       "provisions": "Provisions", "gnpa": "Gross NPA", "nnpa": "Net NPA",
+       "interest": "Interest income", "fin": "Finance costs", "lnii": "Net interest income", "impair": "Credit cost", "premium": "Net premium income", "fyp": "First year premium",
+       "renewal": "Renewal premium", "solvency": "Solvency ratio", "gwp": "Gross premium written", "earned": "Net premium earned", "combined": "Combined ratio"}
 UNIT = {"cr": "₹ கோடி", "rs": "₹", "pct": "%", "x": "x"}
+NO_JOKE = {"solvency"}                              # no comic reaction to a regulator's capital figure
+
+
+def financial(x: dict) -> bool:
+    """A bank, lender or insurer: ROE is judged against 15 rather than 20, and there is no debt reading."""
+    return nse.shape(x) in FINANCIAL
+
+
+def icon(x: dict) -> str:
+    return {"bank": "bank", "lender": "bank", "life": "shield", "general": "shield"}.get(nse.shape(x), "company")
 
 
 def short(name: str) -> str:
@@ -198,7 +236,8 @@ def takeaways(result: dict) -> list[dict]:
 
     def add(icon, text, tone, say, en):
         out.append({"icon": icon, "text": text, "tone": tone, "say": say, "en": en})
-    top = "nii" if result["bank"] else "revenue"
+    sh = nse.shape(result)
+    top = {"bank": "nii", "lender": "lnii", "life": "premium", "general": "gwp"}.get(sh, "revenue")
     name = SAY[top]
     if ch.get(top):
         c = ch[top]
@@ -224,19 +263,43 @@ def takeaways(result: dict) -> list[dict]:
             f"But profit has not grown as much as {name.lower()}." + (" Costs have gone up a little." if costs < 0 else ""))
     elif p:
         add("coin", "Profit-ம் அதே வேகத்துல", "good", "Profit-ம் கிட்டத்தட்ட அதே வேகத்துல வளர்ந்திருக்கு.", "Profit has also grown at about the same pace.")
-    last = ch.get("gnpa") if result["bank"] else ch.get("opm")
-    if last and last["way"]:
-        if result["bank"]:
-            good = last["way"] < 0
-            add("shield" if good else "eye", "கடன் தரம் மேம்பட்டிருக்கு" if good else "வராக்கடன் ஏறிருக்கு", "good" if good else "bad",
-                "வராக்கடன் சதவீதம் குறைஞ்சிருக்கு, அதாவது கடன் தரம் மேம்பட்டிருக்கு." if good else "வராக்கடன் சதவீதம் ஏறிருக்கு. அடுத்த quarter-ல இத கவனிக்கணும்.",
-                "The percentage of bad loans has come down, which means loan quality has improved." if good else
-                "The percentage of bad loans has gone up. This is worth keeping an eye on next quarter.")
-        else:
-            good = last["way"] > 0
-            add("shield" if good else "eye", "Margin மேம்பட்டிருக்கு" if good else "Margin-ல pressure", "good" if good else "bad",
-                "Margin-ம் மேம்பட்டிருக்கு." if good else "Margin கொஞ்சம் இறங்கிருக்கு. அடுத்த quarter-லயும் இத கவனிக்கணும்.",
-                "Margin has improved too." if good else "Margin has slipped a little. This is worth keeping an eye on next quarter too.")
+    if sh == "lender":                                  # credit cost is what a lender sets aside for loans at risk: down is good
+        c = ch.get("impair")
+        if c and c["way"]:
+            good = c["way"] < 0
+            add("shield" if good else "eye", "Credit cost குறைஞ்சிருக்கு" if good else "Credit cost ஏறிருக்கு", "good" if good else "bad",
+                "Credit cost குறைஞ்சிருக்கு, அதாவது திரும்பி வராத கடனுக்காக ஒதுக்குற பணம் கம்மியாயிருக்கு." if good else "Credit cost ஏறிருக்கு, அதாவது கடனுக்காக ஒதுக்குற பணம் அதிகமாயிருக்கு. இத கவனிக்கணும்.",
+                "Credit cost has come down, which means less money is being set aside for loans at risk." if good else
+                "Credit cost has gone up, which means more money is being set aside for loans at risk. This is worth keeping an eye on.")
+    elif sh == "general":                               # under a hundred percent: the premium covers the claims and costs
+        c = ch.get("combined")
+        if c and c["way"]:
+            good = c["way"] < 0
+            add("shield" if good else "eye", "Combined ratio குறைஞ்சிருக்கு" if good else "Combined ratio ஏறிருக்கு", "good" if good else "bad",
+                "Combined ratio குறைஞ்சிருக்கு, அதாவது claim, செலவு கம்மியாயிருக்கு." if good else "Combined ratio ஏறிருக்கு, அதாவது claim, செலவு அதிகமாயிருக்கு. இத கவனிக்கணும்.",
+                "Combined ratio has come down, which means claims and costs are lower." if good else
+                "Combined ratio has gone up, which means claims and costs are higher. This is worth keeping an eye on.")
+    elif sh == "life":
+        x = r.get("solvency")
+        if x:
+            good = x["now"] >= 150
+            add("shield" if good else "eye", "Solvency ratio 150-க்கு மேல" if good else "Solvency ratio 150-க்கு கீழ", "good" if good else "bad",
+                f"Solvency ratio {spoken(x['now'], 'pct')}. IRDAI கேக்குற 150 percent-க்கு மேல இருக்கு." if good else f"Solvency ratio {spoken(x['now'], 'pct')}. IRDAI கேக்குற 150 percent-க்கு கீழ இருக்கு.",
+                f"Solvency ratio is {fig_en(x['now'], 'pct')}, above the 150% IRDAI asks for." if good else f"Solvency ratio is {fig_en(x['now'], 'pct')}, below the 150% IRDAI asks for.")
+    else:
+        last = ch.get("gnpa") if sh == "bank" else ch.get("opm")
+        if last and last["way"]:
+            if sh == "bank":
+                good = last["way"] < 0
+                add("shield" if good else "eye", "கடன் தரம் மேம்பட்டிருக்கு" if good else "வராக்கடன் ஏறிருக்கு", "good" if good else "bad",
+                    "வராக்கடன் சதவீதம் குறைஞ்சிருக்கு, அதாவது கடன் தரம் மேம்பட்டிருக்கு." if good else "வராக்கடன் சதவீதம் ஏறிருக்கு. அடுத்த quarter-ல இத கவனிக்கணும்.",
+                    "The percentage of bad loans has come down, which means loan quality has improved." if good else
+                    "The percentage of bad loans has gone up. This is worth keeping an eye on next quarter.")
+            else:
+                good = last["way"] > 0
+                add("shield" if good else "eye", "Margin மேம்பட்டிருக்கு" if good else "Margin-ல pressure", "good" if good else "bad",
+                    "Margin-ம் மேம்பட்டிருக்கு." if good else "Margin கொஞ்சம் இறங்கிருக்கு. அடுத்த quarter-லயும் இத கவனிக்கணும்.",
+                    "Margin has improved too." if good else "Margin has slipped a little. This is worth keeping an eye on next quarter too.")
     return out[:3]
 
 
@@ -269,7 +332,7 @@ def deck(result: dict, per_table: int = 4, reasons: list[dict] = (), ratios: lis
     tables = [{"kind": "table", "title": f"{q} · Numbers", "cols": [result["year_ago"], q, "YoY"], "items": rows[i:i + size]} for i in range(0, len(rows), size)]
     return [NOTICE,
             {"kind": "cover", "title": f"{name} · {q} Result", "items": [
-                {"icon": "bank" if result["bank"] else "company", "text": result["symbol"]}, {"icon": "paper", "text": q}, {"icon": "lens", "text": "என்ன சொல்லுது?"}]},
+                {"icon": icon(result), "text": result["symbol"]}, {"icon": "paper", "text": q}, {"icon": "lens", "text": "என்ன சொல்லுது?"}]},
             *tables, *extras(result, reasons, ratios, news),
             {"kind": "points", "title": "ஆக மொத்தம்", "items": takeaways(result), "note": "Company report பண்ண numbers மட்டும் · முதலீட்டு ஆலோசனை இல்ல"}]
 
@@ -309,7 +372,7 @@ def _row_en(x: dict) -> str:
 
 def _weight(x: dict) -> float:
     c = change(x)
-    return 0.0 if not c else abs(c["size"]) * (10 if x["unit"] == "pct" else 1)
+    return 0.0 if not c or x["key"] in NO_JOKE else abs(c["size"]) * (10 if x["unit"] == "pct" else 1)
 
 
 def lines(result: dict, slides: list[dict], ratios: list[dict] = ()) -> list[dict]:
@@ -331,8 +394,8 @@ def lines(result: dict, slides: list[dict], ratios: list[dict] = ()) -> list[dic
         elif slide["kind"] == "facts":                              # the key ratios: the analysis video's own wording for each
             rows = {r["key"]: r for r in ratios}
             for i, it in enumerate(slide["items"]):
-                say, tone, _ = _fact_line(rows[it["key"]], bool(result["bank"]))
-                out.append({"slide": s, "show": i + 1, "say": say, "en": _fact_en(rows[it["key"]], bool(result["bank"])), "tone": tone})
+                say, tone, _ = _fact_line(rows[it["key"]], financial(result))
+                out.append({"slide": s, "show": i + 1, "say": say, "en": _fact_en(rows[it["key"]], financial(result)), "tone": tone})
         elif slide["kind"] == "quotes":
             out += quote_lines(s, slide)
         elif slide["kind"] == "points":
@@ -394,6 +457,8 @@ MEANS.update({
     "high": "52 week high-னா, ஒரு வருஷத்துல share தொட்ட அதிகபட்ச price.",
     "low": "52 week low-னா, ஒரு வருஷத்துல share தொட்ட குறைஞ்சபட்ச price.",
     "ev": "EV to EBITDA-னா, company-ஓட மொத்த மதிப்பையும் கடனையும் சேர்த்து, ஒரு வருஷ operating லாபத்தோட ஒப்பிடுறது.",
+    "ttm_premium": "Premium-னா, மக்கள் insurance policy-க்காக company-க்கு கட்டுற பணம். இதுதான் insurance company-ஓட முக்கிய வருமானம்.",
+    "prem_growth": "Premium growth-னா, வர்ற premium எவ்வளவு percent கூடியிருக்கு அல்லது குறைஞ்சிருக்குன்னு காட்டுறது.",
 })
 MEANS_EN.update({
     "ttm_revenue": "Revenue is the total money the company took in by selling its products or services.",
@@ -422,6 +487,8 @@ MEANS_EN.update({
     "high": "The 52 week high is the highest price the share touched in a year.",
     "low": "The 52 week low is the lowest price the share touched in a year.",
     "ev": "EV to EBITDA compares the company's total value plus its debt with one year of operating profit.",
+    "ttm_premium": "Premium is the money people pay the company for insurance policies. It is an insurance company's main income.",
+    "prem_growth": "Premium growth shows by what percent the premium coming in has grown or fallen.",
 })
 # the value sentence of each ratio; {v} is the figure as spoken
 TELL = {
@@ -432,6 +499,7 @@ TELL = {
     "promoter": "Promoter holding {v}.", "cfo": "கடைசி financial year-ல operating cash flow {v}.", "fcf": "Free cash flow {v}.",
     "mcap": "அந்த price வச்சு பாத்தா market cap {v}.", "pe": "PE {v}.", "pb": "Price to book {v}.", "dyield": "Dividend yield {v}.",
     "high": "52 week high {v}.", "low": "52 week low {v}.", "ev": "EV to EBITDA {v}.",
+    "lnii": "கடைசி பன்னிரண்டு மாசத்துல net interest income {v}.", "ttm_premium": "கடைசி பன்னிரண்டு மாசத்துல premium {v}.", "solvency": "Solvency ratio {v}.", "combined": "Combined ratio {v}.",
 }
 TELL_EN = {
     "ttm_revenue": "In the last twelve months, the company's revenue is {v}.", "nii": "In the last twelve months, net interest income is {v}.",
@@ -441,6 +509,8 @@ TELL_EN = {
     "promoter": "Promoter holding is {v}.", "cfo": "In the last financial year, operating cash flow is {v}.", "fcf": "Free cash flow is {v}.",
     "mcap": "At that price, the market cap is {v}.", "pe": "PE is {v}.", "pb": "Price to book is {v}.", "dyield": "Dividend yield is {v}.",
     "high": "The 52 week high is {v}.", "low": "The 52 week low is {v}.", "ev": "EV to EBITDA is {v}.",
+    "lnii": "In the last twelve months, net interest income is {v}.", "ttm_premium": "In the last twelve months, the premium is {v}.", "solvency": "Solvency ratio is {v}.",
+    "combined": "Combined ratio is {v}.",
 }
 MONTH = ["ஜனவரி", "பிப்ரவரி", "மார்ச்", "ஏப்ரல்", "மே", "ஜூன்", "ஜூலை", "ஆகஸ்ட்", "செப்டம்பர்", "அக்டோபர்", "நவம்பர்", "டிசம்பர்"]
 GOOD_ROE = {False: 20, True: 15}                        # a rule of thumb for a company and for a bank
@@ -468,6 +538,16 @@ def reading(r: dict, bank: bool = False) -> tuple[str, float, str, str, str] | N
             return "bad", 15 - v, "கொஞ்சம் கம்மி", f"{name} பத்து percent-க்கு கீழ இருந்தா குறைவுன்னு பாப்பாங்க. இது ஒரு தோராயமான விதி மட்டும்தான். இங்க அப்படித்தான் இருக்கு.", \
                 f"{name} below ten percent is usually seen as low. This is only a rough rule of thumb. That is where it stands here."
         return "flat", 0, "நடுத்தரம்", "இது நடுத்தர level-ல இருக்கு.", "This is at a middling level."
+    if k == "solvency":                                 # weight 0: no joke about a regulator's capital figure
+        if v >= 150:
+            return "good", 0, "150-க்கு மேல", "இது IRDAI கேக்குற 150 percent-க்கு மேல இருக்கு.", "This is above the 150% IRDAI asks for."
+        return "bad", 0, "150-க்கு கீழ", "இது IRDAI கேக்குற 150 percent-க்கு கீழ இருக்கு.", "This is below the 150% IRDAI asks for."
+    if k == "combined":
+        if v < 100:
+            return "good", 0, "underwriting லாபம்", "Combined ratio நூறு percent-க்கு கீழ இருந்தா, insurance தொழில்லயே லாபம்னு அர்த்தம். இங்க அப்படித்தான் இருக்கு.", \
+                   "A combined ratio below a hundred percent means the insurance business itself makes a profit. That is where it stands here."
+        return "bad", 0, "underwriting நஷ்டம்", "Combined ratio நூறு percent-க்கு மேல இருந்தா, insurance தொழில்ல நஷ்டம்; லாபம் முதலீட்டு வருமானத்துல இருந்துதான் வருது. இங்க அப்படித்தான் இருக்கு.", \
+               "A combined ratio above a hundred percent means the insurance business itself makes a loss, and the profit comes from investment income. That is where it stands here."
     if k == "opm" and v >= 20:
         return "good", v - 10, "வலுவான margin", "Operating margin இருபது percent-க்கு மேல இருந்தா வலுவான margin-ன்னு சொல்லுவாங்க. இது ஒரு தோராயமான விதி.", \
                "Operating margin above twenty percent is called a strong margin. This is only a rough rule of thumb."
@@ -482,7 +562,7 @@ def reading(r: dict, bank: bool = False) -> tuple[str, float, str, str, str] | N
             return "bad", 5 + 5 * (v - 1.5), "கடன் அதிகம்", "Debt to equity 1.5-க்கு மேல இருந்தா கடன் அதிகம்னு பாப்பாங்க. இது ஒரு தோராயமான விதி.", \
                    "Debt to equity above 1.5 is seen as high debt. This is only a rough rule of thumb."
         return "flat", 0, "மிதமான கடன்", "கடன் மிதமான அளவுல இருக்கு.", "The debt is at a moderate level."
-    if k in ("rev_growth", "profit_growth"):                    # no reaction (weight 0): a base year with a one-off makes a joke unfair
+    if k in ("rev_growth", "profit_growth", "prem_growth"):     # no reaction (weight 0): a base year with a one-off makes a joke unfair
         if v >= 10:
             return "good", 0, "வேகமான வளர்ச்சி", "இது வேகமான வளர்ச்சி.", "This is fast growth."
         if v >= 0:
@@ -501,7 +581,8 @@ def reading(r: dict, bank: bool = False) -> tuple[str, float, str, str, str] | N
 
 
 # a ratio's English note (fundamentals.ratios) as the slide shows it: Tanglish, dates as 11 Sep 2026; longer phrases first
-NOTES = [("operating profit / revenue net of excise duty", "Operating profit / excise duty கழிச்ச revenue"), ("operating profit / revenue as filed", "Operating profit / filing-ல உள்ள revenue"),
+NOTES = [("interest income less finance costs", "வட்டி வருமானம் - finance costs"), ("net premium income", "net premium income"), ("gross premium written", "gross premium written"),
+         ("latest quarter", "கடைசி quarter"), ("operating profit / revenue net of excise duty", "Operating profit / excise duty கழிச்ச revenue"), ("operating profit / revenue as filed", "Operating profit / filing-ல உள்ள revenue"),
          ("profit / revenue net of excise duty", "Profit / excise duty கழிச்ச revenue"), ("profit / revenue as filed", "Profit / filing-ல உள்ள revenue"),
          ("before excise duty is taken off", "excise duty கழிக்கல"), ("net of excise duty", "excise duty கழிச்சு"), ("as filed", "filing-ல உள்ளபடி"),
          ("includes profit from discontinued operations", "நிறுத்தின business லாபமும் சேரும்"), ("includes one-offs", "ஒருமுறை வருமானமும் சேரும்"),
@@ -514,7 +595,7 @@ NOTES = [("operating profit / revenue net of excise duty", "Operating profit / e
          ]
 DATED = [(r"price on ([\d\w ]{11}) x shares", r"\1 price x share எண்ணிக்கை"), (r"as (?:on|of) ([\d\w ]{11})", r"\1 நிலவரம்"),
          (r"close on ([\d\w ]{11})", r"\1 close"), (r"year to ([\d\w ]{11})", r"\1 வரை")]
-DEFINED = {"ttm_revenue", "opm", "npm", "rev_growth", "profit_growth"}          # a ratio whose basis the slide always states, beside the reading
+DEFINED = {"ttm_revenue", "opm", "npm", "rev_growth", "profit_growth", "prem_growth"}          # a ratio whose basis the slide always states, beside the reading
 
 
 def note_ta(note: str) -> str:
@@ -536,7 +617,7 @@ def _fact(r: dict, bank: bool) -> dict:
 
 def analysis_takeaways(f: dict, rows: list[dict]) -> list[dict]:
     """Up to three things the ratios show, by plain rules, in the order returns and debt, growth, margin, promoter."""
-    r, bank, out = {x["key"]: x["value"] for x in rows}, bool(f["bank"]), []
+    r, bank, out = {x["key"]: x["value"] for x in rows}, financial(f), []
     hi = GOOD_ROE[bank]
 
     def add(icon, text, tone, say, en):
@@ -553,14 +634,15 @@ def analysis_takeaways(f: dict, rows: list[dict]) -> list[dict]:
         add("shield", "நல்ல ROE", "good", f"ஆக மொத்தம், ROE {roe:.1f} percent, நல்ல level-ல இருக்கு.", f"All in all, ROE is {roe:.1f}%, at a good level.")
     elif roe is not None and roe < 10:
         add("eye", "ROE கம்மி", "bad", f"ஆக மொத்தம், ROE {roe:.1f} percent, கொஞ்சம் குறைவா இருக்கு.", f"All in all, ROE is {roe:.1f}%, a little low.")
-    rg, pg = r.get("rev_growth"), r.get("profit_growth")
+    rg, pg = r.get("rev_growth", r.get("prem_growth")), r.get("profit_growth")
+    top, topen = ("Premium", "premium") if "prem_growth" in r else ("Revenue", "revenue")
     if rg is not None and pg is not None:
         if rg > 0 and pg > 0:
-            add("up", "Revenue, profit இரண்டும் வளர்ச்சி", "good", "Revenue-உம் profit-உம் ரெண்டுமே வளர்ந்திருக்கு.", "Revenue and profit have both grown.")
+            add("up", f"{top}, profit இரண்டும் வளர்ச்சி", "good", f"{top}-உம் profit-உம் ரெண்டுமே வளர்ந்திருக்கு.", f"{top} and profit have both grown.")
         elif rg > 0:
-            add("eye", "Revenue வளர்ச்சி, profit குறைவு", "flat", "Revenue வளர்ந்திருக்கு. ஆனா profit குறைஞ்சிருக்கு.", "Revenue has grown. But profit has fallen.")
+            add("eye", f"{top} வளர்ச்சி, profit குறைவு", "flat", f"{top} வளர்ந்திருக்கு. ஆனா profit குறைஞ்சிருக்கு.", f"{top} has grown. But profit has fallen.")
         else:
-            add("down", "Revenue குறைவு", "bad", "Revenue குறைஞ்சிருக்கு.", "Revenue has fallen.")
+            add("down", f"{top} குறைவு", "bad", f"{top} குறைஞ்சிருக்கு.", f"{top} has fallen.")
     elif pg is not None:
         add("up" if pg > 0 else "down", "Profit வளர்ச்சி" if pg > 0 else "Profit குறைவு", "good" if pg > 0 else "bad", "Profit வளர்ந்திருக்கு." if pg > 0 else "Profit குறைஞ்சிருக்கு.",
             "Profit has grown." if pg > 0 else "Profit has fallen.")
@@ -570,6 +652,11 @@ def analysis_takeaways(f: dict, rows: list[dict]) -> list[dict]:
     elif m is not None and m < 10:
         add("eye", "மெல்லிய margin", "flat", f"Operating margin {m:.1f} percent, மெல்லிய margin. இது துறைக்கு துறை மாறும்.",
             f"Operating margin is {m:.1f}%, a thin margin. This changes from one sector to another.")
+    sv = r.get("solvency")
+    if m is None and sv is not None:
+        add("shield" if sv >= 150 else "eye", "Solvency ratio" + (" 150-க்கு மேல" if sv >= 150 else " 150-க்கு கீழ"), "good" if sv >= 150 else "bad",
+            f"Solvency ratio {sv:.1f} percent. IRDAI கேக்குற 150 percent-க்கு {'மேல' if sv >= 150 else 'கீழ'} இருக்கு.",
+            f"Solvency ratio is {sv:.1f}%, {'above' if sv >= 150 else 'below'} the 150% IRDAI asks for.")
     p = r.get("promoter")
     if p is not None:
         add("eye", f"Promoter holding {shown(p, 'pct')}", "flat", "இந்த company-ல promoter group-ஓட holding இல்ல." if p < 0.005 else f"Promoter holding {p:.1f} percent.",
@@ -583,7 +670,7 @@ def analysis_source(f: dict) -> str:
 
 def analysis_deck(f: dict, rows: list[dict], per_table: int = 4) -> list[dict]:
     """Notice, cover, a facts table for each group of ratios (a long group is split evenly, four rows at most), the takeaways."""
-    name, bank, tables = short(f["name"]), bool(f["bank"]), []
+    name, bank, tables = short(f["name"]), financial(f), []
     day = next((r["note"].replace("close on ", "") for r in rows if r["key"] == "price"), "")
     for group, title in GROUPS.items():
         items = [_fact(r, bank) for r in rows if r["group"] == group]
@@ -595,7 +682,7 @@ def analysis_deck(f: dict, rows: list[dict], per_table: int = 4) -> list[dict]:
                            **({"note": "SEBI rule: கடைசி 30 நாள் price சொல்லக்கூடாது"} if group == "valuation" and i == n - 1 else {})})
     return [NOTICE,
             {"kind": "cover", "title": f"{name} · Fundamental Analysis", "items": [
-                {"icon": "bank" if bank else "company", "text": f["symbol"]}, {"icon": "paper", "text": "Last 12 months · " + dmy(f["ttm_to"])}, {"icon": "lens", "text": "என்ன சொல்லுது?"}]},
+                {"icon": icon(f), "text": f["symbol"]}, {"icon": "paper", "text": "Last 12 months · " + dmy(f["ttm_to"])}, {"icon": "lens", "text": "என்ன சொல்லுது?"}]},
             *tables,
             {"kind": "points", "title": "ஆக மொத்தம்", "items": analysis_takeaways(f, rows), "note": "Company report பண்ண numbers மட்டும் · முதலீட்டு ஆலோசனை இல்ல"}]
 
@@ -603,8 +690,8 @@ def analysis_deck(f: dict, rows: list[dict], per_table: int = 4) -> list[dict]:
 def _fact_line(r: dict, bank: bool) -> tuple[str, str, float]:
     k, v = r["key"], r["value"]
     out = [MEANS[k]] if k in MEANS else []
-    if k in ("rev_growth", "profit_growth"):
-        what = "Revenue" if k == "rev_growth" else "Profit"
+    if k in ("rev_growth", "profit_growth", "prem_growth"):
+        what = {"rev_growth": "Revenue", "prem_growth": "Premium"}.get(k, "Profit")
         basis = "போன financial year-ஓட ஒப்பிட்டா" if r["note"].startswith("FY") else "முந்தின பன்னிரண்டு மாசத்தோட ஒப்பிட்டா"
         out.append(f"{basis}, {what} {abs(v):.1f} percent {'வளர்ந்திருக்கு' if v >= 0 else 'குறைஞ்சிருக்கு'}.")
     elif k == "price":
@@ -629,9 +716,9 @@ def _fact_en(r: dict, bank: bool) -> str:
     """The English caption of a ratio's line, with the same figures `_fact_line` says."""
     k, v = r["key"], r["value"]
     out = [MEANS_EN[k]] if k in MEANS_EN else []
-    if k in ("rev_growth", "profit_growth"):
+    if k in ("rev_growth", "profit_growth", "prem_growth"):
         basis = "Compared with the last financial year," if r["note"].startswith("FY") else "Compared with the previous twelve months,"
-        out.append(f"{basis} {'revenue' if k == 'rev_growth' else 'profit'} has {'grown' if v >= 0 else 'fallen'} by {abs(v):.1f}%.")
+        out.append(f"{basis} {({'rev_growth': 'revenue', 'prem_growth': 'premium'}).get(k, 'profit')} has {'grown' if v >= 0 else 'fallen'} by {abs(v):.1f}%.")
     elif k == "price":
         out.append(f"This price is as of {date_en(r['note'].replace('close on ', ''))}. The closing price that day was {fig_en(v, 'rs')}. "
                    "Under SEBI's rule, an educational channel cannot mention a share's price from the last thirty days. That is why we have taken this older price.")
@@ -647,7 +734,7 @@ def _fact_en(r: dict, bank: bool) -> str:
 
 def analysis_lines(f: dict, rows: list[dict], slides: list[dict]) -> list[dict]:
     """One spoken line per thing that appears, in order. Each ratio: what the term means, its value, and a reading where a rule of thumb gives one."""
-    name, bank = said_name(f), bool(f["bank"])
+    name, bank = said_name(f), financial(f)
     by_key = {r["key"]: r for r in rows}
     out = [{"slide": 0, "show": 1, "say": NOTICE_SAY, "en": NOTICE_SAY_EN, "fixed": True, "hold": NOTICE_HOLD},
            {"slide": 1, "show": 1, "say": f"வணக்கம் நண்பர்களே! இன்னைக்கு {name}-ஓட fundamental analysis பாக்கலாம்.",
@@ -727,6 +814,7 @@ async def reword(llm, said: list[dict], result: dict, tier: str = "writer") -> t
 # ---- the reasons behind the numbers (the company's own words), key ratios and news ----------------------------------------------
 
 METRIC_ROW = {"revenue": "revenue", "margin": "opm", "profit": "profit", "nii": "nii", "provisions": "provisions", "npa": "gnpa"}   # a reason -> the row it must agree with
+ROW_OF = {"lender": {"nii": "lnii", "provisions": "impair"}, "life": {"revenue": "premium"}, "general": {"revenue": "gwp"}}      # the row a reason's metric means, for a form that names it differently
 CHIP = {"revenue": "Revenue", "margin": "Margin", "profit": "Profit", "nii": "NII", "provisions": "Provisions", "npa": "Gross NPA", "outlook": "Guidance"}
 WORD = {"revenue": "revenue", "margin": "margin", "profit": "profit", "nii": "net interest income", "provisions": "provisions", "npa": "வராக்கடன்"}
 VERB, ARROW = {"up": "ஏறிருக்கு", "down": "குறைஞ்சிருக்கு"}, {"up": "▲", "down": "▼", "none": "="}
@@ -766,6 +854,10 @@ Find up to 5 reasons the company itself gives for how these numbers moved, or wh
 If the documents give no such reason, answer {{"reasons": []}}."""
 
 
+def row_key(result: dict, metric: str) -> str | None:
+    return ROW_OF.get(nse.shape(result), {}).get(metric) or METRIC_ROW.get(metric)
+
+
 def moves(result: dict) -> str:
     """The result's year-on-year moves in a sentence for the model: "revenue up 10%, operating margin down 0.5 pts"."""
     out = []
@@ -800,7 +892,7 @@ def check_reason(item: object, doc: str, result: dict) -> str:
         return "advice or rude wording"
     if metric == "outlook":
         return "price or target wording in an outlook" if TIME.search(point + " " + say) else ""
-    row = next((x for x in result["rows"] if x["key"] == METRIC_ROW[metric]), None)
+    row = next((x for x in result["rows"] if x["key"] == row_key(result, metric)), None)
     c = row and change(row)
     if not c:
         return "no figure of ours to agree with"
@@ -851,7 +943,7 @@ async def reasons(llm, result: dict, text: str, tier: str = "writer", dropped: l
             if dropped is not None:
                 dropped.append((it, why))
             continue
-        row = next((x for x in result["rows"] if x["key"] == METRIC_ROW.get(it["metric"])), None)
+        row = next((x for x in result["rows"] if x["key"] == row_key(result, it["metric"])), None)
         c = row and change(row)
         kept.append({**{k: it[k].strip() for k in ("metric", "direction", "point", "quote", "say")}, "weight": _weight(row) if row else 0.0,
                      "tone": c["tone"] if c else "flat", "row": row["key"] if row else None})
@@ -875,13 +967,15 @@ def reason_slide(items: list[dict], docs: list[dict]) -> dict:
     return {"kind": "quotes", "title": "ஏன் இப்படி? · Company சொன்னது", "items": rows, "note": source_note(docs)}
 
 
-KEY = {False: ("roe", "roce", "de", "npm"), True: ("roe", "roa", "bv")}
+KEY = {"company": ("roe", "roce", "de", "npm"), "bank": ("roe", "roa", "bv"), "lender": ("roe", "roa", "bv"), "plain": ("roe", "npm", "bv"),
+       "life": ("roe", "solvency", "bv"), "general": ("roe", "combined", "solvency", "bv")}
 
 
-def key_ratios(rows: list[dict], bank: bool) -> list[dict]:
-    """The filing-based ratios the results video shows (fundamentals.ratios rows), never a price-based one."""
+def key_ratios(rows: list[dict], kind: str | bool) -> list[dict]:
+    """The filing-based ratios the results video shows (fundamentals.ratios rows), never a price-based one. `kind` is nse.shape(...); a bool is the older
+    bank / not a bank."""
     by = {r["key"]: r for r in rows}
-    return [by[k] for k in KEY[bank] if k in by]
+    return [by[k] for k in KEY["bank" if kind is True else "company" if kind is False else kind] if k in by]
 
 
 def extras(result: dict, reasons_: list[dict], ratios: list[dict], news: list[dict]) -> list[dict]:
@@ -891,7 +985,7 @@ def extras(result: dict, reasons_: list[dict], ratios: list[dict], news: list[di
     if reasons_:
         out.append(reason_slide(reasons_, docs))
     if ratios:
-        out.append({"kind": "facts", "title": "Key Ratios", "cols": ["Value"], "items": [_fact(r, bool(result["bank"])) for r in ratios]})
+        out.append({"kind": "facts", "title": "Key Ratios", "cols": ["Value"], "items": [_fact(r, financial(result)) for r in ratios]})
     if news:
         out.append(news_slide(news))
     return out

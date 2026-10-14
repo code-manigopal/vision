@@ -5,11 +5,12 @@
 
 - Two kinds of long video, by the weekday of the release (channel option `pattern`, e.g. mon: analysis, tue: topic): "analysis" is one company's
   ratios from its filings (Scout picks a company not analysed in 180 days; Analyst reads fundamentals, shareholding, dividends and the price AT
-  LEAST `price_lag_days` OLD, SEBI's rule for educational channels; fewer than 8 ratios = skipped, the next company is tried), "result" is the
-  quarterly result below. "topic" is not built yet and falls back to a result.
-- Results Scout: only inside the making window (`make_after` to `make_before`, night time; a manual run ignores it). Looks at the
-  results NSE lists as filed lately (services/nse.py `recent`) and takes one company of the channel's index (`index_csv`) whose
-  newest quarter has not been filmed (kv `mm_done`, key SYMBOL:quarter). Nothing new = NOTHING NEW and the rest idle.
+  LEAST `price_lag_days` OLD, SEBI's rule for educational channels; fewer than 8 ratios (7 for a bank, lender or insurer) = skipped, the next company
+  is tried), "result" is the quarterly result below. "topic" is not built yet and falls back to a result.
+- Results Scout: only inside the making window (`make_after` to `make_before`, night time; a manual run ignores it). Reads every result NSE lists
+  as filed in the last `within_days` (services/nse.py `recent`, paged) and takes up to three companies of the channel's index (`index_csv`) whose
+  newest quarter has not been filmed (kv `mm_done`, key SYMBOL:quarter; a skip made by an older parser does not count). The Analyst makes the
+  first one it can read; a filing with no figures for its form is marked tried and the next is taken. Nothing new = NOTHING NEW and the rest idle.
 - The figures are the filing's, nothing else (masters/market.py builds the slides and the lines); the voice is Mani's cloned voice
   (voice/clone.py, about an hour a video, with LM Studio's model unloaded meanwhile) or Edge's Tamil voice (`voice_engine`).
 - The upload is PRIVATE with no release time. An approval (kind `yt_publish`) is raised; approving schedules it for the next
@@ -47,6 +48,7 @@ BACKLOG = 2                      # videos finished or awaiting approval at which
 PAUSE = 0.15                     # seconds of silence after each spoken line
 EDGE_VOICE, EDGE_RATE = "ta-IN-ValluvarNeural", "+14%"
 DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+CANDIDATES = 3                   # results the Scout lines up in one run: the Analyst takes the first it can read, so one odd filing does not cost the night
 REPEAT_DAYS = 180                # a company is not analysed twice within this many days (a skipped one counts)
 TRIES = 4                        # more companies the Analyst may try when one has too few ratios
 LAG_DAYS = 31                    # the price used is at least this old: SEBI bars an education-only creator from a stock's price of the last 30 days
@@ -169,10 +171,24 @@ def release_kind(store, ch: dict) -> tuple[str, str]:
     return (ch.get("pattern") or {}).get(DAYS[due.weekday()]) or "result", due.date().isoformat()
 
 
+def done_at(store, key: str) -> float | None:
+    """When a result or analysis was made or looked at, or None if it has not been. A skip made by an older parser (nse.PARSER) does not count:
+    the code reads more forms now, so a company skipped for "no figures" or "too few ratios" is tried again."""
+    got = store.kv_get(DONE, key)
+    if got is None or (got.get("skipped") and (got.get("parser") or 0) < nse.PARSER):
+        return None
+    return got.get("at") or 1
+
+
+def skip(store, key: str, why: str) -> None:
+    """Mark a result or analysis tried and not made (or it would be picked again every night), with the reason and the parser that failed it."""
+    store.kv_put(DONE, key, {"skipped": why, "at": time.time(), "parser": nse.PARSER})
+
+
 def analysis_order(store, symbols: set[str], day: str) -> list[str]:
     """Companies to analyse, best first: never analysed ones in a stable but not alphabetical order (a hash with the release date), then
     those analysed over REPEAT_DAYS ago, oldest first. Anyone analysed or skipped within REPEAT_DAYS is left out."""
-    at = {s: (store.kv_get(DONE, f"analysis:{s}") or {}).get("at") for s in symbols}
+    at = {s: done_at(store, f"analysis:{s}") for s in symbols}
     new = sorted((s for s in symbols if not at[s]), key=lambda s: hashlib.sha1(f"{day}:{s}".encode()).hexdigest())
     return new + sorted((s for s in symbols if at[s] and at[s] < time.time() - REPEAT_DAYS * 86400), key=lambda s: at[s])
 
@@ -209,16 +225,21 @@ class ResultsScout(MCrew):
                 ctx["job"] = {"kind": "analysis", "symbol": order[0], "key": f"analysis:{order[0]}", "name": order[0], "more": order[1:1 + TRIES],
                               "dir": str(youtube.ROOT / "data" / "shorts" / ch["id"] / f"analysis-{order[0]}")}
                 return AgentResult("done", "FOUND", f"{order[0]}: fundamental analysis (release {day})")
-            filed = await nse.recent(c)
+            days = int(ch.get("within_days") or 4)
+            filed = await nse.recent(c, days)
         later = " (a topic day; topic videos are not built yet, so a result)" if kind == "topic" else ""
-        fresh = time.time() - int(ch.get("within_days") or 4) * 86400
+        fresh = time.time() - days * 86400
+        picks: list[dict] = []
         for f in filed:
-            q = nse.quarter(f["end"])
-            if f["symbol"].upper() in symbols and nse.filed_at(f["filed"]).timestamp() > fresh and not store.kv_has(DONE, f"{f['symbol'].upper()}:{q}"):
-                sym = f["symbol"].upper()
-                ctx["job"] = {"kind": "result", "symbol": sym, "quarter": q, "key": f"{sym}:{q}", "name": f["name"], "end": f["end"].isoformat(),
-                              "dir": str(youtube.ROOT / "data" / "shorts" / ch["id"] / f"{f['end'].isoformat()}-{sym}-{q.replace(' ', '')}")}
-                return AgentResult("done", "FOUND", f"{market.short(f['name'])} {q} results{later}")
+            q, sym = nse.quarter(f["end"]), f["symbol"].upper()
+            if sym in symbols and nse.filed_at(f["filed"]).timestamp() > fresh and done_at(store, f"{sym}:{q}") is None and not any(p["key"] == f"{sym}:{q}" for p in picks):
+                picks.append({"kind": "result", "symbol": sym, "quarter": q, "key": f"{sym}:{q}", "name": f["name"], "end": f["end"].isoformat(),
+                              "dir": str(youtube.ROOT / "data" / "shorts" / ch["id"] / f"{f['end'].isoformat()}-{sym}-{q.replace(' ', '')}")})
+                if len(picks) == CANDIDATES:
+                    break
+        if picks:
+            ctx["job"] = {**picks[0], "more": picks[1:]}
+            return AgentResult("done", "FOUND", f"{market.short(picks[0]['name'])} {picks[0]['quarter']} results{later}" + (f" (and {len(picks) - 1} more to try if it cannot be read)" if len(picks) > 1 else ""))
         return AgentResult("done", "NOTHING NEW", f"No new result from the {len(symbols)} companies in the index ({len(filed)} filings read){later}")
 
 
@@ -250,20 +271,29 @@ class MarketAnalyst(MCrew):
             return await self.report(ctx, job)
         if job.get("kind") == "analysis":
             return await self.analyse(ctx, job)
-        async with self.client() as c:
-            result = await nse.latest(c, job["symbol"])
-        if not result or not result["rows"]:
-            ctx["store"].kv_put(DONE, job["key"], {"skipped": "no figures", "at": time.time()})      # or it would be picked again every night
-            raise RuntimeError(f"NSE lists no figures for {job['symbol']} {job['quarter']}")
+        result, unread = None, []
+        for cand in [dict(job), *job.get("more", [])]:                  # the first result that has figures for its form; one that has none is marked tried, not an error
+            async with self.client() as c:
+                got = await nse.latest(c, cand["symbol"])
+            if got and got["rows"]:
+                result = got
+                job.update(cand, more=[])
+                break
+            skip(ctx["store"], cand["key"], "no figures")
+            unread.append(f"{cand['symbol']} {cand['quarter']}")
+        if not result:
+            ctx.pop("job", None)
+            return AgentResult("wait", "UNREADABLE", f"NSE lists no figures for {', '.join(unread)}; marked tried, the next night looks again at others")
         job["result"] = result
         async with self.client() as c:                      # what backs the numbers; each is optional, the video is made without it
             f = await optional(nse.fundamentals(c, job["symbol"]))
             if f and f["ttm"]:
-                job["key_ratios"] = market.key_ratios(fundamentals.ratios(f, None), bool(f["bank"]))      # filings only: no price here, SEBI's 30-day rule
+                job["key_ratios"] = market.key_ratios(fundamentals.ratios(f, None), nse.shape(f))      # filings only: no price here, SEBI's 30-day rule
             job["docs"] = await optional(documents(c, job["symbol"], result)) or []
             job["news"] = await optional(headlines(c, result)) or []
         extra = [f"{len(job.get('key_ratios') or [])} ratios", f"{len(job['docs'])} documents", f"{len(job['news'])} headlines"]
-        return AgentResult("done", "READ", f"{result['name']} {result['quarter']}: {len(result['rows'])} figures from the filing, " + ", ".join(extra))
+        return AgentResult("done", "READ", f"{result['name']} {result['quarter']}: {len(result['rows'])} figures from the filing, " + ", ".join(extra)
+                           + (f"; no figures for {', '.join(unread)}, marked tried" if unread else ""))
 
 
     async def report(self, ctx: dict, job: dict) -> AgentResult:
@@ -278,19 +308,19 @@ class MarketAnalyst(MCrew):
         return AgentResult("done", "READ", f"{sum(len(r['items']) for r in data['regions'])} indices in {len(data['regions'])} regions" + (f"; left out: {left}" if left else ""))
 
     async def analyse(self, ctx: dict, job: dict) -> AgentResult:
-        """The company's ratios. One with fewer than MIN_RATIOS is marked skipped for REPEAT_DAYS and the next of `more` is tried."""
+        """The company's ratios. One with fewer than fundamentals.minimum(f) is marked skipped for REPEAT_DAYS and the next of `more` is tried."""
         store, lag, tried = ctx["store"], int(self.ch.get("price_lag_days") or LAG_DAYS), []
         async with self.client() as c:
             for sym in [job["symbol"], *job.get("more", [])]:
                 f, rows, price = await gather(c, sym, lag)
-                if f and len(rows) >= fundamentals.MIN_RATIOS:
+                if f and len(rows) >= fundamentals.minimum(f):
                     job.update(symbol=sym, key=f"analysis:{sym}", name=f["name"], fundamentals=f, ratios=rows, price=price,
                                dir=str(youtube.ROOT / "data" / "shorts" / self.ch["id"] / f"analysis-{sym}-{f['ttm_to']}"))
                     return AgentResult("done", "READ", f"{f['name']}: {len(rows)} ratios from the filings" + ("" if price else ", no price"))
-                store.kv_put(DONE, f"analysis:{sym}", {"skipped": "too few ratios", "at": time.time()})
+                skip(store, f"analysis:{sym}", "too few ratios")
                 tried.append(sym)
         ctx.pop("job", None)
-        return AgentResult("wait", "TOO FEW FIGURES", f"{', '.join(tried)}: fewer than {fundamentals.MIN_RATIOS} ratios from the filings; skipped for {REPEAT_DAYS} days")
+        return AgentResult("wait", "TOO FEW FIGURES", f"{', '.join(tried)}: too few ratios from the filings ({fundamentals.MIN_RATIOS}, or {fundamentals.MIN_FINANCIAL} for a bank, lender or insurer); skipped for {REPEAT_DAYS} days")
 
 
 class TanglishWriter(MCrew):
@@ -392,7 +422,8 @@ class SlideEditor(MCrew):
 
     @staticmethod
     def title(result: dict) -> str:
-        figures = "NII, Profit, NPA" if result["bank"] else "Revenue, Profit, Margin"
+        figures = {"bank": "NII, Profit, NPA", "lender": "NII, Profit, Asset Quality", "life": "Premium, Profit, Solvency", "general": "Premium, Profit, Combined Ratio",
+                   "plain": "Revenue, Profit, EPS"}.get(nse.shape(result), "Revenue, Profit, Margin")
         return f"{market.short(result['name'])} {result['quarter']} Results தமிழில் | {figures} என்ன சொல்லுது?"[:100]
 
     @staticmethod
@@ -406,7 +437,8 @@ class SlideEditor(MCrew):
 
     @staticmethod
     def analysis_title(f: dict) -> str:
-        figures = "ROE, NII, Profit" if f["bank"] else "ROE, Debt, Margin"
+        figures = {"bank": "ROE, NII, Profit", "lender": "ROE, NII, Profit", "life": "ROE, Premium, Solvency", "general": "ROE, Premium, Solvency",
+                   "plain": "ROE, Profit, Margin"}.get(nse.shape(f), "ROE, Debt, Margin")
         return f"{market.short(f['name'])} Fundamental Analysis தமிழில் | {figures} என்ன சொல்லுது?"[:100]
 
     @staticmethod

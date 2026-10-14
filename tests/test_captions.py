@@ -9,6 +9,7 @@ import pytest
 from PIL import Image
 from test_market import PRICE, bank_fund, fund, result
 from test_market_backing import GOOD_MARGIN, GOOD_OUT, GOOD_REV, run
+from test_market_forms import analysis_decks as form_analysis, decks as form_results
 from test_market_report import SHAPES, data_for
 
 from vision.masters import fundamentals, market, market_crew, slides, youtube
@@ -71,7 +72,15 @@ def report_decks():
     return out
 
 
-ALL = result_decks() + analysis_decks() + report_decks()
+def form_decks():
+    """The results and analysis decks of the forms NSE files besides an ordinary company and a bank: lender, non-lender NBFC, life and general insurer."""
+    out = []
+    for r, deck, said in form_results():
+        out += [(deck, said, r), (deck, market.react(said, r, turn=1), r), (deck, market.react(said, r, turn=0), r)]
+    return out + [(deck, said, f) for f, deck, said in form_analysis()]
+
+
+ALL = result_decks() + analysis_decks() + report_decks() + form_decks()
 
 
 def test_every_line_has_an_english_caption_with_the_same_figures_as_the_spoken_line():

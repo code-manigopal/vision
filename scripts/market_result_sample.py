@@ -46,7 +46,7 @@ async def main(symbol: str, reword: bool) -> None:
     model = llm.writer_available()
     async with httpx.AsyncClient(follow_redirects=True) as c:
         f = await market_crew.optional(nse.fundamentals(c, symbol))
-        key = market.key_ratios(fundamentals.ratios(f, None), bool(f["bank"])) if f and f["ttm"] else []
+        key = market.key_ratios(fundamentals.ratios(f, None), nse.shape(f)) if f and f["ttm"] else []
         docs = await market_crew.optional(market_crew.documents(c, symbol, result)) or []
         day = datetime.strptime(result["filed"][:11], "%d-%b-%Y").date()
         raw = await market_crew.optional(news.fetch_feed(c, news.google_news_between(f'("{market.short(result["name"])}" OR {symbol}) results', (day - timedelta(days=1)).isoformat(),

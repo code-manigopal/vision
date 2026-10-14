@@ -13,8 +13,11 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
+from ..services.nse import shape
+
 GROUPS = {"size": "Size & Profit", "efficiency": "Efficiency", "balance": "Balance Sheet", "valuation": "Valuation"}
 MIN_RATIOS = 8                  # fewer than this and the company is not filmed
+MIN_FINANCIAL = 7               # a bank, lender or insurer has fewer kinds of ratio to give (no debt, margin or cash readings), so the bar is one lower
 MIN_YEAR_DAYS = 150             # a high and a low need about this many trading days behind them
 
 
@@ -28,6 +31,11 @@ def lagged(closes: list[tuple[date, float]], today: date, lag_days: int = 31) ->
     year = [c for d, c in old if day - timedelta(days=365) < d <= day]
     return {"price": price, "date": day.isoformat(), "high": max(year) if len(year) >= MIN_YEAR_DAYS else None,
             "low": min(year) if len(year) >= MIN_YEAR_DAYS else None}
+
+
+def minimum(f: dict) -> int:
+    """How many ratios a company needs before it is filmed: MIN_RATIOS, or MIN_FINANCIAL for a bank, lender, insurer or other NBFC-form company."""
+    return MIN_RATIOS if shape(f) == "company" else MIN_FINANCIAL
 
 
 def _div(a: float | None, b: float | None) -> float | None:
@@ -47,13 +55,13 @@ def net_revenue(p: dict) -> tuple[float | None, bool]:
 
 def growth(f: dict, key: str) -> tuple[float | None, str]:
     """Percent change of a figure: the last twelve months against the twelve before when eight quarters are listed, else the latest fiscal year
-    against the one before. The note says which, and that revenue is as filed or net of excise duty (when both periods list it)."""
+    against the one before. The note says which, and that revenue is as filed or net of excise duty (when both periods list it). key is revenue, premium or profit."""
     t, p, y = f.get("ttm") or {}, f.get("prev") or {}, f.get("years") or []
     if t.get(key) is not None and p.get(key):
         net = key == "revenue" and net_revenue(t)[1] and net_revenue(p)[1]
         a, b = (net_revenue(t)[0], net_revenue(p)[0]) if net else (t[key], p[key])
         return 100 * (a - b) / abs(b), "last 12 months vs the 12 before" + (", net of excise duty" if net else ", as filed" if key == "revenue" else "")
-    ykey = "revenue" if key == "revenue" else "profit"
+    ykey = key if key in ("revenue", "premium") else "profit"
     if len(y) >= 2 and y[0].get(ykey) is not None and y[1].get(ykey):
         net = ykey == "revenue" and net_revenue(y[0])[1] and net_revenue(y[1])[1]
         a, b = (net_revenue(y[0])[0], net_revenue(y[1])[0]) if net else (y[0][ykey], y[1][ykey])
@@ -65,7 +73,14 @@ def growth(f: dict, key: str) -> tuple[float | None, str]:
 
 
 def ratios(f: dict, price: dict | None = None) -> list[dict]:
-    t, b, bank = f.get("ttm") or {}, f.get("bs") or {}, bool(f.get("bank"))
+    """The ratios a company has figures for, by how its form is read (nse.shape): company | plain | bank | lender | life | general.
+
+    A company gets everything. An NBFC-form company that does not lend (plain) gets no operating margin, ROCE, debt, EV/EBITDA: its finance costs are not
+    a cost to add back. A bank or lender: net interest income, ROE, ROA, book value, no ROCE, debt or margin (net interest margin is left out: the filings
+    state no average earning assets to divide by). An insurer: premium, profit, ROE, book value and the solvency ratio (a general insurer also its combined
+    ratio), no ROCE, ROA, debt, margin or EV/EBITDA, since its assets and borrowings are policyholders' funds and its trade."""
+    t, b, sh = f.get("ttm") or {}, f.get("bs") or {}, shape(f)
+    bank, ins = sh in ("bank", "lender"), sh in ("life", "general")
     out: list[dict] = []
 
     def add(key, group, label, value, unit, note=""):
@@ -75,19 +90,27 @@ def ratios(f: dict, price: dict | None = None) -> list[dict]:
     profit, assets = t.get("profit"), b.get("assets")
     # size and profit
     if bank:
-        add("nii", "size", "Net interest income", t.get("nii"), "cr", "last 12 months")
+        add("nii" if sh == "bank" else "lnii", "size", "Net interest income", t.get("nii" if sh == "bank" else "lnii"), "cr",
+            "last 12 months" if sh == "bank" else "interest income less finance costs, last 12 months")
+    elif ins:
+        add("ttm_premium", "size", "Net premium income" if sh == "life" else "Gross premium written", t.get("premium"), "cr",
+            ("net premium income" if sh == "life" else "gross premium written") + ", last 12 months")
     else:
         add("ttm_revenue", "size", "Revenue", t.get("revenue"), "cr", "as filed, last 12 months" + (", before excise duty is taken off" if t.get("excise") else ""))
     add("ttm_profit", "size", "Net profit", profit, "cr", "last 12 months, owners' share")
-    if not bank:
+    if sh in ("company", "plain"):
         rev, net = net_revenue(t)                       # a margin on revenue that is net of excise duty where the filings list it
         basis = ("operating profit / revenue net of excise duty" if net else "operating profit / revenue as filed") + ", last 12 months"
-        add("opm", "size", "Operating margin", _pct(t.get("op"), rev), "pct", basis)
+        if sh == "company":
+            add("opm", "size", "Operating margin", _pct(t.get("op"), rev), "pct", basis)
         add("npm", "size", "Net margin", _pct(profit, rev), "pct", basis.replace("operating profit", "profit"))
     add("eps", "size", "EPS", t.get("eps") if t.get("eps") is not None else _div(profit, shares), "rs", "last 12 months")
-    if not bank:
+    if sh in ("company", "plain"):
         g, note = growth(f, "revenue")
         add("rev_growth", "size", "Revenue growth", g, "pct", note)
+    elif ins:
+        g, note = growth(f, "premium")
+        add("prem_growth", "size", "Premium growth", g, "pct", note)
     g, note = growth(f, "profit")
     add("profit_growth", "size", "Profit growth", g, "pct", note + (", includes one-offs" if g is not None and "discontinued" not in note else ""))
     # efficiency
@@ -95,26 +118,31 @@ def ratios(f: dict, price: dict | None = None) -> list[dict]:
     equity = (owners + opening) / 2 if owners is not None and opening is not None else owners
     add("roe", "efficiency", "ROE", _pct(profit, equity), "pct", "profit / " + ("average equity" if opening is not None and owners is not None else "closing equity"))
     debt = b["borrow_nc"] + b["borrow_c"] if b.get("borrow_nc") is not None and b.get("borrow_c") is not None else None
-    if not bank:
+    if sh == "company":
         ebit = t["pbt"] + t["fin"] if t.get("pbt") is not None and t.get("fin") is not None else None
         add("roce", "efficiency", "ROCE", _pct(ebit, b["equity"] + debt) if b.get("equity") is not None and debt is not None else None, "pct",
             "EBIT / (equity + borrowings)")
-    add("roa", "efficiency", "Return on assets", _pct(profit, assets), "pct", "profit / total assets")
-    if not bank:
+    if not ins:
+        add("roa", "efficiency", "Return on assets", _pct(profit, assets), "pct", "profit / total assets")
+    if sh in ("company", "plain"):
         add("turnover", "efficiency", "Asset turnover", _div(t.get("revenue"), assets), "x", "revenue / total assets")
+    last = f.get("latest") or {}                        # an insurer's regulatory figures are the newest quarter's, as filed (a figure outside a real one's range is already left out)
+    if ins:
+        add("solvency", "efficiency", "Solvency ratio", last.get("solvency"), "pct", f"as filed, as on {f.get('latest_end')}")
+        add("combined", "efficiency", "Combined ratio", last.get("combined"), "pct", "as filed, latest quarter")
     # balance sheet
     add("reserves", "balance", "Reserves", b.get("reserves"), "cr", f"as on {f.get('as_of')}")
-    if not bank:
+    if sh == "company":
         add("debt", "balance", "Total debt", debt, "cr", "borrowings; lease liabilities not added")
         add("leases", "balance", "Lease liabilities", b.get("leases"), "cr", "shown apart from debt")
         add("de", "balance", "Debt to equity", _div(debt, owners), "x", "borrowings / equity")
         add("cash", "balance", "Cash", b.get("cash"), "cr", "cash and equivalents")
     bv = _div(owners, shares)
     add("bv", "balance", "Book value per share", bv, "rs", "equity / number of shares")
-    sh = f.get("shareholding") or {}
-    add("promoter", "balance", "Promoter holding", sh.get("promoter"), "pct", f"as of {sh.get('date')}")
+    sh_ = f.get("shareholding") or {}
+    add("promoter", "balance", "Promoter holding", sh_.get("promoter"), "pct", f"as of {sh_.get('date')}")
     cf = f.get("cf") or {}
-    if not bank and cf.get("cfo") is not None:
+    if sh in ("company", "plain") and cf.get("cfo") is not None:
         add("cfo", "balance", "Operating cash flow", cf["cfo"], "cr", f"year to {cf['end']}")
         add("fcf", "balance", "Free cash flow", cf["cfo"] - cf["capex"] if cf.get("capex") is not None else None, "cr", "operating cash flow less capital spending")
     # valuation: the lagged price only
@@ -131,7 +159,7 @@ def ratios(f: dict, price: dict | None = None) -> list[dict]:
         add("high", "valuation", "52-week high", price.get("high"), "rs", f"year to {day}")
         add("low", "valuation", "52-week low", price.get("low"), "rs", f"year to {day}")
         ebitda = t.get("op")
-        if not bank and mcap and debt is not None and b.get("cash") is not None and ebitda and ebitda > 0:
+        if sh == "company" and mcap and debt is not None and b.get("cash") is not None and ebitda and ebitda > 0:
             add("ev", "valuation", "EV / EBITDA", (mcap + debt - b["cash"]) / ebitda, "x", "(market cap + debt - cash) / operating profit")
     return out
 

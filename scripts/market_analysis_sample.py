@@ -35,7 +35,7 @@ OUT = ROOT / "data" / "shorts" / "_sample"
 async def main(symbol: str, reword: bool) -> None:
     async with httpx.AsyncClient(follow_redirects=True, timeout=60.0) as c:
         f, rows, price = await market_crew.gather(c, symbol)
-    if not f or len(rows) < market_crew.fundamentals.MIN_RATIOS:
+    if not f or len(rows) < market_crew.fundamentals.minimum(f):
         sys.exit(f"{symbol}: NSE gives too few figures for an analysis ({len(rows)} ratios)")
     deck = market.analysis_deck(f, rows)
     said, kept = market.analysis_lines(f, rows, deck), 0

@@ -19,7 +19,7 @@ from vision.agents import AgentResult, Director, Master, Stage, SubAgent
 from vision.bus import EventBus, Store
 from vision.config import Config
 from vision.masters import CATALOG, market_crew, slides, youtube
-from vision.services import lmstudio, oauth
+from vision.services import lmstudio, nse, oauth
 
 FFMPEG = pytest.mark.skipif(not shutil.which("ffmpeg"), reason="ffmpeg not installed")
 IST = ZoneInfo("Asia/Kolkata")
@@ -79,11 +79,12 @@ def web(yt):
 
 
 def chart(days=700):
-    """Daily closes for two years up to yesterday; the last 31 days are 9999, a price the video must never show."""
+    """Daily closes for two years up to yesterday; the last 30 days are 9999, a price the video must never show. (The close of exactly 31 days
+    ago is allowed by the rule, so it is an ordinary price here: marking it 9999 made the test fail at some hours of the day.)"""
     now = int(time.time())
     stamps = [now - 86400 * n for n in range(days, 0, -1)]
     return {"chart": {"result": [{"meta": {"gmtoffset": 19800}, "timestamp": stamps,
-                                  "indicators": {"quote": [{"close": [9999.0 if n <= 31 else 200.0 + n % 50 for n in range(days, 0, -1)]}]}}]}}
+                                  "indicators": {"quote": [{"close": [9999.0 if n <= 30 else 200.0 + n % 50 for n in range(days, 0, -1)]}]}}]}}
 
 
 async def tone(text, stem):
@@ -378,7 +379,7 @@ def test_a_company_is_not_analysed_twice_within_180_days_and_skipped_ones_count(
     release_on(monkeypatch, 2026, 10, 19)
     now = time.time()
     env["store"].kv_put(market_crew.DONE, "analysis:SAMPLE", {"at": now - 10 * 86400})
-    env["store"].kv_put(market_crew.DONE, "analysis:OTHER", {"skipped": "too few ratios", "at": now - 100 * 86400})
+    env["store"].kv_put(market_crew.DONE, "analysis:OTHER", {"skipped": "too few ratios", "at": now - 100 * 86400, "parser": nse.PARSER})
     ctx = scout_ctx(env, reason="manual")
     res = asyncio.run(scout.run(ctx))
     assert res.label == "NOTHING NEW" and "job" not in ctx and "180 days" in res.summary
@@ -431,3 +432,118 @@ def test_the_listen_back_is_summed_up_for_the_record_and_a_failed_voice_is_held(
     qa = market_crew.voice_qa(tmp_path)
     assert (qa["lines"], qa["lowest"], qa["mean"], qa["made_again"], qa["longest_gap"]) == (2, 0.7, 0.8, 1, 0.4) and qa["text"] == "heard 0.70 at worst, 1 made again"
     assert market_crew.voice_qa(tmp_path / "none") is None
+
+
+# ---- the Scout's coverage, the candidates it lines up, and a result that cannot be read -----------------------------------------------------------
+
+def paged(rows_by_page, calls):
+    """NSE's market-wide list with paging: `size` rows a page, pages from 1 (the first needs no page). calls records (page, size) of each request."""
+    def handler(req):
+        u = str(req.url)
+        if "index.csv" in u:
+            return httpx.Response(200, text=CSV + "Third Ltd,Stuff,THIRD,EQ,INE000A01012\n")
+        if "integrated-filing-results" in u and "symbol" not in req.url.params:
+            page = int(req.url.params.get("page", 1))
+            calls.append((page, req.url.params.get("size")))
+            return httpx.Response(200, json={"data": rows_by_page.get(page, [])})
+        return httpx.Response(404)
+    return lambda: httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+
+def listed_row(symbol, hours_ago, end="30-SEP-2026", broadcast=True):
+    when = time.strftime("%d-%b-%Y %H:%M:%S", time.localtime(time.time() - hours_ago * 3600))
+    return {"symbol": symbol, "smName": symbol.title() + " Limited", "qe_Date": end, "consolidated": "Consolidated", "audited": "Audited",
+            "broadcast_Date": when if broadcast else None, "creation_Date": when, "xbrl": f"https://nsearchives.test/{symbol}-{end}.xml"}
+
+
+def test_the_scout_reads_the_filing_list_page_by_page_until_it_reaches_back_past_the_window(env):
+    calls = []
+    page1 = [listed_row(f"FILL{n}", 1) for n in range(100)]                                  # a full page, all filed within the window: ask for the next
+    page2 = [listed_row("OTHER", 50, broadcast=False), listed_row("OLDONE", 24 * 9)]          # OTHER has no broadcast time yet (its creation time stands in); the last row is 9 days old
+    scout = market_crew.ResultsScout(env["ch"], client_factory=paged({1: page1, 2: page2, 3: [listed_row("NEVER", 1)]}, calls))
+    ctx = scout_ctx(env)
+    res = asyncio.run(scout.run(ctx))
+    assert calls == [(1, "100"), (2, "100")] and res.label == "FOUND" and ctx["job"]["symbol"] == "OTHER" and ctx["job"]["more"] == []        # page 3 is never asked for
+    page = [listed_row("OTHER", 1), listed_row("OLDONE", 24 * 9)]                              # a short page ends the reading at once
+    calls.clear()
+    res = asyncio.run(market_crew.ResultsScout(env["ch"], client_factory=paged({1: page}, calls)).run(scout_ctx(env)))
+    assert calls == [(1, "100")] and res.label == "FOUND"
+
+
+def test_the_scout_lines_up_up_to_three_unfinished_results_newest_first_without_repeats(env):
+    rows = [listed_row("OTHER", 1), {**listed_row("OTHER", 1), "consolidated": "Standalone", "xbrl": "https://nsearchives.test/o-s.xml"}, listed_row("SAMPLE", 2), listed_row("THIRD", 3),
+            listed_row("OTHER", 30, end="30-JUN-2026"), listed_row("STRANGER", 1)]
+    ctx = scout_ctx(env)
+    res = asyncio.run(market_crew.ResultsScout(env["ch"], client_factory=paged({1: rows}, [])).run(ctx))
+    job = ctx["job"]
+    assert res.label == "FOUND" and [job["key"]] + [m["key"] for m in job["more"]] == ["OTHER:Q2 FY27", "SAMPLE:Q2 FY27", "THIRD:Q2 FY27"] and "more to try" in res.summary
+    env["store"].kv_put(market_crew.DONE, "SAMPLE:Q2 FY27", {"at": 1, "file": "x"})
+    ctx = scout_ctx(env)
+    asyncio.run(market_crew.ResultsScout(env["ch"], client_factory=paged({1: rows}, [])).run(ctx))
+    assert [ctx["job"]["key"]] + [m["key"] for m in ctx["job"]["more"]] == ["OTHER:Q2 FY27", "THIRD:Q2 FY27", "OTHER:Q1 FY27"]
+
+
+def test_a_skip_made_by_an_older_parser_is_tried_again_and_one_by_the_current_parser_is_not(env):
+    scout = market_crew.ResultsScout(env["ch"], client_factory=web(env["yt"]))
+    old = {"skipped": "no figures", "at": time.time()}                                         # what last night wrote: no parser recorded
+    env["store"].kv_put(market_crew.DONE, "SAMPLE:Q2 FY27", old)
+    ctx = scout_ctx(env)
+    assert asyncio.run(scout.run(ctx)).label == "FOUND" and ctx["job"]["key"] == "SAMPLE:Q2 FY27"
+    env["store"].kv_put(market_crew.DONE, "SAMPLE:Q2 FY27", {**old, "parser": nse.PARSER})
+    assert asyncio.run(scout.run(scout_ctx(env))).label == "NOTHING NEW"
+    env["store"].kv_put(market_crew.DONE, "SAMPLE:Q2 FY27", {**old, "parser": nse.PARSER - 1})
+    assert asyncio.run(scout.run(scout_ctx(env))).label == "FOUND"
+    env["store"].kv_put(market_crew.DONE, "SAMPLE:Q2 FY27", {"at": time.time(), "file": "x.mp4"})        # a video that was made is never made again
+    assert asyncio.run(scout.run(scout_ctx(env))).label == "NOTHING NEW"
+    assert market_crew.done_at(env["store"], "NOBODY:Q1 FY27") is None
+
+
+def good_result(sym):
+    return {"symbol": sym, "name": f"{sym.title()} Limited", "quarter": "Q2 FY27", "rows": [{"key": "revenue", "label": "Revenue", "unit": "cr", "now": 1.0, "prev": 1.0, "year": 1.0}],
+            "bank": False, "consolidated": True, "source": "u", "filed": "13-Oct-2026 04:04:30"}
+
+
+def candidate(sym):
+    return {"kind": "result", "symbol": sym, "quarter": "Q2 FY27", "key": f"{sym}:Q2 FY27", "name": f"{sym.title()} Limited", "end": "2026-09-30", "dir": f"d-{sym}"}
+
+
+def test_a_result_that_cannot_be_read_is_marked_tried_and_the_next_candidate_is_taken_without_an_error(env, monkeypatch):
+    async def latest(c, sym):
+        return good_result(sym) if sym == "GOOD" else {**good_result(sym), "rows": []} if sym == "EMPTY" else None
+    async def none(*a, **k):
+        return None
+    monkeypatch.setattr(market_crew.nse, "latest", latest)
+    monkeypatch.setattr(market_crew.nse, "fundamentals", none)
+    monkeypatch.setattr(market_crew, "documents", none)
+    monkeypatch.setattr(market_crew, "headlines", none)
+    analyst = market_crew.MarketAnalyst(env["ch"], client_factory=web(env["yt"]))
+    ctx = scout_ctx(env, job={**candidate("BAD"), "more": [candidate("EMPTY"), candidate("GOOD")]})
+    res = asyncio.run(analyst.run(ctx))
+    assert (res.status, res.label) == ("done", "READ") and ctx["job"]["symbol"] == "GOOD" and ctx["job"]["key"] == "GOOD:Q2 FY27" and ctx["job"]["dir"] == "d-GOOD"
+    assert "BAD Q2 FY27" in res.summary and "EMPTY Q2 FY27" in res.summary and ctx["job"]["more"] == []
+    for sym in ("BAD", "EMPTY"):
+        skipped = env["store"].kv_get(market_crew.DONE, f"{sym}:Q2 FY27")
+        assert skipped["skipped"] == "no figures" and skipped["parser"] == nse.PARSER
+    assert not env["store"].kv_has(market_crew.DONE, "GOOD:Q2 FY27")
+    ctx = scout_ctx(env, job={**candidate("BAD"), "more": []})                                 # nothing readable: not an error, the rest of the crew idles
+    res = asyncio.run(analyst.run(ctx))
+    assert (res.status, res.label) == ("wait", "UNREADABLE") and "job" not in ctx and "BAD Q2 FY27" in res.summary
+    assert asyncio.run(market_crew.TanglishWriter(env["ch"]).run(ctx)).label == "IDLE"
+
+
+def test_an_insurer_or_a_lender_needs_one_ratio_fewer_than_a_company_before_it_is_filmed(env, monkeypatch):
+    async def gather(c, sym, lag=31):
+        return {"name": "Life Limited", "kind": "life", "ttm": {}, "ttm_to": "2026-06-30"}, [{}] * 7, None
+    monkeypatch.setattr(market_crew, "gather", gather)
+    ctx = scout_ctx(env, job={"kind": "analysis", "symbol": "LIFE", "key": "analysis:LIFE", "more": [], "dir": "x"})
+    res = asyncio.run(market_crew.MarketAnalyst(env["ch"], client_factory=web(env["yt"])).run(ctx))
+    assert res.label == "READ" and ctx["job"]["symbol"] == "LIFE"
+
+
+def test_the_titles_name_what_each_form_shows():
+    t = market_crew.SlideEditor.title
+    assert "Premium, Profit, Solvency" in t({"name": "ICICI Life Limited", "quarter": "Q2 FY27", "kind": "life"})
+    assert "Premium, Profit, Combined Ratio" in t({"name": "X Limited", "quarter": "Q2 FY27", "kind": "general"})
+    assert "NII, Profit, Asset Quality" in t({"name": "X Limited", "quarter": "Q2 FY27", "kind": "nbfc", "lender": True})
+    assert "Revenue, Profit, Margin" in t({"name": "X Limited", "quarter": "Q2 FY27", "bank": False}) and "NII, Profit, NPA" in t({"name": "X", "quarter": "Q1 FY27", "bank": True})
+    assert "Revenue, Profit, EPS" in t({"name": "X Limited", "quarter": "Q2 FY27", "kind": "nbfc", "lender": False})

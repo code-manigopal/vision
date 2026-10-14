@@ -37,6 +37,12 @@ SOUNDS = {
     # the reasons, key ratios and news of a results video
     "guidance": "கைடன்ஸ்", "headline": "ஹெட்லைன்", "headlines": "ஹெட்லைன்ஸ்", "news": "நியூஸ்", "sources": "சோர்ஸஸ்", "screen": "ஸ்க்ரீன்", "ratios": "ரேஷியோஸ்",
     "ratio": "ரேஷியோ",
+    # financials: lenders (NBFCs) and insurers
+    "combined ratio": "கம்பைன்ட் ரேஷியோ", "credit cost": "க்ரெடிட் காஸ்ட்", "net interest margin": "நெட் இன்ட்ரெஸ்ட் மார்ஜின்", "interest income": "இன்ட்ரெஸ்ட் இன்கம்",
+    "finance costs": "ஃபைனான்ஸ் காஸ்ட்ஸ்", "first year": "ஃபர்ஸ்ட் இயர்", "stage 3": "ஸ்டேஜ் த்ரீ", "credit": "க்ரெடிட்", "cost": "காஸ்ட்", "costs": "காஸ்ட்ஸ்",
+    "premium": "ப்ரீமியம்", "solvency": "சால்வென்சி", "renewal": "ரெனிவல்", "gross": "க்ராஸ்", "written": "ரிட்டன்", "earned": "ஏர்ண்ட்", "interest": "இன்ட்ரெஸ்ட்",
+    "insurance": "இன்ஷூரன்ஸ்", "reinsurance": "ரீஇன்ஷூரன்ஸ்", "policy": "பாலிசி", "policies": "பாலிசீஸ்", "claim": "க்ளெய்ம்", "claims": "க்ளெய்ம்ஸ்",
+    "underwriting": "அண்டர்ரைட்டிங்", "irdai": "ஐஆர்டிஏஐ", "lender": "லெண்டர்", "nbfc": "என்பிஎஃப்சி", "aum": "ஏயுஎம்", "year": "இயர்",
     # the pre-market and post-market Shorts: index names as a Tamil speaker says them, abbreviations run together; "S&P 500" is a phrase so its & and 500 are not read as a number
     "bank nifty": "பேங்க் நிஃப்டி", "gift nifty": "கிஃப்ட் நிஃப்டி", "sgx nifty": "எஸ்ஜிஎக்ஸ் நிஃப்டி", "nifty": "நிஃப்டி", "sensex": "சென்செக்ஸ்", "s&p 500": "எஸ் அண்ட் பி ஃபைவ் ஹண்ட்ரட்",
     "dow jones": "டவ் ஜோன்ஸ்", "nasdaq": "நாஸ்டாக்", "nikkei": "நிக்கே", "kospi": "காஸ்பி", "hang seng": "ஹாங் செங்", "ftse": "ஃபுட்ஸி", "dax": "டாக்ஸ்", "cac": "காக்",

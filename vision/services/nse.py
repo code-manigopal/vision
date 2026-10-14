@@ -10,38 +10,65 @@
     announcements(client, s) what the company filed with the exchange (press releases, presentations, board outcomes), newest first
 
 A filing states one period only, so a comparison means reading the earlier filings too. Nothing here is computed
-beyond what the filing gives, except: a bank's net interest income (interest earned less interest expended), a
-company's operating profit (profit before exceptional items and tax, plus finance costs and depreciation, less
-other income) and its margin. A company is read from its consolidated filing; a bank from its standalone one, the
-only one that states its bad loans. NSE's own site is what a person would read in a browser; this asks it a few times a
+beyond what the filing gives, except: a bank's net interest income (interest earned less interest expended), a lender's
+(an NBFC's: interest earned less finance costs), a company's operating profit (profit before exceptional items and tax,
+plus finance costs and depreciation, less other income) and its margin. A company is read from its consolidated filing; a
+bank from its standalone one, the only one that states its bad loans.
+
+NSE files results in five XBRL forms, told apart by the file name (INTEGRATED_FILING_<FORM>_...): INDAS (ordinary companies),
+BANKING, NBFC (lenders, but also asset managers and holding companies, which lend little or nothing), LI (life insurers) and GI
+(general insurers). `kind` is indas | bank | nbfc | life | general, and `shape` is how the figures are read: company, bank, lender,
+plain (an NBFC-form company that is not a lender: no operating margin, no debt readings), life or general. NSE's own site is what a person would read in a browser; this asks it a few times a
 day, never in a loop.
 """
 
 from __future__ import annotations
 
 import re
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 import httpx
+from zoneinfo import ZoneInfo
 
 API = "https://www.nseindia.com/api/"
 UA = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
       "Accept": "application/json", "Referer": "https://www.nseindia.com/companies-listing/corporate-integrated-filing"}
 CRORE = 1e7
+PARSER = 2                      # raise it when a change in how filings are read can turn a result that had no figures into one that has: skips made by an older parser are tried again
+FORMS = {"INDAS": "indas", "BANKING": "bank", "NBFC": "nbfc", "LI": "life", "GI": "general"}
+LENDER_SHARE = 0.5              # an NBFC-form company whose interest earned is at least this share of its revenue lends; below it, it is read like an ordinary company
+INSURER_EPS = ("BasicAndDilutedEPSAfterExtraordinaryItemsNetOfTaxExpenseForThePeriodNotToBeAnnualized", "BasicAndDilutedEPSBeforeExtraordinaryItemsNetOfTaxExpenseForThePeriodNotToBeAnnualized")
+OWNERS_PROFIT = ("ProfitOrLossAttributableToOwnersOfParent", "ProfitLossForPeriod")
+LIFE_PROFIT = ("ProfitLossAfterTaxAndExtraordinaryItems", "ProfitLossAfterTaxBeforeExtraordinaryItems")      # the shareholders' account: a life insurer's own profit; the policyholders' surplus is not it
 
 # (key, label, unit, tags tried in order); unit cr = rupees shown in crore, pct = a percentage as filed, rs = rupees
+# the owners' share of the profit is the figure the company, the press and its EPS go by; the whole period's profit only when a filing lacks it
+EPS_ORDINARY = ("BasicEarningsLossPerShareFromContinuingAndDiscontinuedOperations", "BasicEarningsLossPerShareFromContinuingOperations")
 COMPANY = [("revenue", "Revenue", "cr", ("RevenueFromOperations",)),
            ("opm", "Operating margin", "pct", ()),
-           # the owners' share of the profit is the figure the company, the press and its EPS go by; the whole period's profit only when a filing lacks it
-           ("profit", "Net Profit", "cr", ("ProfitOrLossAttributableToOwnersOfParent", "ProfitLossForPeriod")),
-           ("eps", "EPS", "rs", ("BasicEarningsLossPerShareFromContinuingAndDiscontinuedOperations", "BasicEarningsLossPerShareFromContinuingOperations"))]
+           ("profit", "Net Profit", "cr", OWNERS_PROFIT),
+           ("eps", "EPS", "rs", EPS_ORDINARY)]
+PLAIN = [r for r in COMPANY if r[0] != "opm"]           # an NBFC-form company that does not lend: finance costs are not a cost to add back, so no operating margin
 BANK = [("nii", "Net Interest Income", "cr", ()),
         ("op", "Operating Profit", "cr", ("OperatingProfitBeforeProvisionAndContingencies",)),
         ("provisions", "Provisions", "cr", ("ProvisionsOtherThanTaxAndContingencies",)),
         ("profit", "Net Profit", "cr", ("ProfitLossAfterTaxesMinorityInterestAndShareOfProfitLossOfAssociates", "ProfitLossForThePeriod")),
         ("gnpa", "Gross NPA", "pct", ("PercentageOfGrossNpa",)),
         ("nnpa", "Net NPA", "pct", ("PercentageOfNpa",))]
-LOWER_IS_BETTER = {"provisions", "gnpa", "nnpa"}
+# an NBFC's quarterly filing states no stage-3 or capital-adequacy figure (only the profit and loss, and a balance sheet in the half-year and annual ones), so none is shown
+LENDER = [("interest", "Interest Income", "cr", ("InterestEarned",)), ("fin", "Finance Costs", "cr", ("FinanceCosts",)), ("lnii", "Net Interest Income", "cr", ()),
+          ("impair", "Credit Cost", "cr", ("ImpairmentOnFinancialInstruments",)), ("profit", "Net Profit", "cr", OWNERS_PROFIT), ("eps", "EPS", "rs", EPS_ORDINARY)]
+LIFE = [("premium", "Net Premium Income", "cr", ("NetPremiumIncome",)), ("fyp", "First Year Premium", "cr", ("IncomeFirstYearPremium",)),
+        ("renewal", "Renewal Premium", "cr", ("IncomeRenewalPremium",)), ("profit", "Net Profit", "cr", LIFE_PROFIT),
+        ("solvency", "Solvency Ratio", "pct", ("SolvencyRatio",)), ("eps", "EPS", "rs", INSURER_EPS)]
+GENERAL = [("gwp", "Gross Premium Written", "cr", ("GrossPremiumsWritten",)), ("earned", "Net Premium Earned", "cr", ("PremiumEarned",)),
+           ("profit", "Net Profit", "cr", ("ProfitLossAfterTax",)), ("combined", "Combined Ratio", "pct", ("CombinedRatio",)),
+           ("solvency", "Solvency Ratio", "pct", ("SolvencyRatio",)), ("eps", "EPS", "rs", INSURER_EPS)]
+ROWS = {"company": COMPANY, "plain": PLAIN, "bank": BANK, "lender": LENDER, "life": LIFE, "general": GENERAL}
+LOWER_IS_BETTER = {"provisions", "gnpa", "nnpa", "fin", "impair", "combined"}
+# a ratio the filings state as a fraction (2.3 = 230 %), shown as a percentage only inside the range a real one can have: some filings state it scaled
+# differently (LICI 0.0242, ICICIGI 0.0271, GICRE 0.0432 as filed), and a figure the filing may have got wrong is left out, never rescaled by a guess
+SANE = {"solvency": (1.0, 10.0), "combined": (0.5, 2.0)}
 
 
 def quarter(end: date) -> str:
@@ -73,15 +100,25 @@ def _listed(r: httpx.Response, symbol: str = "") -> list[dict]:
     rows = (r.json() or {}).get("data") or []
     out = [{"symbol": x.get("symbol") or symbol.upper(), "name": x.get("smName") or x.get("cmName") or symbol, "end": _day(x["qe_Date"]),
             "consolidated": (x.get("consolidated") or "").lower().startswith("consol"), "audited": x.get("audited") or "",
-            "filed": x.get("broadcast_Date") or "", "xbrl": x.get("xbrl") or ""}
+            "filed": x.get("broadcast_Date") or x.get("creation_Date") or "", "xbrl": x.get("xbrl") or ""}
            for x in rows if x.get("qe_Date") and str(x.get("xbrl") or "").endswith(".xml")]
     return sorted(out, key=lambda f: (f["end"], f["filed"]), reverse=True)
 
 
-async def recent(client: httpx.AsyncClient) -> list[dict]:
-    """Results filed market-wide lately (NSE answers the same list with no symbol: about the last day's filings), newest first by filing time."""
-    r = await _get(client, API + "integrated-filing-results", index="equities", type="Integrated Filing- Financials")
-    out = _listed(r)
+async def recent(client: httpx.AsyncClient, days: int = 4, pages: int = 6, size: int = 100) -> list[dict]:
+    """Results filed market-wide in the last `days`, newest first by filing time. NSE answers the list with no symbol, newest first, 20 rows a page by default;
+    `size` (up to at least 500) and `page` (from 1) are honoured, so pages of `size` are read until one reaches back past the window (a date range is ignored).
+    A row just filed has no broadcast time yet: its creation time stands in for it."""
+    cut, seen, out = datetime.now(ZoneInfo("Asia/Kolkata")).replace(tzinfo=None) - timedelta(days=days), set(), []     # NSE's times are Indian time
+    for page in range(1, pages + 1):
+        extra = {"page": page} if page > 1 else {}
+        r = await _get(client, API + "integrated-filing-results", index="equities", type="Integrated Filing- Financials", size=size, **extra)
+        rows = _listed(r)
+        new = [f for f in rows if f["xbrl"] not in seen]
+        seen |= {f["xbrl"] for f in new}
+        out += new
+        if not new or len((r.json() or {}).get("data") or []) < size or min(filed_at(f["filed"]) for f in rows) < cut:
+            break
     return sorted(out, key=lambda f: filed_at(f["filed"]), reverse=True)
 
 
@@ -92,14 +129,39 @@ def filed_at(text: str) -> datetime:
         return datetime.min
 
 
-def parse(xml: str) -> dict:
-    """The figures a filing states for its own period: {bank, name, start, end, v: {tag: number}}."""
+def form(xml: str, url: str = "", v: dict | None = None, text: dict | None = None) -> str:
+    """Which of the five forms a filing is: from its file name (INTEGRATED_FILING_NBFC_INDAS_...), else the taxonomy named in the file (IntegratedFinance_LI),
+    else from the tags it states (a bank states NameOfBank / InterestExpended, a general insurer its premiums written, a life insurer its premium income)."""
+    for src in (re.search(r"INTEGRATED_FILING_([A-Z]+)", url or ""), re.search(r"IntegratedFinance_([A-Z]+)", xml[:6000])):
+        if src and src[1] in FORMS:
+            return FORMS[src[1]]
+    v, text = v or {}, text or {}
+    if "NameOfBank" in text or "InterestExpended" in v:
+        return "bank"
+    return "general" if "GrossPremiumsWritten" in v else "life" if "NetPremiumIncome" in v else "indas"
+
+
+def shape(x: dict) -> str:
+    """How a result, a parsed filing or a fundamentals dict is read: company | plain | bank | lender | life | general. One that carries only `bank` is a bank or a company."""
+    kind = "bank" if x.get("bank") else x.get("kind") or "indas"
+    return {"bank": "bank", "life": "life", "general": "general"}.get(kind) or (("lender" if x.get("lender") else "plain") if kind == "nbfc" else "company")
+
+
+def lends(v: dict) -> bool:
+    """Does an NBFC-form company lend? Its interest earned is at least LENDER_SHARE of its revenue (an asset manager or a holding company earns little or none)."""
+    rev = v.get("RevenueFromOperations") or v.get("Income")
+    return bool(rev) and (v.get("InterestEarned") or 0.0) >= LENDER_SHARE * rev
+
+
+def parse(xml: str, url: str = "") -> dict:
+    """The figures a filing states for its own period: {kind, bank, lender, name, start, end, v: {tag: number}}. `url` (the filing's address) names its form."""
     plain = {i: dict(re.findall(r"<xbrli:(startDate|endDate|instant)>([\d-]+)", body))
              for i, body in re.findall(r'<xbrli:context id="([\w-]+)">(.*?)</xbrli:context>', xml, re.S) if "Member" not in body}
     facts = re.findall(r'<[\w-]+:(\w+)\s[^>]*contextRef="([\w-]+)"[^>]*>([^<]+)<', xml)
     spans = [i for i, p in plain.items() if "startDate" in p]
     if not spans:
-        return {"bank": False, "name": "", "start": None, "end": None, "v": {}}
+        kind = form(xml, url)
+        return {"kind": kind, "bank": kind == "bank", "lender": False, "name": "", "start": None, "end": None, "v": {}}
     # the quarter itself, not the year so far: the period that ends last and starts latest (the first such in the file)
     one = max(spans, key=lambda i: (plain[i]["endDate"], plain[i]["startDate"], -spans.index(i)))
     start, end = plain[one]["startDate"], plain[one]["endDate"]
@@ -113,7 +175,8 @@ def parse(xml: str) -> dict:
                 pass
     if (ex := excise(xml, start, end)) is not None:
         v["ExciseDuty"] = ex
-    return {"bank": "NameOfBank" in text or "InterestEarned" in v, "name": text.get("NameOfBank") or text.get("NameOfTheCompany") or "",
+    kind = form(xml, url, v, text)
+    return {"kind": kind, "bank": kind == "bank", "lender": kind == "nbfc" and lends(v), "name": text.get("NameOfBank") or text.get("NameOfTheCompany") or "",
             "start": start, "end": end, "v": v}
 
 
@@ -142,8 +205,10 @@ def _value(f: dict | None, key: str, tags: tuple) -> float | None:
     if not f:
         return None
     v = f["v"]
-    if key == "nii":
+    if key == "nii":                                    # a bank: interest earned less interest expended
         return v["InterestEarned"] - v["InterestExpended"] if {"InterestEarned", "InterestExpended"} <= v.keys() else None
+    if key == "lnii":                                   # a lender states no interest expended, only finance costs: net interest income is worked out from the two
+        return v["InterestEarned"] - v["FinanceCosts"] if {"InterestEarned", "FinanceCosts"} <= v.keys() else None
     if key == "opm":
         need = ("ProfitBeforeExceptionalItemsAndTax", "RevenueFromOperations")
         if not all(k in v for k in need) or not v["RevenueFromOperations"]:
@@ -152,19 +217,36 @@ def _value(f: dict | None, key: str, tags: tuple) -> float | None:
     got = next((v[t] for t in tags if t in v), None)
     if key in ("gnpa", "nnpa"):                       # filed as a fraction (0.0117); a consolidated bank filing leaves it at zero
         return round(got * 100, 2) if got else None
+    if key in SANE:                                     # a fraction as filed (2.299 = 229.9 %), left out when outside the range a real one has
+        return round(got * 100, 1) if got is not None and SANE[key][0] <= got <= SANE[key][1] else None
     return got
 
 
 def rows(now: dict, prev: dict | None, year: dict | None) -> list[dict]:
     """The figures to show, each with the quarter before and the same quarter a year ago where those filings were read."""
     out = []
-    for key, label, unit, tags in (BANK if now["bank"] else COMPANY):
+    for key, label, unit, tags in ROWS[shape(now)]:
         cur = _value(now, key, tags)
         if cur is None:
             continue
-        out.append({"key": key, "label": label, "unit": unit, "now": cur, "prev": _value(prev, key, tags), "year": _value(year, key, tags),
-                    "lower_is_better": key in LOWER_IS_BETTER})
+        was, before = _value(year, key, tags), _value(prev, key, tags)
+        if key == "eps":                             # per-share figures only compare across the same number of shares (HDFCAMC: a bonus issue halved EPS)
+            was, before = (v if same_shares(now, f) else None for v, f in ((was, year), (before, prev)))
+        out.append({"key": key, "label": label, "unit": unit, "now": cur, "prev": before, "year": was, "lower_is_better": key in LOWER_IS_BETTER})
     return out
+
+
+def shares(f: dict | None) -> float | None:
+    """The number of shares a filing implies: paid-up capital / face value."""
+    v = (f or {}).get("v") or {}
+    cap, face = v.get("PaidUpValueOfEquityShareCapital"), v.get("FaceValueOfEquityShareCapital")
+    return cap / face if cap and face else None
+
+
+def same_shares(a: dict | None, b: dict | None) -> bool:
+    """True when two filings have the same share count (within 1 %), or when either does not say."""
+    x, y = shares(a), shares(b)
+    return not (x and y) or abs(x - y) / y < 0.01
 
 
 async def latest(client: httpx.AsyncClient, symbol: str) -> dict | None:
@@ -179,16 +261,17 @@ async def latest(client: httpx.AsyncClient, symbol: str) -> dict | None:
     back[3] = date(head["end"].year - (m <= 0), m + 12 * (m <= 0), 31 if (m + 12 * (m <= 0)) in (3, 12) else 30)
 
     async def read(f: dict | None) -> dict | None:
-        return parse((await _get(client, f["xbrl"])).text) if f else None
+        return parse((await _get(client, f["xbrl"])).text, f["xbrl"]) if f else None
     now = await read(head)
     alone = next((f for f in listed if f["end"] == head["end"] and not f["consolidated"]), None)
-    if now["bank"] and head["consolidated"] and alone:  # a bank states its bad loans only in the standalone filing
+    # a bank states its bad loans only in the standalone filing; any form whose consolidated filing yields no figure is read from the standalone one
+    if (now["bank"] or not rows(now, None, None)) and head["consolidated"] and alone:
         head, same = alone, [f for f in listed if not f["consolidated"]]
         now = await read(head)
     prev, year = [await read(next((f for f in same if f["end"] == back[k]), None)) for k in (3, 12)]
-    return {"symbol": head["symbol"], "name": now["name"] or head["name"], "bank": now["bank"], "end": head["end"].isoformat(),
+    return {"symbol": head["symbol"], "name": now["name"] or head["name"], "bank": now["bank"], "kind": now["kind"], "lender": now["lender"], "end": head["end"].isoformat(),
             "quarter": quarter(head["end"]), "year_ago": quarter(back[12]), "before": quarter(back[3]), "consolidated": head["consolidated"],
-            "audited": head["audited"], "filed": head["filed"], "source": head["xbrl"], "rows": rows(now, prev, year)}
+            "audited": head["audited"], "filed": head["filed"], "source": head["xbrl"], "rows": rows(now, prev, year), "parser": PARSER}
 
 
 async def calendar(client: httpx.AsyncClient) -> list[dict]:
@@ -200,11 +283,14 @@ async def calendar(client: httpx.AsyncClient) -> list[dict]:
 
 # ---- fundamentals: what the filings say about a whole company, not one quarter -------------------------------------------------
 
-EPS_TAGS = COMPANY[3][3]
-PROFIT_TAGS = ("ProfitOrLossAttributableToOwnersOfParent", "ProfitLossForPeriod") + BANK[3][3]       # owners' share first, else the whole profit
-# balance-sheet names -> the tags that state them (instant figures at the period end); a bank has no "Equity" tag, it states Capital and ReservesAndSurplus
-BALANCE = {"equity": ("Equity",), "owners": ("EquityAttributableToOwnersOfParent",), "capital": ("EquityShareCapital", "Capital"),
-           "reserves": ("OtherEquity", "ReservesAndSurplus"), "borrow_nc": ("BorrowingsNoncurrent",), "borrow_c": ("BorrowingsCurrent",),
+EPS_TAGS = EPS_ORDINARY + INSURER_EPS
+PROFIT_TAGS = OWNERS_PROFIT + BANK[3][3] + LIFE_PROFIT + GENERAL[2][3]       # owners' share first, else the whole profit
+PREMIUM_TAGS = {"life": LIFE[0][3], "general": GENERAL[0][3]}               # what an insurer's premium line is: net premium income / gross premium written
+# balance-sheet names -> the tags that state them (instant figures at the period end); a bank has no "Equity" tag, it states Capital and ReservesAndSurplus,
+# a life insurer ShareholdersFunds, a general insurer share capital + reserves + the fair-value account
+BALANCE = {"equity": ("Equity",), "owners": ("EquityAttributableToOwnersOfParent", "ShareholdersFunds"), "capital": ("EquityShareCapital", "Capital", "PaidUpEquityCapital"),
+           "reserves": ("OtherEquity", "ReservesAndSurplus", "ReservesAndSurplusExcludingRevaluationReserve"), "borrow_nc": ("BorrowingsNoncurrent",), "borrow_c": ("BorrowingsCurrent",),
+           "fair": ("FairValueChangeAccountAndRevaluationReserve",),
            "assets": ("Assets",), "cash": ("CashAndCashEquivalents",), "paid": ("PaidUpValueOfEquityShareCapital",), "face": ("FaceValueOfEquityShareCapital",)}
 CAPEX = ("PurchaseOfPropertyPlantAndEquipmentClassifiedAsInvestingActivities", "PurchaseOfIntangibleAssetsClassifiedAsInvestingActivities",
          "PurchaseOfIntangibleAssetsUnderDevelopment")
@@ -258,10 +344,14 @@ def _get_any(v: dict, tags: tuple) -> float | None:
 
 def _figures(p: dict) -> dict:
     """What one quarter adds to a twelve-month sum (None for a figure the filing does not state)."""
-    v = p["v"]
-    if p["bank"]:
-        return {"nii": _value(p, "nii", ()), "profit": _get_any(v, BANK[3][3]), "eps": _get_any(v, EPS_TAGS),
-                "pbt": _get_any(v, ("ProfitLossFromOrdinaryActivitiesBeforeTax", "ProfitBeforeExtraordinaryItemsAndTax"))}
+    v, sh = p["v"], shape(p)
+    if sh in ("bank", "lender"):
+        nii = _value(p, "nii" if sh == "bank" else "lnii", ())
+        return {("nii" if sh == "bank" else "lnii"): nii, "profit": _get_any(v, PROFIT_TAGS), "eps": _get_any(v, EPS_TAGS),
+                "pbt": _get_any(v, ("ProfitLossFromOrdinaryActivitiesBeforeTax", "ProfitBeforeExtraordinaryItemsAndTax", "ProfitBeforeTax"))}
+    if sh in ("life", "general"):
+        return {"premium": _get_any(v, PREMIUM_TAGS[sh]), "profit": _get_any(v, PROFIT_TAGS), "eps": _get_any(v, EPS_TAGS),
+                "pbt": _get_any(v, ("ProfitLossBeforeTax", "ProfitOrLossBeforeTax"))}
     ok = "ProfitBeforeExceptionalItemsAndTax" in v
     return {"revenue": v.get("RevenueFromOperations"), "excise": v.get("ExciseDuty"), "op": _op(v) if ok else None, "profit": _get_any(v, PROFIT_TAGS), "eps": _get_any(v, EPS_TAGS),
             "pbt": _get_any(v, ("ProfitBeforeTax", "ProfitBeforeExceptionalItemsAndTax")), "fin": v.get("FinanceCosts"),
@@ -272,20 +362,21 @@ def _sum(quarters: list[dict]) -> dict:
     return {k: (sum(q[k] for q in quarters) if all(q.get(k) is not None for q in quarters) else None) for k in quarters[0]}
 
 
-def _balance(v: dict, bank: bool) -> dict:
+def _balance(v: dict, financial: bool) -> dict:
     b = {k: _get_any(v, tags) for k, tags in BALANCE.items()}
     if b["owners"] is None:                             # no minority interest is stated: the equity is the owners'
-        b["owners"] = b["equity"] if b["equity"] is not None else (b["capital"] + b["reserves"] if None not in (b["capital"], b["reserves"]) else None)
+        b["owners"] = b["equity"] if b["equity"] is not None else (b["capital"] + b["reserves"] + (b["fair"] or 0.0) if None not in (b["capital"], b["reserves"]) else None)
     if b["equity"] is None:
         b["equity"] = b["owners"]
-    if bank:
+    if financial:                                       # a bank's, lender's or insurer's borrowings are its trade, not a debt to read
         b["borrow_nc"] = b["borrow_c"] = None
     b["shares"] = b["paid"] / b["face"] if b["paid"] and b["face"] else None
     return b
 
 
 def _has_balance(p: dict) -> bool:
-    return "Equity" in p["v"] or ("Capital" in p["v"] and "ReservesAndSurplus" in p["v"])
+    v = p["v"]
+    return "Equity" in v or "ShareholdersFunds" in v or ("Capital" in v and "ReservesAndSurplus" in v) or ("PaidUpEquityCapital" in v and "ReservesAndSurplusExcludingRevaluationReserve" in v)
 
 
 async def fundamentals(client: httpx.AsyncClient, symbol: str) -> dict | None:
@@ -314,12 +405,13 @@ async def fundamentals(client: httpx.AsyncClient, symbol: str) -> dict | None:
     async def get(end: date) -> dict:
         if end not in read:
             xml = (await _get(client, by_end[end]["xbrl"])).text
-            read[end] = (xml, parse(xml))
+            read[end] = (xml, parse(xml, by_end[end]["xbrl"]))
         return read[end][1]
     for e in chain[:4]:
         await get(e)
     head = read[ends[0]][1]
-    bank = head["bank"]
+    sh = shape(head)
+    fin = sh != "company"
     quarters = [_figures(read[e][1]) for e in chain[:4]]
     ttm = _sum(quarters) if len(chain) >= 4 else None
     prev = None
@@ -332,15 +424,18 @@ async def fundamentals(client: httpx.AsyncClient, symbol: str) -> dict | None:
         if _has_balance(await get(e)):
             as_of = e
             break
-    bs = _balance(read[as_of][1]["v"], bank) if as_of else {}
-    if as_of and not bank:
+    bs = _balance(read[as_of][1]["v"], fin) if as_of else {}
+    if as_of and sh == "company":
         bs["leases"] = leases(read[as_of][0])
     if bs.get("shares") is None and ttm:                  # the newest quarter states the share capital too
-        bs["shares"] = _balance(head["v"], bank)["shares"]
+        bs["shares"] = _balance(head["v"], fin)["shares"]
+    if bs.get("shares") is None and ttm and sh in ("life", "general"):       # an insurer states no face value: the shares are its quarter's profit over its quarter's EPS
+        profit, eps = _get_any(head["v"], PROFIT_TAGS), _get_any(head["v"], EPS_TAGS)
+        bs["shares"] = round(profit / eps) if profit and eps else None
     opened = None
     before = date(as_of.year - 1, as_of.month, as_of.day) if as_of else None
     if before in by_end and await get(before) and _has_balance(read[before][1]):
-        opened = {"owners": _balance(read[before][1]["v"], bank)["owners"], "end": before.isoformat()}
+        opened = {"owners": _balance(read[before][1]["v"], fin)["owners"], "end": before.isoformat()}
     years, cf = [], None
     for e in [e for e in ends if e.month == 3][:4]:
         got = parse_year(read[e][0]) if e in read or await get(e) else None
@@ -348,11 +443,12 @@ async def fundamentals(client: httpx.AsyncClient, symbol: str) -> dict | None:
             continue
         v = got["v"]
         years.append({"end": got["end"], "revenue": v.get("RevenueFromOperations"), "excise": v.get("ExciseDuty"), "profit": _get_any(v, PROFIT_TAGS),
-                      "disc": v.get("ProfitLossFromDiscontinuedOperationsAfterTax")})
+                      "disc": v.get("ProfitLossFromDiscontinuedOperationsAfterTax"), "premium": _get_any(v, PREMIUM_TAGS.get(sh, ()))})
         if cf is None and "CashFlowsFromUsedInOperatingActivities" in v:
             capex = [v[t] for t in CAPEX if t in v]
             cf = {"end": got["end"], "cfo": v["CashFlowsFromUsedInOperatingActivities"], "capex": sum(capex) if capex and CAPEX[0] in v else None}
-    return {"symbol": by_end[ends[0]]["symbol"], "name": head["name"] or by_end[ends[0]]["name"], "bank": bank, "consolidated": flag,
+    return {"symbol": by_end[ends[0]]["symbol"], "name": head["name"] or by_end[ends[0]]["name"], "bank": sh == "bank", "kind": head["kind"], "lender": head["lender"], "consolidated": flag,
+            "latest": {k: _value(head, k, tags) for k, _, _, tags in ROWS[sh] if k in SANE}, "latest_end": head["end"],
             "as_of": as_of.isoformat() if as_of else None, "ttm_to": chain[0].isoformat() if len(chain) >= 4 else None, "ttm": ttm, "prev": prev,
             "bs": bs, "bs_open": opened, "years": years, "cf": cf,
             "sources": [by_end[e]["xbrl"] for e in sorted(read, reverse=True)]}

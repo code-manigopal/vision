@@ -20,6 +20,8 @@ import secrets as pysecrets
 import time
 from urllib.parse import urlencode
 
+import logging
+
 import httpx
 
 from ..config import ROOT, secret
@@ -133,8 +135,10 @@ async def access_token(account: str, provider: str, client: httpx.AsyncClient | 
         data["scope"] = " ".join(p["scopes"])
     async with (client or httpx.AsyncClient(timeout=20)) as c:
         r = await c.post(p["token"], data=data)
-    d = r.json()
-    if "access_token" not in d:
+    d = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
+    if "access_token" not in d:                      # say why: on 2026-10-14 a refresh at 03:16 failed once and worked again later, and nothing told why
+        logging.getLogger("vision.oauth").warning("%s sign-in for %s could not be renewed (%s): %s", provider, account, r.status_code,
+                                                  d.get("error_description") or d.get("error") or r.text[:200])
         raise AuthNeeded(account, provider)
     tok.update(access_token=d["access_token"], expires_at=time.time() + int(d.get("expires_in", 3600)) - 60)
     if d.get("refresh_token"):
