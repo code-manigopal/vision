@@ -74,8 +74,8 @@ tests/             test_core, test_telegram, test_phase34, test_phase567
 1. **One reporter per master.** Sub-agents pass work down their chain (`ctx`); only the reporter's
    `AgentResult.summary` (+ `data`) becomes the master report. Briefs use master reports only.
    Reporters: email=Summarizer, calendar=Scheduler, trading=Portfolio Manager, invest=Daily P&L Reporter,
-   web=Proposal Drafter, jobs=Application Tracker, world=News Summarizer,
-   traffic=Incident Scout, visa=Slot Watcher, youtube=Confessions Everywhere Director (its crew reports to it through Analytics Manager; it also adds Mani Market Tamil's line, whose own crew reports through Market Analytics).
+   web=Proposal Drafter, jobs=Application Tracker, world=News Summarizer (news, weather, flights, traffic),
+   visa=Slot Watcher, youtube=Confessions Everywhere Director (its crew reports to it through Analytics Manager; it also adds Mani Market Tamil's line, whose own crew reports through Market Analytics).
 2. **Errors skip the chain**: a failing agent turns red, alerts the master log (Telegram once/30 min),
    and blocks later stages — unless the agent sets `blocking = False` (sync/data agents do).
 3. **Side effects need approval** (the YOU gate): sending email, booking meetings, job packages,
@@ -257,7 +257,11 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   OpenSky without an account allows about 100 world snapshots a day (a 429 after that): a refusal is a wait, not a fault
   (label RESTING, the last flights stay up, nothing asked until the allowance is back: kv `world_state`), hence 15 min.
   World Watch shows `near_slots` (10) flights nearest home first, the rest spread worldwide; a route lookup is spent only on callsigns not yet known.
-- Traffic Desk is read-only (no approval gate).
+- **Traffic Desk is no longer a master (Mani, 2026-10-14): merged into World Watch**, read-only as before (no approval gate). City Geocoder
+  runs in GATHER beside the news, then Traffic Poller (stage ROADS) and Incident Scout (INCIDENTS); none of them blocks (no TomTom key = red Geocoder,
+  the other two idle WAITING, the news still reported). The News Summarizer adds the Scout's line to the report and the cities to its data (`traffic`).
+  Agents stay in `masters/traffic.py`; `watch_cities` is under `masters.world.options`; checked every World Watch cycle (15 min). `/api/traffic`,
+  `/traffic` on Telegram and `python -m vision traffic` are unchanged. Its slot on the ring goes to the E-books Manager (to be designed).
 - Visa Watch (`masters/visa.py`, added as the 11th master, now one of ten; Mani and family only, **notify only, Mani books by hand**): about once an
   hour per account (`interval_minutes` 60 ± `jitter_minutes` 10; the master cycles every 10 min and looks at one due account
   per run, never two within 5 min unless `test_mode: true`) it reads the dates the Canada portal (ais.usvisa-info.com) offers
@@ -589,12 +593,11 @@ The long lesson opens on the disclaimer card as ever, has a fixed opening line, 
 ## Status
 | Master | Mode | Needs from Mani |
 |---|---|---|
-| Traffic | live | TOMTOM_API_KEY |
 | Investments | live | Kite login link, FYERS_APP_ID/SECRET (+PIN), Wealthsimple CSV in inbox/wealthsimple |
 | Email / Calendar | live | GOOGLE_CLIENT_ID/SECRET and/or MS_CLIENT_ID/SECRET, accounts in config, sign-in |
 | Job Hunt | live | resumes in vault/resume (done), target companies (optional); Adzuna is paid and switched off |
 | Web Designer | live | GOOGLE_MAPS_API_KEY, CLOUDFLARE_API_TOKEN + ACCOUNT_ID, optional PEXELS_API_KEY / PIXABAY_API_KEY |
-| World Watch (news, weather, flights) | live | nothing; optional OPENSKY creds (a free account lifts flights from about 100 to 1,000 snapshots a day) |
+| World Watch (news, weather, flights, traffic) | live | TOMTOM_API_KEY for traffic; optional OPENSKY creds (a free account lifts flights from about 100 to 1,000 snapshots a day) |
 | Trading Desk | live | OANDA practice token + account |
 | YouTube Manager (+ Mani Market Tamil) | live (upload mocked only, never run against YouTube) | GROQ_API_KEY, PEXELS_API_KEY (the .env line has no usable value), REDDIT_CLIENT_ID/SECRET or .txt stories in inbox/confessions/confessions; GOOGLE_CLIENT_ID/SECRET with YouTube Data API v3 and Google Drive API enabled and redirect `http://127.0.0.1:8765/auth/youtube/callback`, then the YouTube sign-in. Mani Market Tamil: its own YouTube sign-in (`/auth/youtube/login?account=youtube-manimarket`), `vault/voice/ref-tight.wav` + `ref.txt` and the IndicF5 model for the cloned voice, headless Chrome (selenium) for the slides, LM Studio's `lms` tool |
 | Visa Watch | live (never run signed in) | add the account on its desk, then sign in to the portal himself in the window it opens (again whenever the session runs out); the Keychain prompt allowed once |

@@ -21,7 +21,7 @@ llm:                       # Ask engine + every agent that writes or judges
 #   only_masters: [youtube]            just YouTube Manager
 #   only_masters: [youtube, news]      those two
 #   only_masters: []                   no override: each master's own `enabled:` below decides
-# ids: email, calendar, trading, invest, news, web, jobs, world, traffic, youtube, visa. Restart VISION after a change.
+# ids: email, calendar, trading, invest, news, web, jobs, world, youtube, visa. Restart VISION after a change.
 only_masters: []
 
 # mode: stub = demo agents until that master is built · live = real agents
@@ -75,7 +75,7 @@ masters:
       targets: {}                         # optional, e.g. { india: 40, us: 40, crypto: 20 }
       ideas_tier: writer                  # who writes "ideas to consider": local (LM Studio) or writer (Groq: faster, but your movers' names and percentages leave the Mac)
       ideas_timeout: 45                   # seconds to wait for the model; after that the ideas come from plain rules
-  world:                                  # World Watch: everything VISION watches in the world: news, weather and flights
+  world:                                  # World Watch: everything VISION watches in the world: news, weather, flights and traffic
     enabled: true
     trust: OBSERVE
     mode: live
@@ -85,6 +85,7 @@ masters:
       max_flights: 60
       near_km: 400
       route_lookups: 25
+      watch_cities: ["Leamington, ON", "Windsor, ON"]   # traffic (TomTom): incidents in these cities every cycle
       news_minutes: 30                    # the news feeds are read again this often, however often the flights are
       max_age_hours: 30
       # topics: override any Google News search, e.g.
@@ -141,13 +142,6 @@ masters:
       followup_days: 10                   # no reply this long after applying: a reminder, at most `followups` of them
       followups: 2
       stale_days: 60                      # after the reminders and this long with no reply, the application is set aside as closed
-  traffic:
-    enabled: true
-    trust: OBSERVE
-    mode: live
-    cycle_minutes: 10
-    options:
-      watch_cities: ["Leamington, ON", "Windsor, ON"]
   visa:
     enabled: true
     trust: OBSERVE         # only looks at the dates on offer and tells you; you book by hand

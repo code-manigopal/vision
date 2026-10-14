@@ -34,7 +34,7 @@ def check() -> int:
     from .masters import build_masters
     for m in build_masters(cfg):
         print(f"  {m.name:<18} {'on ' if m.enabled else 'off'}  mode={m.mode:<4}  trust={m.trust:<8} reporter={m.reporter}")
-    keys = {"TOMTOM_API_KEY": "Traffic Desk", "TELEGRAM_BOT_TOKEN": "Telegram bot", "TELEGRAM_CHAT_ID": "Telegram: your chat (send /start to the bot to get it)",
+    keys = {"TOMTOM_API_KEY": "World Watch traffic", "TELEGRAM_BOT_TOKEN": "Telegram bot", "TELEGRAM_CHAT_ID": "Telegram: your chat (send /start to the bot to get it)",
             "FYERS_APP_ID": "Investments · Fyers", "GOOGLE_CLIENT_ID": "Email + Calendar · Google sign-in", "MS_CLIENT_ID": "Email + Calendar · Microsoft sign-in",
             "ANTHROPIC_API_KEY": "Cloud model (optional)", "ADZUNA_APP_ID": "Job Hunt · Adzuna", "GOOGLE_MAPS_API_KEY": "Web Designer · Places",
             "CLOUDFLARE_API_TOKEN": "Web Designer · deploys", "PEXELS_API_KEY": "Web Designer · stock photos (optional)", "OPENSKY_CLIENT_ID": "World Watch (optional)", "OANDA_API_TOKEN": "Trading Desk"}

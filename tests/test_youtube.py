@@ -822,7 +822,7 @@ def test_only_masters_switches_the_others_off():
     assert {m.id for m in build_masters(cfg) if m.enabled} == {"youtube"}
     assert cfg.masters["news"].enabled and not cfg.master("news").enabled          # the master's own setting is left as it was
     cfg = Config(only_masters=[], masters={"news": {"enabled": False}})
-    assert not cfg.master("news").enabled and cfg.master("traffic").enabled
+    assert not cfg.master("news").enabled and cfg.master("world").enabled
 
 
 # ---------- editing upgrade, quick format, double down ----------

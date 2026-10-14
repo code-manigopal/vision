@@ -74,11 +74,15 @@ class NewsSummarizer(SubAgent):
         air = ctx.get("results", {}).get("Flight Tracker")
         flights = (air.data or {}) if air and air.status != "error" else {}
         air_line = air.summary if air and air.status != "error" and air.summary else ""
+        # and the roads: the Incident Scout's line and the cities it polled
+        road = ctx.get("results", {}).get("Incident Scout")
+        road_line = road.summary if road and road.status == "done" and road.summary else ""
+        roads = {"traffic": ctx["traffic"]} if road_line and "traffic" in ctx else {}
         if not headlines:
-            return AgentResult("done", "QUIET", " · ".join(x for x in ("No fresh headlines", air_line) if x), {**flights, "headlines": []})
-        summary = f"{len(parts)} topics updated" + (f" · {w['city']} {w['temp']}°C {w['words']}" if w else "") + (f" · {air_line}" if air_line else "")
+            return AgentResult("done", "QUIET", " · ".join(x for x in ("No fresh headlines", air_line, road_line) if x), {**flights, **roads, "headlines": []})
+        summary = f"{len(parts)} topics updated" + (f" · {w['city']} {w['temp']}°C {w['words']}" if w else "") + (f" · {air_line}" if air_line else "") + (f" · {road_line}" if road_line else "")
         return AgentResult("done", f"{len(headlines)} ITEMS", summary,
-                           {**flights, "headlines": headlines, "weather": w, "detail": parts})
+                           {**flights, **roads, "headlines": headlines, "weather": w, "detail": parts})
 
 
 def build_agents(options: dict[str, Any], cfg=None) -> dict[str, SubAgent]:

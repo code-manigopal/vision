@@ -1247,7 +1247,7 @@ class Component extends DCLogic {
   // The hosted preview can't reach the backend, so it falls back to a demo response of the same shape.
   async fetchTraffic(city) {
     this.setState({ mode: 'briefing', mind: false, page: 0, trafficLoading: city, trafficErr: null });
-    this.say('Traffic Desk: checking ' + city + '…');
+    this.say('World Watch: checking ' + city + '…');
     const local = /^(localhost|127\.0\.0\.1|.*\.local)$/.test((window.location && window.location.hostname) || '');
     let data = null, err = null;
     if (local) {
@@ -1267,7 +1267,7 @@ class Component extends DCLogic {
       this.setState({ flash: line, flashUntil: Date.now() + 15000 });
       this.speak(line);
     } else {
-      this.say('Traffic Desk could not reach the backend: ' + err);
+      this.say('World Watch could not reach the backend: ' + err);
     }
   }
   demoTraffic(city) {
@@ -1445,7 +1445,7 @@ class Component extends DCLogic {
   // Preview: rule-based intent parser. Real build: the local LLM router (LM Studio, tool calling)
   // returns the same {kind, ...entities} list, and the same plan UI runs on the real agent results.
   static REPORTERS = { email: 'Summarizer', calendar: 'Scheduler', trading: 'Portfolio Manager', invest: 'Daily P&L Reporter',
-    web: 'Proposal Drafter', jobs: 'Application Tracker', world: 'News Summarizer', traffic: 'Incident Scout', youtube: 'Confessions Everywhere Director', visa: 'Slot Watcher' };
+    web: 'Proposal Drafter', jobs: 'Application Tracker', world: 'News Summarizer', youtube: 'Confessions Everywhere Director', visa: 'Slot Watcher' };
   static HOLD = null;   // a master kept on hold (greyed out, skipped at boot); none right now
   titleCase(x) { return x.trim().replace(/\s+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()); }
   parseDay(q) {
@@ -1514,15 +1514,15 @@ class Component extends DCLogic {
       const r = this.demoRoute(it.from, it.to);
       const major = r.delay >= 10;
       return { chip: 'ROUTE TRAFFIC · ' + r.from + ' → ' + r.to, route: r,
-        steps: [['TRAFFIC DESK', 'City Geocoder', 'Geocode ' + r.from, fx(r.coords[0])], ['TRAFFIC DESK', 'City Geocoder', 'Geocode ' + r.to, fx(r.coords[1])],
-          ['TRAFFIC DESK', 'Traffic Poller', 'Route with live traffic', r.km + ' km · ' + tm(r.now)], ['TRAFFIC DESK', 'Incident Scout', 'Incidents along ' + r.road, r.incidents.length + ' found']],
+        steps: [['WORLD WATCH', 'City Geocoder', 'Geocode ' + r.from, fx(r.coords[0])], ['WORLD WATCH', 'City Geocoder', 'Geocode ' + r.to, fx(r.coords[1])],
+          ['WORLD WATCH', 'Traffic Poller', 'Route with live traffic', r.km + ' km · ' + tm(r.now)], ['WORLD WATCH', 'Incident Scout', 'Incidents along ' + r.road, r.incidents.length + ' found']],
         say: (it.assumedFrom ? 'From home, ' + r.to : r.from + ' to ' + r.to) + ' is about ' + r.km + ' km via ' + r.road + ', ' + tm(r.now) + ' right now, ' + (r.delay ? r.delay + ' minutes slower than usual.' : 'no slower than usual.') + ' ' + r.incidents.map((x) => cap(x.type) + ' near ' + x.near + (x.mins ? ' (+' + x.mins + ' min)' : '')).join('; ') + '. ' + (major ? 'Leave a little early.' : 'No major delays.'),
         follow: ['Traffic in ' + r.to, 'Weather in ' + r.to + ' tomorrow', "What's on my calendar today"] };
     }
     if (it.kind === 'trafficCity') {
       const d = this.demoTraffic(it.city), ms = d.mostSevere;
       return { chip: 'CITY TRAFFIC · ' + d.city, trafficData: d,
-        steps: [['TRAFFIC DESK', 'City Geocoder', 'Bounding box for ' + d.city, 'mapped'], ['TRAFFIC DESK', 'Traffic Poller', 'Live incidents', d.totalActive + ' active'], ['TRAFFIC DESK', 'Incident Scout', 'Worst delay', ms.delayMinutes + ' min']],
+        steps: [['WORLD WATCH', 'City Geocoder', 'Bounding box for ' + d.city, 'mapped'], ['WORLD WATCH', 'Traffic Poller', 'Live incidents', d.totalActive + ' active'], ['WORLD WATCH', 'Incident Scout', 'Worst delay', ms.delayMinutes + ' min']],
         say: 'Traffic in ' + d.city + ': ' + d.totalActive + ' active incidents, ' + d.jams + ' jams and ' + d.roadworks + ' roadworks. ' + (d.majorDelay ? 'Major delay of ' + ms.delayMinutes + ' minutes on ' + ms.road + '.' : 'No major delays.'),
         follow: ['Traffic between Windsor and ' + d.city, 'Weather in ' + d.city] };
     }
@@ -1620,7 +1620,7 @@ class Component extends DCLogic {
     if (/\b(what needs (me|my)|(show|review|open) (me )?(the |my )?(approvals?|decisions?)|anything to (approve|decide)|what('?s| is) waiting)\b/.test(t0)) { this.openDecide(); return; }
     if (/^(how are (we|you|things)( all)?( doing| going)?|how'?s (it|everything) going|what'?s up|whats up|status( report| update)?|give me (a |the )?(status|update|rundown)|what did i miss)\b/.test(t0)) { this.startBrief(); return; }
     if (/\b(approved pitches|my pitches|show (me )?(the )?pitches)\b/.test(t0)) { this.openDesk('web', 'pitched'); return; }
-    { const dm = t0.match(/\b(?:show|open)\b.*?\b(email|calendar|trading|invest\w*|news|web|job\w*|world|traffic)?\b.*\bdesk\b/);
+    { const dm = t0.match(/\b(?:show|open)\b.*?\b(email|calendar|trading|invest\w*|news|web|job\w*|world)?\b.*\bdesk\b/);
       if (dm) { const k = (dm[1] || '').replace(/^invest.*/, 'invest').replace(/^job.*/, 'jobs'); this.openDesk(k || this.state.master); return; } }
     if (this.state.liveUp && !this.useLocal && t0 && !this.isNavCommand(t0)) { this.askLive(raw); return; }
     this.runLocal(raw);
@@ -1688,7 +1688,7 @@ class Component extends DCLogic {
       this.say('Mind closed.');
     } else if (this.pickMaster(t) || t.includes('agent') || t.includes('pipeline') || t.includes('slave')) {
       const mk = this.pickMaster(t);
-      const names = { youtube: 'YouTube Manager', trading: 'Trading Desk', jobs: 'Job Hunt', web: 'Web Designer', invest: 'Investments', world: 'World Watch', email: 'Email Manager', calendar: 'Calendar Manager', traffic: 'Traffic Desk', visa: 'Visa Watch' };
+      const names = { youtube: 'YouTube Manager', trading: 'Trading Desk', jobs: 'Job Hunt', web: 'Web Designer', invest: 'Investments', world: 'World Watch', email: 'Email Manager', calendar: 'Calendar Manager', visa: 'Visa Watch' };
       if (mk) this.setState({ master: mk });
       this.say('Showing ' + names[mk || this.state.master] + ' agents.');
       setTimeout(() => this.scrollToGraph(), 60);
@@ -1704,7 +1704,7 @@ class Component extends DCLogic {
     if (t.includes('job') || t.includes('resume') || t.includes('career')) return 'jobs';
     if (t.includes('web') || t.includes('site') || t.includes('design')) return 'web';
     if (t.includes('news') || t.includes('cricket') || t.includes('politic') || t.includes('headline')) return 'world';
-    if (t.includes('traffic')) return 'traffic';
+    if (t.includes('traffic')) return 'world';
     if (t.includes('visa')) return 'visa';
     if (t.includes('calendar') || t.includes('meeting')) return 'calendar';
     if (t.includes('email') || t.includes('mail') || t.includes('inbox')) return 'email';
@@ -2131,15 +2131,13 @@ class Component extends DCLogic {
         ['Bitcoin Tracker','work','LIVE'],['Daily P&L Reporter','done','SENT 6:00']] },
       world: { name: 'WORLD WATCH', dot: 'd-work', agents: [
         ['Indian Market News','work','SCANNING'],['Global Market News','work','SCANNING'],['Cricket News','done','UPDATED'],
-        ['Political News','idle','QUEUED'],['Weather Agent','work','LIVE'],['Flight Tracker','work','TRACKING'],['News Summarizer','idle','QUEUED']] },
+        ['Political News','idle','QUEUED'],['Weather Agent','work','LIVE'],['Flight Tracker','work','TRACKING'],['City Geocoder','done','MAPPED'],['Traffic Poller','work','POLLING'],['Incident Scout','work','SCANNING'],['News Summarizer','idle','QUEUED']] },
       email: { name: 'EMAIL MANAGER', dot: 'd-wait', agents: [
         ['Reader','done','24 READ'],['Categorizer','done','SORTED'],['Summarizer','done','DONE'],
         ['Writer','wait','2 DRAFTS'],['Sender','idle','WAITING']] },
       calendar: { name: 'CALENDAR MANAGER', dot: 'd-wait', agents: [
         ['Calendar Reader','done','SYNCED'],['Conflict Checker','done','NO CLASH'],['Scheduler','wait','CONFIRM'],
         ['Reminder Agent','work','ARMED'],['Email Liaison','work','LINKED']] },
-      traffic: { name: 'TRAFFIC DESK', dot: 'd-work', agents: [
-        ['City Geocoder', 'done', 'MAPPED'], ['Traffic Poller', 'work', 'POLLING'], ['Incident Scout', 'work', 'SCANNING']] },
       visa: { name: 'VISA WATCH', dot: 'd-done', agents: [
         ['Canada Checker', 'done', 'CHECKED'], ['Slot Watcher', 'done', 'WATCHING']] }
     };
@@ -2174,12 +2172,12 @@ class Component extends DCLogic {
       Object.keys(data).forEach((m) => { if (m !== Component.HOLD && !((LM[m] || {}).agents || []).length) data[m].agents = data[m].agents.map((a) => [a[0], 'idle', 'WAITING', a[3]]); });
       ((LM[s.master] || {}).agents || []).forEach((a) => { liveSum[a.name] = a.summary || ''; });
     }
-    const masters = ['email','calendar','trading','invest','web','jobs','world','traffic','youtube','visa'].map((id) => ({
+    const masters = ['email','calendar','trading','invest','web','jobs','world','youtube','visa'].map((id) => ({
       name: data[id].name.charAt(0) + data[id].name.slice(1).toLowerCase().replace(/ (\w)/, (m) => m.toUpperCase()).replace('Youtube', 'YouTube'),
       dot: data[id].dot,
       count: data[id].agents.length,
-      trust: ({ traffic: 'OBSERVE', calendar: 'SUGGEST', email: 'SUGGEST', trading: 'OBSERVE', invest: 'OBSERVE', web: 'SUGGEST', jobs: 'ACT', world: 'OBSERVE', youtube: 'ACT', visa: 'OBSERVE' })[id],
-      trustColor: ({ traffic: '#67C7EB', calendar: '#FBCA03', email: '#FBCA03', trading: '#67C7EB', invest: '#67C7EB', web: '#FBCA03', jobs: '#67C7EB', world: '#67C7EB', youtube: '#67C7EB', visa: '#67C7EB' })[id],
+      trust: ({ calendar: 'SUGGEST', email: 'SUGGEST', trading: 'OBSERVE', invest: 'OBSERVE', web: 'SUGGEST', jobs: 'ACT', world: 'OBSERVE', youtube: 'ACT', visa: 'OBSERVE' })[id],
+      trustColor: ({ calendar: '#FBCA03', email: '#FBCA03', trading: '#67C7EB', invest: '#67C7EB', web: '#FBCA03', jobs: '#67C7EB', world: '#67C7EB', youtube: '#67C7EB', visa: '#67C7EB' })[id],
       cls: s.master === id ? 'mst-on' : 'mst',
       id, agents: [],
       open: s.master === id && !!s.accOpen,   // its sub-agents and buttons show under it; a second click folds them away
@@ -2217,7 +2215,7 @@ class Component extends DCLogic {
       'All masters online. RAM is running high.'
     ];
     // ---- Orbit markers: one per master, hover = glass status card ----
-    const orbOrder = ['email','calendar','trading','invest','web','jobs','world','traffic','youtube','visa'];
+    const orbOrder = ['email','calendar','trading','invest','web','jobs','world','youtube','visa'];
     const SC = 430 / 440;
     const orbMarks = orbOrder.map((m, k) => {
       const an = (-90 + k * 360 / orbOrder.length) * Math.PI / 180 + s.orbA;
@@ -2266,11 +2264,10 @@ class Component extends DCLogic {
       ['jobs', 'Job Hunt', -18, [['Job Scout', 'Windsor roles'], ['Resume Tailor', 'Resume v7'], ['Outreach', 'Contacts'], ['Tracker', 'Applications']]],
       ['web', 'Web Designer', 18, [['Business Finder', 'Local leads'], ['Competitor Analyst', 'Competitor notes'], ['Website Builder', 'Demo sites'], ['Proposal Drafter', 'Proposals']]],
       ['invest', 'Investments', 54, [['Broker Syncs', 'Holdings'], ['Index Tracker', 'Index moves'], ['Bitcoin Tracker', 'BTC log'], ['P&L Reporter', 'Daily P&L']]],
-      ['world', 'World Watch', 90, [['Markets News', 'India and global'], ['Cricket', 'Match updates'], ['Politics', 'Policy watch'], ['Weather', 'Leamington wx'], ['Flight Tracker', 'Live flights']]],
+      ['world', 'World Watch', 90, [['Markets News', 'India and global'], ['Cricket', 'Match updates'], ['Politics', 'Policy watch'], ['Weather', 'Leamington wx'], ['Flight Tracker', 'Live flights'], ['City Geocoder', 'City bbox'], ['Traffic Poller', 'Congestion log'], ['Incident Scout', 'Incidents']]],
       ['visa', 'Visa Watch', 126, [['Slot Watcher', 'Earlier dates']]],
       ['email', 'Email Manager', 162, [['Reader', 'Inbox digest'], ['Categorizer', 'Categories'], ['Writer', 'Drafts'], ['Sender', 'Sent log']]],
-      ['calendar', 'Calendar Manager', 198, [['Scheduler', 'Meetings'], ['Reminder Agent', 'Reminders'], ['Email Liaison', 'Invites']]],
-      ['traffic', 'Traffic Desk', 234, [['City Geocoder', 'City bbox'], ['Traffic Poller', 'Congestion log'], ['Incident Scout', 'Incidents']]]
+      ['calendar', 'Calendar Manager', 198, [['Scheduler', 'Meetings'], ['Reminder Agent', 'Reminders'], ['Email Liaison', 'Invites']]]
     ];
     const GX = 350, GY = 238, SX = 1.42, SY = 0.9;
     const easeBack = (x) => { const c1 = 1.4, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); };
@@ -2330,11 +2327,10 @@ class Component extends DCLogic {
         below: { stage: 5, name: 'Reflection', note: 'decision log · 5d later' } },
       jobs: { loop: true, stages: [['SCOUT',['Job Scout']],['TAILOR',['Resume Tailor','Cover Letter Writer']],['APPROVAL',['YOU']],['REACH OUT',['Outreach']],['TRACK',['Application Tracker']],['PREPARE',['Interview Prep']]] },
       invest: { loop: false, stages: [['SYNC',['Zerodha Sync','Fyers Sync','Wealthsimple Sync']],['CONSOLIDATE',['Portfolio Aggregator']],['ANALYZE',['Allocation Analyst','Risk Monitor','Market Watcher','Tax & Records Keeper']],['MARKET PULSE',['Index Tracker','Bitcoin Tracker']],['REPORT',['Daily P&L Reporter']]] },
-      traffic: { loop: true, stages: [['LOCATION', ['City Geocoder']], ['POLL', ['Traffic Poller']], ['INCIDENTS', ['Incident Scout']]] },
       visa: { loop: false, stages: [['CHECK', ['Canada Checker']], ['COMPARE', ['Slot Watcher']]] },
       calendar: { loop: false, stages: [['SYNC',['Calendar Reader']],['CHECK',['Conflict Checker']],['PLAN',['Scheduler','Reminder Agent']],['COORDINATE',['Email Liaison']],['APPROVAL',['YOU']],['HANDOFF',['Email Manager']]], xnote: { stage: 5, text: 'invites go out via Email Sender' } },
       email: { xnote: { stage: 1, text: 'meeting requests → Calendar Manager' }, loop: false, stages: [['READ',['Reader']],['SORT',['Categorizer']],['SUMMARIZE',['Summarizer']],['DRAFT',['Writer']],['APPROVAL',['YOU']],['SEND',['Sender']]] },
-      world: { loop: false, stages: [['GATHER',['Indian Market News','Global Market News','Cricket News','Political News','Weather Agent','Flight Tracker']],['CURATE',['News Summarizer']],['VIEW',['Globe View']]] },
+      world: { loop: false, stages: [['GATHER',['Indian Market News','Global Market News','Cricket News','Political News','Weather Agent','Flight Tracker','City Geocoder']],['ROADS',['Traffic Poller']],['INCIDENTS',['Incident Scout']],['CURATE',['News Summarizer']],['VIEW',['Globe View']]] },
       web: { loop: false, stages: [['FIND',['Business Finder']],['RESEARCH',['Information Collector','Competitor Analyst']],['ASSETS',['Images Downloader','Color Theme Decider']],['BUILD',['Website Builder']],['DEPLOY',['Cloudflare Deployer']],['PITCH',['Proposal Drafter']],['APPROVAL',['YOU']]] }
     };
     const meta = {
@@ -2480,7 +2476,7 @@ class Component extends DCLogic {
     if (RD.invest && RD.invest.mkts && RD.invest.mkts.length) bMkts = RD.invest.mkts.map((m) => m.pct == null ? noRow(m.name) : mk(m.name, m.pct));
     else if (bLive) bMkts = [noRow(RD.invest ? 'Markets unavailable' : 'Waiting for Investments')];
     // ---- Boot sequence: every agent reports in to VISION ----
-    const order = ['email','calendar','trading','invest','web','jobs','world','traffic','youtube','visa'];
+    const order = ['email','calendar','trading','invest','web','jobs','world','youtube','visa'];
     const flat = [];
     order.forEach((m) => data[m].agents.forEach((a2) => flat.push([m, a2[0]])));
     const total = flat.length;
@@ -2616,15 +2612,14 @@ class Component extends DCLogic {
       ['invest', 'INVEST', '+C$43 yesterday · CSV due'],
       ['web', 'WEB DESIGN', 'Pitch ready for approval'],
       ['jobs', 'JOBS', '12 postings · resume tailoring'],
-      ['world', 'WORLD', '4 topics updated · 28 flights tracked'],
+      ['world', 'WORLD', '4 topics updated · 28 flights tracked · Leamington 3 incidents'],
       ['calendar', 'CALENDAR', calTodayLine],
-      ['traffic', 'TRAFFIC', s.traffic ? s.traffic.city + ' · ' + s.traffic.totalActive + ' incidents' : 'Ask: traffic in <city>'],
       ['youtube', 'YOUTUBE', '4 Shorts scheduled · 1 long video'],
       ['visa', 'VISA WATCH', 'No earlier date on offer']
     ];
     const T = s.traffic, TMS = T && T.mostSevere;
     const tr = s.trafficLoading
-      ? { title: 'TRAFFIC: ' + s.trafficLoading.toUpperCase(), count: 'Geocoding city · polling TomTom…', flag: 'Traffic Desk working', flagColor: '#FBCA03', bg: 'rgba(21,19,11,0.9)', border: '#B97D10', src: 'LIVE' }
+      ? { title: 'TRAFFIC: ' + s.trafficLoading.toUpperCase(), count: 'Geocoding city · polling TomTom…', flag: 'World Watch working', flagColor: '#FBCA03', bg: 'rgba(21,19,11,0.9)', border: '#B97D10', src: 'LIVE' }
       : s.trafficErr
       ? { title: 'TRAFFIC: UNAVAILABLE', count: s.trafficErr, flag: 'Check the VISION backend', flagColor: '#FF8A73', bg: 'rgba(20,11,10,0.9)', border: '#6A0C0B', src: 'ERROR' }
       : T
@@ -2636,7 +2631,7 @@ class Component extends DCLogic {
     const bMasters = mReports.map(([m, name, line0]) => {
       let line = line0;
       const w = data[m].agents.some((x) => x[1] === 'wait') && m !== Component.HOLD;
-      line = (s.live && s.live.reports && s.live.reports[m]) || (bLive && !(m === 'traffic' && s.traffic) ? 'no report yet' : line);
+      line = (s.live && s.live.reports && s.live.reports[m]) || (bLive ? 'no report yet' : line);
       // Investments has its own cards just before this one: here only what they don't say (a login or CSV it waits on)
       if (m === 'invest' && RD.invest && RD.invest.ports && RD.invest.ports.length) { const wt = /waiting on: [^·]+/.exec(line); line = wt ? wt[0].trim() : 'In the portfolio card'; }
       // one short line per desk, so all eleven fit the card and none is read out at length
@@ -2831,7 +2826,7 @@ class Component extends DCLogic {
       // One card per desk (Mani's choice, 2026-10-13: no combined "Your desks" card). A desk with cards of its own is left
       // out (Investments: portfolio), World Watch's card leaves its headlines and weather to their own cards; a card does not say again what the "Waiting for you"
       // card just said, and a desk with nothing to tell gets no card
-      const bDesks = bMasters.filter((x) => x.name !== 'INVEST' && !(x.name === 'TRAFFIC' && T))
+      const bDesks = bMasters.filter((x) => x.name !== 'INVEST')
         .map((x) => Object.assign({}, x, { parts: x.full.split(/ · |; /).map((p) => p.trim().replace(/,? waiting for you/i, ''))
           .filter((p) => p && (!needs.length || !/(pitch(es)?|package(s)?|request(s)?) (waiting|awaiting)|awaiting ok|^waiting on:/i.test(p)))
           .filter((p) => x.id !== 'world' || !((heads.length && /topics? updated|fresh headlines/i.test(p)) || (wx && /°C/.test(p)))).slice(0, 6) }))
@@ -3048,7 +3043,7 @@ class Component extends DCLogic {
         ask: () => this.setState({ visaAsk: a.id }), no: () => this.setState({ visaAsk: null }),
         yes: () => this.visaCall('DELETE', '/' + encodeURIComponent(a.id)) };
     });
-    const gtabs = [['email','Email'],['calendar','Calendar'],['traffic','Traffic'],['trading','Trading'],['invest','Invest'],['web','Web'],['jobs','Jobs'],['world','World'],['youtube','YouTube'],['visa','Visa']].map(([id, label]) => ({
+    const gtabs = [['email','Email'],['calendar','Calendar'],['trading','Trading'],['invest','Invest'],['web','Web'],['jobs','Jobs'],['world','World'],['youtube','YouTube'],['visa','Visa']].map(([id, label]) => ({
       label, cls: s.master === id ? 'tab-on' : 'tab', pick: () => this.setState({ master: id })
     }));
 

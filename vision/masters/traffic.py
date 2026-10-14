@@ -1,6 +1,8 @@
-"""Traffic Desk (live): City Geocoder -> Traffic Poller -> Incident Scout (reporter).
+"""Traffic agents of World Watch (Traffic Desk merged into it, Mani, 2026-10-14):
+City Geocoder (GATHER, beside the news) -> Traffic Poller (ROADS) -> Incident Scout (INCIDENTS) -> the News Summarizer reports.
+None of them blocks: roads down never holds back the news, weather and flights.
 
-Watches the cities listed in config.yaml -> masters.traffic.options.watch_cities.
+Watches the cities listed in config.yaml -> masters.world.options.watch_cities.
 """
 
 from __future__ import annotations
@@ -15,6 +17,7 @@ from ..services import traffic_api as tt
 
 class CityGeocoder(SubAgent):
     name, tier, note = "City Geocoder", "API", "Dynamic city input"
+    blocking = False
 
     async def run(self, ctx: dict[str, Any]) -> AgentResult:
         cities: list[str] = self.opts.get("cities") or []
@@ -26,8 +29,11 @@ class CityGeocoder(SubAgent):
 
 class TrafficPoller(SubAgent):
     name, tier, note = "Traffic Poller", "API", "Live congestion"
+    blocking = False
 
     async def run(self, ctx: dict[str, Any]) -> AgentResult:
+        if not ctx.get("places"):
+            return AgentResult("idle", "WAITING", "No cities mapped")
         out = []
         async with httpx.AsyncClient(timeout=tt.TIMEOUT) as client:
             for place in ctx.get("places", []):
@@ -41,8 +47,11 @@ class TrafficPoller(SubAgent):
 
 class IncidentScout(SubAgent):
     name, tier, note = "Incident Scout", "DEEP", "Active roadworks & jams"
+    blocking = False
 
     async def run(self, ctx: dict[str, Any]) -> AgentResult:
+        if "traffic" not in ctx:
+            return AgentResult("idle", "WAITING", "No traffic polled")
         parts, major = [], 0
         for c in ctx.get("traffic", []):
             city = c["city"].split(",")[0]

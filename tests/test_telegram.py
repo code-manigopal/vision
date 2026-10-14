@@ -39,7 +39,17 @@ def make(tmp_path, monkeypatch, token="T", chat="42"):
         else:
             monkeypatch.setenv(k, v)
     monkeypatch.delenv("TOMTOM_API_KEY", raising=False)
-    cfg = Config(masters={"youtube": MasterConfig(enabled=False), "traffic": MasterConfig(mode="live", options={"watch_cities": ["Leamington"]})})
+    from vision.agents import SubAgent
+    from vision.masters import world
+
+    class Down(SubAgent):
+        name = "Weather Agent"
+
+        async def run(self, ctx):
+            raise RuntimeError("Open-Meteo down")
+
+    monkeypatch.setattr(world, "build_agents", lambda options, cfg=None: {"Weather Agent": Down()})
+    cfg = Config(masters={"youtube": MasterConfig(enabled=False), "world": MasterConfig(mode="live")})
     bus, store = EventBus(), Store(tmp_path / "t.db")
     orch = Orchestrator(cfg, build_masters(cfg), bus, store)
     fake = FakeTelegram()
@@ -70,7 +80,7 @@ def test_strangers_ignored_owner_answered(tmp_path, monkeypatch):
     assert fake.sent() == []
     asyncio.run(tg.handle_update({"update_id": 2, "message": {"chat": {"id": 42}, "text": "what's up"}}))
     text = fake.sent()[0]["text"]
-    assert "Email Manager" in text and "Traffic Desk" in text and "YouTube" not in text
+    assert "Email Manager" in text and "World Watch" in text and "YouTube" not in text
 
 
 def test_morning_brief_is_masters_only(tmp_path, monkeypatch):
@@ -79,7 +89,7 @@ def test_morning_brief_is_masters_only(tmp_path, monkeypatch):
     asyncio.run(orch.brief("morning"))
     text = fake.sent()[-1]["text"]
     assert text.startswith("☀️ <b>VISION · Good morning")
-    assert "⚠️ <b>Traffic Desk</b>: Blocked" in text          # no TomTom key -> blocked, flagged
+    assert "⚠️ <b>World Watch</b>: Blocked" in text          # a failing blocking agent -> blocked, flagged
     assert "Summarizer" not in text                            # sub-agents never appear, only master reports
 
 
@@ -89,8 +99,8 @@ def test_alert_and_approval_buttons(tmp_path, monkeypatch):
     async def flow():
         watcher = asyncio.create_task(tg._watch_bus())
         await asyncio.sleep(0)
-        bus.say("⚠ Traffic Desk · City Geocoder failed: TOMTOM_API_KEY is not set")
-        bus.say("⚠ Traffic Desk · City Geocoder failed: TOMTOM_API_KEY is not set")   # duplicate: suppressed
+        bus.say("⚠ World Watch · City Geocoder failed: TOMTOM_API_KEY is not set")
+        bus.say("⚠ World Watch · City Geocoder failed: TOMTOM_API_KEY is not set")   # duplicate: suppressed
         a = store.add_approval("email", "Writer", "Send reply re: meeting next week")
         bus.publish({"type": "approval", "approval": a})
         await asyncio.sleep(0.05)

@@ -1,4 +1,4 @@
-"""VISION · Traffic Desk service (TomTom / Google)
+"""VISION · traffic service for World Watch (TomTom / Google)
 
 get_city_traffic(city_name): geocode a city to a bounding box, then pull live
 TomTom incidents inside it and summarise them.
@@ -194,7 +194,7 @@ def _summarise(place: Place, bbox, clamped: bool, incidents: list[dict]) -> dict
     }
 
 
-# ---------- Helpers used by the Traffic Desk agents ----------
+# ---------- Helpers used by World Watch's traffic agents ----------
 
 async def geocode(client: httpx.AsyncClient, city: str) -> Place:
     tomtom_key, google_key, geocoder = _keys()

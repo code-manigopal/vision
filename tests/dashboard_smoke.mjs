@@ -10,8 +10,7 @@ class DCLogic { constructor(p) { this.props = p; } setState(p) { Object.assign(t
 const Component = new Function('DCLogic', src + '\nreturn Component;')(DCLogic);
 const live = {
   empty: { masters: {}, reports: {}, report_data: {}, notices: {}, approvals: [], boot: { active: false, done: 0, total: 0 }, telegram: { connected: false }, voice: {} },
-  full: { masters: { world: { agents: [{ name: 'News Summarizer', status: 'done', label: '5 ITEMS', summary: '4 topics updated' }] },
-      traffic: { agents: [{ name: 'City Geocoder', status: 'error', label: 'ERROR', summary: 'Add TOMTOM_API_KEY to .env' }, { name: 'Traffic Poller', status: 'idle', label: 'BLOCKED', summary: 'Waiting on City Geocoder' }] } },
+  full: { masters: { world: { agents: [{ name: 'City Geocoder', status: 'error', label: 'ERROR', summary: 'Add TOMTOM_API_KEY to .env' }, { name: 'Traffic Poller', status: 'idle', label: 'BLOCKED', summary: 'Waiting on City Geocoder' }, { name: 'News Summarizer', status: 'done', label: '5 ITEMS', summary: '4 topics updated' }] } },
     reports: { world: '4 topics updated', invest: 'Portfolio −C$227' },
     report_data: { invest: { ports: [{ name: 'Total (CAD)', value: -227, pct: -1.32, sym: 'C$', total: true }], mkts: [{ name: 'NIFTY 50', pct: -0.88 }, { name: 'Bitcoin (24h)', pct: null }] },
       calendar: { events: [{ title: 'Standup', start: new Date().toISOString(), all_day: false }] }, world: { flights: [], total_airborne: 0, headlines: [{ tag: 'GLOBAL', text: 'A headline', source: 'CNBC' }], weather: { city: 'Leamington', temp: 20, words: 'cloudy', kind: 'cloud', daily: [{ kind: 'cloud', hi: 21 }] } } },
@@ -29,7 +28,7 @@ let fails = 0; const seen = new Set();
 const fail = (...a) => { fails++; console.log(...a); };
 const mk = (st) => { const c = new Component({}); Object.assign(c.state, { log: [], boot: false }, st); c.scrollToTop = () => {}; return c; };
 for (const [name, L] of [['preview', null], ['connected-empty', live.empty], ['connected-full', live.full]])
-  for (const mode of ['ambient', 'briefing', 'issues', 'decide', 'desk', 'calendar', 'world', 'ask']) for (const master of ['trading', 'traffic', 'youtube']) {
+  for (const mode of ['ambient', 'briefing', 'issues', 'decide', 'desk', 'calendar', 'world', 'ask']) for (const master of ['trading', 'world', 'youtube']) {
     const c = mk({ mode, master, liveUp: !!L, live: L, askSrc: 'offline', askSteps: [['VISION', 'A', 'b', '']], askChips: ['X'], askQ: 'q', askSay: 's', askAt: Date.now() - 5000, askFollow: [] });
     let v; try { v = c.renderVals(); } catch (e) { fail('CRASH', name, mode, master, String(e).slice(0, 200)); continue; }
     if (L) for (const key of Object.keys(v)) { const txt = JSON.stringify(v[key], (k, x) => typeof x === 'function' ? undefined : x) || '';
@@ -57,11 +56,11 @@ if (c.state.deckI !== 1 || said.length !== 2) fail('voice did not advance the de
 c.deckGo(2); await wait(120); v = c.renderVals();                      // arrow keys jump and VISION picks up there
 if (c.state.deckI !== 3 || !v.deckCards[3].center || said.length !== 3) fail('arrow step failed', c.state.deckI, said.length);
 c.deckToggle(); if (c.state.deckTalk) fail('pause did not stop narration');
-c.openIssues('traffic/City Geocoder'); c.renderVals(); await wait(200); v = c.renderVals();   // the real runtime re-renders on setState
+c.openIssues('world/City Geocoder'); c.renderVals(); await wait(200); v = c.renderVals();   // the real runtime re-renders on setState
 const ic = v.deckCards.find((x) => x.center);
 if (c.state.mode !== 'issues' || !ic || ic.title !== 'City Geocoder' || !/Traffic Poller/.test(JSON.stringify(ic.rows))) fail('issue card wrong', JSON.stringify(ic && [ic.title, ic.rows]));
 if (!/key is missing/.test(said[said.length - 1]) || !/key is missing/.test(ic.body)) fail('issue was not explained', said[said.length - 1], ic && ic.body, JSON.stringify(c.state.issueText));
-const p = mk({ liveUp: true, live: live.full, master: 'traffic' }).renderVals();
+const p = mk({ liveUp: true, live: live.full, master: 'world' }).renderVals();
 if (p.agents[0].cursor !== 'pointer' || p.agents[1].cursor !== 'default') fail('failing agent row should be clickable');
 const lv = mk({ listening: true }).renderVals();
 if (lv.listenRing !== 'lring-on' || lv.statusMsg !== 'Listening…' || !/listen/.test(lv.coreImgCls)) fail('listening mode is not shown on the core');

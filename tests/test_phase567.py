@@ -163,7 +163,7 @@ def test_ask_engine_tools_and_guard(tmp_path, monkeypatch):
     o = orch_with(tmp_path, {}, FakeLLM(script))
     eng = AskEngine(o)
     out = asyncio.run(eng.ask("how's the traffic between windsor and leamington?"))
-    assert out["steps"] == [["TRAFFIC DESK", "Traffic Poller", "route traffic", "49 min"]]
+    assert out["steps"] == [["WORLD WATCH", "Traffic Poller", "route traffic", "49 min"]]
     assert out["say"].startswith("Morning, Mani.") and not out["fallback"]
     # approving by voice needs your explicit words
     a = o.store.add_approval("email", "Writer", "Reply to Anna", {"key": "k", "kind": "email_reply", "draft": "x"})

@@ -1,6 +1,7 @@
-"""World Watch (live): everything VISION watches in the world: news, weather and flights (Mani, 2026-10-13).
-Four news gatherers, the Weather Agent and the Flight Tracker run side by side -> News Summarizer (reporter).
-The news and weather agents live in news.py; this module holds the Flight Tracker and builds the whole crew.
+"""World Watch (live): everything VISION watches in the world: news, weather, flights (Mani, 2026-10-13) and traffic (2026-10-14).
+Four news gatherers, the Weather Agent, the Flight Tracker and the City Geocoder run side by side; the Traffic Poller and
+Incident Scout follow the Geocoder -> News Summarizer (reporter).
+The news and weather agents live in news.py, the traffic agents in traffic.py; this module holds the Flight Tracker and builds the whole crew.
 
 Positions: OpenSky Network (free for non-commercial use; OPENSKY_CLIENT_ID/SECRET in .env gives
 higher limits, anonymous works with lower limits). Routes: adsbdb (free, no key), cached for a week.
@@ -129,6 +130,7 @@ class FlightTracker(SubAgent):
 
 def build_agents(options: dict[str, Any], cfg=None) -> dict[str, SubAgent]:
     from .news import build_agents as news_agents
+    from .traffic import build_agents as traffic_agents
     home = tuple(options["home"]) if options.get("home") else (42.05, -82.6)
-    return {**news_agents(options, cfg), "Flight Tracker": FlightTracker(home, int(options.get("max_flights", 60)), int(options.get("near_km", 400)), int(options.get("route_lookups", 25)),
+    return {**news_agents(options, cfg), **traffic_agents(options, cfg), "Flight Tracker": FlightTracker(home, int(options.get("max_flights", 60)), int(options.get("near_km", 400)), int(options.get("route_lookups", 25)),
                                             int(options.get("near_slots", 10)))}

@@ -32,7 +32,7 @@ def store(tmp_path):
 
 
 def test_catalog_matches_dashboard():
-    assert len(CATALOG["order"]) == 10
+    assert len(CATALOG["order"]) == 9          # Traffic Desk merged into World Watch; the E-books Manager takes the 10th slot later
     for mid, spec in CATALOG["masters"].items():
         names = [a["name"] for a in spec["agents"]]
         staged = [n for s in spec["stages"] for n in s["agents"]]
@@ -65,10 +65,17 @@ def test_reporter_must_exist():
         Master("x", "X", [Stage("A", [Echo()])], reporter="Nobody")
 
 
+class Down(SubAgent):
+    name = "Weather Agent"
+
+    async def run(self, ctx):
+        raise RuntimeError("Open-Meteo down")
+
+
 def test_boot_rolls_call_for_every_agent(store, monkeypatch):
-    monkeypatch.delenv("TOMTOM_API_KEY", raising=False)
-    cfg = Config(masters={"traffic": MasterConfig(mode="live", options={"watch_cities": ["Leamington"]}),
-                          "youtube": MasterConfig(enabled=False)})
+    from vision.masters import world
+    monkeypatch.setattr(world, "build_agents", lambda options, cfg=None: {"Weather Agent": Down()})
+    cfg = Config(masters={"world": MasterConfig(mode="live"), "youtube": MasterConfig(enabled=False)})
     bus = EventBus()
     orch = Orchestrator(cfg, build_masters(cfg), bus, store)
     orch.seed_state()
@@ -76,10 +83,10 @@ def test_boot_rolls_call_for_every_agent(store, monkeypatch):
     total = sum(len(s["agents"]) for s in CATALOG["masters"].values())
     assert bus.state["boot"] == {"active": False, "done": total, "total": total}
     assert set(bus.state["reports"]) == set(CATALOG["order"]) - {"youtube"}
-    # traffic is live with no key -> geocoder errors, the rest are blocked, VISION is told
-    assert bus.state["reports"]["traffic"].startswith("Blocked")
+    # a live agent that fails and blocks -> the rest are blocked, VISION is told
+    assert bus.state["reports"]["world"].startswith("Blocked")
     assert "brief" not in bus.state
-    assert "Traffic Desk" in orch.compose_brief().title()
+    assert "World Watch" in orch.compose_brief().title()
 
 
 def test_traffic_master_live(store, monkeypatch):
@@ -96,10 +103,23 @@ def test_traffic_master_live(store, monkeypatch):
 
     real = httpx.AsyncClient
     monkeypatch.setattr(tt.httpx, "AsyncClient", lambda **kw: real(transport=httpx.MockTransport(handler)))
-    cfg = Config(masters={"traffic": MasterConfig(mode="live", options={"watch_cities": ["Windsor"]})})
-    traffic = next(m for m in build_masters(cfg) if m.id == "traffic")
-    report = asyncio.run(traffic.cycle(EventBus(), store))
-    assert report == "Windsor 1 incidents, major delay 15 min on EC Row"
+    from vision.masters import world
+    a = world.build_agents({"watch_cities": ["Windsor"]})
+    m = Master("world", "WORLD WATCH", [Stage("GATHER", [a["City Geocoder"]]), Stage("ROADS", [a["Traffic Poller"]]),
+               Stage("INCIDENTS", [a["Incident Scout"]]), Stage("CURATE", [a["News Summarizer"]])], "News Summarizer")
+    bus = EventBus()
+    report = asyncio.run(m.cycle(bus, store))
+    assert report == "No fresh headlines · Windsor 1 incidents, major delay 15 min on EC Row"
+    assert bus.state["reports"]["world"] == report
+
+
+def test_traffic_without_key_never_blocks_world_watch(store, monkeypatch):
+    monkeypatch.delenv("TOMTOM_API_KEY", raising=False)
+    from vision.masters import world
+    a = world.build_agents({"watch_cities": ["Windsor"]})
+    m = Master("world", "WORLD WATCH", [Stage("GATHER", [a["City Geocoder"]]), Stage("ROADS", [a["Traffic Poller"]]),
+               Stage("INCIDENTS", [a["Incident Scout"]]), Stage("CURATE", [a["News Summarizer"]])], "News Summarizer")
+    assert asyncio.run(m.cycle(EventBus(), store)) == "No fresh headlines"
 
 
 def test_server_ws_and_api(tmp_path, monkeypatch):
@@ -111,7 +131,7 @@ def test_server_ws_and_api(tmp_path, monkeypatch):
         assert c.get("/").status_code == 200
         assert "x-dc" in c.get("/dashboard/Main.dc.html").text
         st = c.get("/api/state").json()
-        assert len(st["masters"]) == 10
+        assert len(st["masters"]) == 9
         with c.websocket_connect("/ws") as ws:
             snap = ws.receive_json()
             assert snap["type"] == "snapshot"

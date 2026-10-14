@@ -7,7 +7,6 @@
   "web",
   "jobs",
   "world",
-  "traffic",
   "youtube",
   "visa"
  ],
@@ -739,43 +738,6 @@
      "note": "OpenSky · live ADS-B"
     },
     {
-     "name": "News Summarizer",
-     "status": "idle",
-     "label": "QUEUED",
-     "tier": "DEEP",
-     "note": "top 4 → VISION"
-    }
-   ],
-   "stages": [
-    {
-     "title": "GATHER",
-     "agents": [
-      "Indian Market News",
-      "Global Market News",
-      "Cricket News",
-      "Political News",
-      "Weather Agent",
-      "Flight Tracker"
-     ],
-     "parallel": true
-    },
-    {
-     "title": "CURATE",
-     "agents": [
-      "News Summarizer"
-     ],
-     "parallel": false
-    }
-   ],
-   "reporter": "News Summarizer",
-   "demo_report": "4 topics updated · 28 flights tracked",
-   "loop": false
-  },
-  "traffic": {
-   "id": "traffic",
-   "name": "TRAFFIC DESK",
-   "agents": [
-    {
      "name": "City Geocoder",
      "status": "done",
      "label": "MAPPED",
@@ -795,18 +757,31 @@
      "label": "SCANNING",
      "tier": "DEEP",
      "note": "Active roadworks & jams"
+    },
+    {
+     "name": "News Summarizer",
+     "status": "idle",
+     "label": "QUEUED",
+     "tier": "DEEP",
+     "note": "top 4 → VISION"
     }
    ],
    "stages": [
     {
-     "title": "LOCATION",
+     "title": "GATHER",
      "agents": [
+      "Indian Market News",
+      "Global Market News",
+      "Cricket News",
+      "Political News",
+      "Weather Agent",
+      "Flight Tracker",
       "City Geocoder"
      ],
-     "parallel": false
+     "parallel": true
     },
     {
-     "title": "POLL",
+     "title": "ROADS",
      "agents": [
       "Traffic Poller"
      ],
@@ -818,11 +793,18 @@
       "Incident Scout"
      ],
      "parallel": false
+    },
+    {
+     "title": "CURATE",
+     "agents": [
+      "News Summarizer"
+     ],
+     "parallel": false
     }
    ],
-   "reporter": "Incident Scout",
-   "demo_report": "Watching Leamington, Windsor",
-   "loop": true
+   "reporter": "News Summarizer",
+   "demo_report": "4 topics updated · 28 flights tracked · Leamington 3 incidents",
+   "loop": false
   },
   "youtube": {
    "id": "youtube",
