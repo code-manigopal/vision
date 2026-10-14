@@ -52,7 +52,8 @@ CHANNEL = {"id": "confessions", "name": "Confessions Everywhere", "director": "C
            "publish_times": ["06:00", "12:00", "18:00", "00:00"], "create_after": "",
            "classics": [], "classics_per_day": 1, "playlists": {}, "viewer_comments": False, "cta": "", "long": {},
            "motion": True, "caption_styles": True, "sfx": True, "sfx_volume": 0.35, "quick": {},
-           "double_down": True, "double_down_after": 12, "explore": 0.15, "trends": True, "trend_region": "US"}
+           "double_down": True, "double_down_after": 12, "explore": 0.15, "trends": True, "trend_region": "US",
+           "lessons": False, "lesson_shorts": False, "lesson_channels": [], "transcripts_per_day": 10, "lesson_model": ""}
 # Original stories: a premise is built from one of each, so no two start from the same place (20 x 12 x 10 x 10 combinations).
 THEMES = ["a family secret", "a betrayal by a close friend", "a lie that grew too big", "a second chance that felt undeserved", "a debt never repaid",
           "an inheritance dispute", "a workplace mistake hidden for years", "a kindness kept secret", "a marriage on autopilot", "jealousy of a sibling",
@@ -498,6 +499,29 @@ def report_release(kind: str, day: date, now: float) -> float | None:
     if soon < at(21, 0):
         return at(21, 0)
     return soon if datetime.fromtimestamp(soon, ist).date() == day else None
+
+
+LESSON_KINDS = ("lesson", "lesson_short")      # Mani Market Tamil's model-written finance lessons: always private until Mani approves, whatever the channel's privacy settings say
+SHORT_KINDS = (*REPORT_KINDS, "lesson_short")  # Shorts released on the Indian clock, outside next_slot
+LESSON_SLOTS = {"premarket": (9, 0), "postmarket": (21, 0)}     # IST: when a lesson Short made in that window goes public (09:00 for the morning window, 21:00 for the evening one)
+
+
+def lesson_release(window: str, day: date, now: float) -> float | None:
+    """When a lesson Short made for the Indian date `day` in the morning (`premarket`) or evening (`postmarket`) window may go public; None when it is stale.
+    Its slot (09:00 or 21:00 IST) if that is still ahead by REPORT_LEAD; past it, REPORT_LEAD from now, but only while it is still that same Indian date (a lesson Short that
+    misses its day is stale: it stays private). It never touches next_slot."""
+    ist = ZoneInfo("Asia/Kolkata")
+    h, m = LESSON_SLOTS[window]
+    slot, soon = datetime(day.year, day.month, day.day, h, m, tzinfo=ist).timestamp(), now + REPORT_LEAD
+    if soon < slot:
+        return slot
+    return soon if datetime.fromtimestamp(soon, ist).date() == day else None
+
+
+def short_when(rec: dict, now: float) -> float | None:
+    """When a report or lesson Short (a record with `kind`, `date` and, for a lesson, `window`) may go public, or None when it is stale."""
+    day = date.fromisoformat(rec["date"])
+    return lesson_release(rec["window"], day, now) if rec["kind"] == "lesson_short" else report_release(rec["kind"], day, now)
 
 
 def made_today(store, ch: dict, fmt: str | None = None, quick: bool = False) -> int:
@@ -1355,8 +1379,8 @@ def channel_for(cfg, channel_id: str) -> dict | None:
 async def publish_approved(ctx: dict, ch: dict, key: str, rec: dict, make=None) -> str:
     """Set an approved private video's release time on YouTube (videos.update) and mark it scheduled. No sign-in: it stays awaiting (and
     approved) and the channel's Uploader tries again on its next run."""
-    acct, report = account(ch), rec.get("kind") in REPORT_KINDS
-    when = report_release(rec["kind"], date.fromisoformat(rec["date"]), _now()) if report else None
+    acct, report = account(ch), rec.get("kind") in SHORT_KINDS
+    when = short_when(rec, _now()) if report else None
     if report and when is None:                    # too late to be news: it stays private on YouTube, and is not published by approval
         ctx["store"].kv_put(LOG, key, {**{k: v for k, v in rec.items() if not k.startswith("_")}, "status": "stale", "stale": True})
         return f"stale: this {rec['kind']} update is for {rec['date']} and is too late to publish, so it stays private on YouTube (VISION does not delete videos)"
@@ -1408,21 +1432,21 @@ class Uploader(Crew):
         ch = self.ch
         long = rec.get("format") == "long"
         tags = list(dict.fromkeys(rec["hashtags"] + ([] if long else ["#Shorts"])))
-        report = rec.get("kind") in REPORT_KINDS
+        report, lesson = rec.get("kind") in SHORT_KINDS, rec.get("kind") in LESSON_KINDS
         if report:                                  # a report Short never takes a slot: `report_privacy` scheduled = public by itself at report_release, approval = private until approved
-            when = report_release(rec["kind"], date.fromisoformat(rec["date"]), _now()) if ch["report_privacy"] == "scheduled" else None
+            when = short_when(rec, _now()) if ch["report_privacy"] == "scheduled" and not lesson else None      # a lesson is never published without approval
         else:
-            when = next_slot(ctx["store"], ch, fmt="long" if long else "short") if ch["privacy"] == "scheduled" else None     # private now, public by itself at its slot
+            when = next_slot(ctx["store"], ch, fmt="long" if long else "short") if ch["privacy"] == "scheduled" and not lesson else None     # private now, public by itself at its slot
         marks = rec.get("chapters") or []           # YouTube shows chapters from three or more timestamps starting at 0:00
         chapters = "\n\n" + "\n".join(f"{clock(m['t'])} {m['heading']}" for m in marks) if long and len(marks) >= 3 and marks[0]["t"] == 0 else ""
         seo = rec.get("seo") or {}                  # the strategist's search tags and opening lines, when it gave them
         about = (seo["lead"] + "\n\n" if seo.get("lead") else "") + (rec["summary"] + "\n\n" if long and rec.get("summary") else "") \
             + " ".join(tags) + (f"\n\n{ch['cta']}" if ch["cta"] else "") + _about(rec) + chapters \
             + ("\n\nFootage: " + "; ".join(rec["credits"]) if rec.get("credits") else "") + (f"\nMusic: {rec['music']}" if rec.get("music") else "")
-        if rec.get("kind") in ("result", "analysis", *REPORT_KINDS):   # a results, analysis or report video's description is written whole (the source and the disclaimer last)
+        if rec.get("kind") in ("result", "analysis", *SHORT_KINDS, "lesson"):   # a results, analysis or report video's description is written whole (the source and the disclaimer last)
             about = rec["summary"]
         body = {"snippet": {"title": rec["title"][:100], "categoryId": str(ch["category"]), "tags": seo.get("tags") or [t.lstrip("#") for t in tags], "description": about},
-                "status": {"privacyStatus": "private" if when or report or ch["privacy"] == "approval" else ch["privacy"], "selfDeclaredMadeForKids": False, "containsSyntheticMedia": bool(ch["synthetic_flag"]),
+                "status": {"privacyStatus": "private" if when or report or lesson or ch["privacy"] == "approval" else ch["privacy"], "selfDeclaredMadeForKids": False, "containsSyntheticMedia": bool(ch["synthetic_flag"]),
                            **({"publishAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(when))} if when else {})}}
         size = Path(rec["file"]).stat().st_size
         auth = {"Authorization": f"Bearer {token}"}

@@ -231,6 +231,19 @@ masters:
           make_before: "04:00"
           per_run: 1                     # videos made a night
           pattern: {mon: analysis, tue: topic, wed: analysis, thu: topic, fri: analysis, sat: analysis, sun: topic}   # the long video by the weekday it is RELEASED on (IST): analysis = one company's ratios from its filings; topic is not built yet (a result is made instead)
+          lessons: true                  # topic days (tue, thu, sun in `pattern`) make a finance lesson from official pages (vision/masters/lessons.py); a fresh result is the fallback when none can be made. Always needs your approval
+          lesson_shorts: true            # on a day the market is shut (Sat, Sun, NSE holiday) the two Short slots make a lesson Short (made in the 07:00 and 18:00 IST windows, released 09:00 and 21:00 IST); always needs your approval
+          lesson_channels:               # Indian finance channels whose recent videos show which topics people watch: their titles only rank the topic bank, and (below) their public transcripts are raw material. Edit freely; a name that does not resolve is skipped
+            - CA Rachana Phadke Ranade
+            - Labour Law Advisor
+            - Asset Yogi
+            - Pranjal Kamra
+            - Ankur Warikoo
+            - Finance With Sharan
+            - Akshat Shrivastava
+            - Money Pechu                # Tamil; could not be checked (needs the YouTube lookup, 100 quota units a name, once): remove it if it resolves to the wrong channel
+          lesson_model: ""               # blank = the usual writer model; a lesson costs roughly 30,000 writer tokens (a Short about 8,000) and Groq's free day is 200,000 PER MODEL, shared with every other writer in VISION: name another Groq model here (e.g. openai/gpt-oss-20b) to give lessons an allowance of their own
+          transcripts_per_day: 10        # public transcripts of the videos that matched tonight's topic, read as raw material for the angle and viewers' questions, never for wording or facts (Mani's call, against YouTube's terms: no sign-in, no cookies, no proxy, 5 s apart, any block stops it for the day)
           price_lag_days: 31             # analysis videos use a share price at least this old: SEBI bars an education-only creator from a named stock's price of the last 30 days
           index_csv: https://nsearchives.nseindia.com/content/indices/ind_niftylargemidcap250list.csv   # the companies it covers (NSE's index list; read once a week)
           publish_times: ["09:00", "21:00"]   # IST; for the Shorts (not built yet)

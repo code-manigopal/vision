@@ -36,6 +36,7 @@ class LLM:
         self.cfg = cfg
         self._client = client_factory or (lambda: httpx.AsyncClient(timeout=httpx.Timeout(120.0)))
         self._local_ok: tuple[float, bool] | None = None
+        self.used = 0                                    # tokens the hosted writer has counted for this process (Groq's free day is 200,000): callers can compare before and after
 
     # ---------- availability ----------
     async def local_available(self) -> bool:
@@ -72,19 +73,19 @@ class LLM:
         raise LLMUnavailable("No model available: start LM Studio's server, or add ANTHROPIC_API_KEY and llm.cloud_model")
 
     # ---------- plain text ----------
-    async def complete(self, prompt: str, *, system: str = "", tier: str = "local", max_tokens: int = 800, temperature: float = 0.3) -> str:
+    async def complete(self, prompt: str, *, system: str = "", tier: str = "local", max_tokens: int = 800, temperature: float = 0.3, model: str | None = None) -> str:
         msgs = [{"role": "user", "content": prompt}]
-        out = await self.chat(msgs, system=system, tier=tier, max_tokens=max_tokens, temperature=temperature)
+        out = await self.chat(msgs, system=system, tier=tier, max_tokens=max_tokens, temperature=temperature, model=model)
         return out["text"]
 
-    async def json(self, prompt: str, *, system: str = "", tier: str = "local", max_tokens: int = 800) -> Any:
-        text = await self.complete(prompt + "\n\nReply with JSON only, no prose.", system=system, tier=tier, max_tokens=max_tokens, temperature=0)
+    async def json(self, prompt: str, *, system: str = "", tier: str = "local", max_tokens: int = 800, model: str | None = None) -> Any:
+        text = await self.complete(prompt + "\n\nReply with JSON only, no prose.", system=system, tier=tier, max_tokens=max_tokens, temperature=0, model=model)
         return parse_json(text)
 
     # ---------- chat with tools (OpenAI-style tool schemas) ----------
     async def chat(self, messages: list[dict], *, system: str = "", tools: list[dict] | None = None, tier: str = "local",
-                   max_tokens: int = 800, temperature: float = 0.3) -> dict:
-        """Returns {"text": str, "tool_calls": [{"id", "name", "args"}], "raw_assistant": message to append}."""
+                   max_tokens: int = 800, temperature: float = 0.3, model: str | None = None) -> dict:
+        """`model` names another model on the hosted writer tier (Groq keeps a separate daily allowance per model). Returns {"text": str, "tool_calls": [{"id", "name", "args"}], "raw_assistant": message to append}."""
         which = await self.pick(tier)
         if which == "local":
             return await self._openai(messages, system, tools, max_tokens, temperature)
@@ -92,7 +93,7 @@ class LLM:
             # a reasoning model left to itself can spend the whole answer on hidden thinking and return nothing: cap the effort
             extra = {"reasoning_effort": self.cfg.llm.writer_reasoning} if self.cfg.llm.writer_reasoning else {}
             return await self._openai(messages, system, tools, max_tokens, temperature, base=self.cfg.llm.writer_base_url,
-                                      model=self.cfg.llm.writer_model, key=secret("GROQ_API_KEY"), extra=extra)
+                                      model=model or self.cfg.llm.writer_model, key=secret("GROQ_API_KEY"), extra=extra)
         return await self._anthropic(messages, system, tools, max_tokens, temperature)
 
     async def _openai(self, messages, system, tools, max_tokens, temperature, *, base: str | None = None, model: str | None = None, key: str | None = None, extra: dict | None = None) -> dict:
@@ -113,7 +114,10 @@ class LLM:
                 wait = 20
             await asyncio.sleep(min(max(wait, 1), 65))
         r.raise_for_status()
-        msg = r.json()["choices"][0]["message"]
+        body_out = r.json()
+        if key:
+            self.used += int((body_out.get("usage") or {}).get("total_tokens") or 0)
+        msg = body_out["choices"][0]["message"]
         calls = [{"id": tc.get("id") or f"call_{i}", "name": tc["function"]["name"],
                   "args": parse_json(tc["function"].get("arguments") or "{}") or {}}
                  for i, tc in enumerate(msg.get("tool_calls") or [])]

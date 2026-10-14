@@ -417,8 +417,8 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   starts at 23:00 (`run_at`); one Director pass can take over an hour, and the master's lock makes the 03:00, 05:00 and six-hourly runs wait their turn, not
   overlap. **SEBI's rule (education-only creators): no price data newer than 30 days about a named stock**; the videos use filed figures only.
   **Analysis videos (a second kind of long video; Mani, 2026-10-13):** one company's fundamentals, insights only. Channel `pattern` maps the weekday of the
-  RELEASE (`youtube.next_slot(fmt="long")`, in the channel's timezone) to a kind: mon/wed/fri/sat `analysis`, tue/thu/sun `topic` (not built: a result is made and
-  the Scout's summary says so; a channel with no `pattern` makes results only). The Scout takes the index member not analysed in 180 days (kv `mm_done`
+  RELEASE (`youtube.next_slot(fmt="long")`, in the channel's timezone) to a kind: mon/wed/fri/sat `analysis`, tue/thu/sun `topic` (a finance lesson, below; with `lessons` off a result is made
+  and the Scout's summary says so; a channel with no `pattern` makes results only). The Scout takes the index member not analysed in 180 days (kv `mm_done`
   `analysis:SYMBOL`, a skipped one counts; never-analysed ones in a hash-of-release-date order, not alphabetical), plus up to 4 more for the Analyst to try when
   one has fewer than 8 ratios. Data is all primary, no Screener (its terms forbid scraping): `nse.fundamentals` sums the last four quarterly filings (eight
   consecutive ones also give the twelve months before), reads the balance sheet of the newest filing that has one (half-year or annual, opening equity from the
@@ -517,10 +517,44 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   as டைமுக்கு, market and finance, ...). `tamil_say._join` now glides with ய after a front vowel sign (ி ீ ெ ே ை: டெய்லி-உம் -> டெய்லியும்) and வ elsewhere; the 13 golden
   lines in `tests/test_voice.py` come out unchanged. The sample scripts render captions by default (`--no-captions`), use the template wording (`--reword` opts in to the
   model; `--plain` is accepted and does nothing) and take `--mani` for the cloned voice (suffix `-mani`); the English line is printed under each spoken line in the .txt.
-  Not built yet: lesson/news Shorts for non-trading days, finance-topic videos (Tue/Thu/Sun), thumbnails and SEO for this channel, and the presenter drawn from
+  Not built yet: news Shorts for non-trading days, thumbnails and SEO for this channel, and the presenter drawn from
   Mani's own character art (now a stand-in drawing). `publish_times` in the channel's options is unused. A live Europe session in the post-market Short has only
   been tested on made-up data (the sample was run in the morning); sample: `scripts/market_report_sample.py premarket|postmarket [--any-time] [--date D]`.
   Edge's voice function is `market_crew.edge_speak`; the sample scripts in `scripts/` are for trying looks and voices by hand.
+  **Finance lessons (Mani, 2026-10-14; `masters/lessons.py`, `services/yt_channels.py`, `services/yt_transcripts.py`; options `lessons`, `lesson_shorts`, `lesson_channels`,
+  `transcripts_per_day`):** on a `topic` release day (tue, thu, sun) the Scout lines up a lesson in place of a result (the night's first result stays as the fallback if no lesson can
+  be made: all sources dead, no writer); on a day the market is shut (Sat, Sun, an NSE holiday) the two Short windows (07:00-08:15 and 18:00-20:30 IST) make a lesson Short in place of the
+  pre/post-market one (kind `lesson_short`; once per window per date, kv `mm_done` `lesson_short:<window>:<date>`; released 09:00 and 21:00 IST by `youtube.lesson_release`, stale = stays
+  private once its Indian date is over). **A lesson and a lesson Short are model-written, so they ALWAYS go through the approval gate, whatever `privacy`/`report_privacy` say**
+  (`youtube.LESSON_KINDS` are uploaded private and never given a `publishAt` or a `next_slot`). Subjects: the topic bank `lessons.TOPICS` (about 45: FDs/RDs, mutual funds, bonds and G-Secs,
+  SGBs and gold, PPF/SSY/NPS, term vs ULIP, tax regimes/80C/capital gains, credit score, budgeting, compounding, inflation, F&O risk from SEBI's study, IPOs, demat, LRS/GIFT City...), each with
+  1-4 official pages (RBI, SEBI, DICGC, India Post, AMFI, Income Tax, PFRDA/NPS Trust, IRDAI, IFSCA, NCFE); **never an individual stock or the market's direction**. Order
+  (`lessons.rank`): topics that top Indian finance channels' recent videos are getting views for first (`lesson_channels` names, resolved once with `search.list` at 100 quota units each and
+  kept for ever in kv `mm_state`; then one cheap read a day: uploads page, `videos.list` statistics; whole-word match of a title to the topic's search words; score = recent views per day;
+  auth = `YOUTUBE_API_KEY` if set, else the channel's own sign-in, none = no signals), the rest least recently made first; a topic is not repeated within 180 days (kv `mm_done`
+  `lesson:<id>`; a Short topic: at most 3 concepts, 30 days apart, `lessonshort:<id>`); a topic with no usable page (`NO SOURCE`) or too few good lines (`TOO THIN`) is left alone 3 days
+  (`lessonskip:<id>`) and the next is tried, two topics a night at most. **Facts come only from the official pages fetched that night, checked by code** (`lessons.check_line`): every
+  quote (30+ characters) is found in a page, every number in the Tamil line and in its English caption is in the quotes (and the two agree), `say` is all Tamil letters and passes
+  `clone.unspelt`, neither line matches ADVICE, FORECAST (so "will, may, should" and the Tamil "இருக்கும், ஆகும்" are out) or RUDE, no company in the index (name or symbol), no brand, no
+  Nifty/Sensex/rally/bull/bear/share-price wording, and no run of 8 words shared with any transcript read. The English caption must also be *backed* by its quotes (`backed_by`: 60 % of its
+  longer words, by stem, in one quote; a line that names FD/RD/NPS... by its acronym is held clause by clause, and the quote must hold that acronym or its usual expansion, so two quotes
+  cannot be stitched into a claim neither makes); book Tamil (`BOOKISH`: என்பது, நீங்கள், செய்கிற...) is refused; English words the writer left in Latin letters are first written in Tamil
+  letters (`tamilise`); a quote is matched ignoring a parenthetical and the rupee's spelling (`squash`), Indian amounts compare as figures (`figs`: 5 lakh = 5,00,000); and every item on a
+  slide must be held by a sentence of the pages (`item_backed`). One retry per slide asks the writer again for the thrown-out lines with the reason for each (`explain`). Dropped lines are logged with the reason and counted on the record; fewer than 10
+  kept (a Short: 4) = TOO THIN. The slides (cover, points, a facts slide when the pages give figures) show only items without invented numbers, each with its "Source: <page> ·
+  <domain>" chip, taken from where the line's quote was found. Requests to Groq stay small for its 8,000-tokens-a-minute allowance: one for the angle, one for the plan, one per slide (a lesson costs about 30,000 tokens, a Short about 8,000). **Groq's free
+  day is 200,000 tokens PER MODEL, shared with every other writer in VISION** (seen on 2026-10-14: `openai/gpt-oss-120b` stood at 198,000 used and refused every request while testing): a 429 is
+  `WRITER BUSY` (the topic is NOT skipped, the next run tries again); channel option `lesson_model` names another Groq model for lessons so they have an allowance of their own
+  (`openai/gpt-oss-20b` answered but could not meet the checks: most lines were refused, so the lesson was TOO THIN; the 120b model is the one the checks were written for).
+  The long lesson opens on the disclaimer card as ever, has a fixed opening line, a fixed closing ("This is only an educational lesson...") and SUBSCRIBE_LONG; the Short has the small
+  top line, no spoken disclaimer, and ends on SUBSCRIBE_SHORT. The description is "what it covers", hashtags, "Sources:" (each page's name and address) and the two disclaimer paragraphs.
+  **Transcripts (Mani's own call, 2026-10-14, against YouTube's terms of service, on the same footing as the LinkedIn call):** the public transcripts of the most-viewed videos that matched
+  the chosen topic are read as raw material for the topic, the angle, viewers' questions and common misunderstandings, **never for wording and never as a source of facts**. Limits in code,
+  keep them: no cookies, no sign-in, no proxy (the `youtube-transcript-api` package's defaults); at most `transcripts_per_day` (10) videos a day, 5 s apart; any block (RequestBlocked,
+  IpBlocked, TooManyRequests, a 429) stops transcript reading for the rest of the day (kv `mm_state` `transcripts`) with no retry; a video without one is skipped. Before Groq sees a word
+  the code removes every sentence that names a company in the index (or a well-known bank or broker), speaks of share price, target, buying, selling, multibagger, the market's direction,
+  or matches ADVICE/FORECAST, and caps it at ~2,500 tokens; the angle it returns may hold no number. The videos read are recorded (`inspired`: title, channel, link) on the record, the
+  approval and the desk, and appear nowhere in the video or its description. Sample: `scripts/market_lesson_sample.py <topic id> [--short] [--videos ID,ID]` (Edge's voice only).
 
 ## Status
 | Master | Mode | Needs from Mani |

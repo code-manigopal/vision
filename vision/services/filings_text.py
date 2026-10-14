@@ -4,12 +4,14 @@
     pdf_text(data, max_pages)      the text of a PDF ("" for a scan with no text layer, or a file that is not a PDF)
     relevant(text, limit)          the sentences that talk about the numbers and the reasons behind them, in document order
     norm(text)                     text as compared when a quote is checked: one line, lower case, straight quotes
+    html_text(html)                the readable paragraphs of a web page, one per line (an official FAQ page for a finance lesson); html_title(html) its title
 
 The reasons on the results video come from here, so a quote the model gives is checked against this text, never trusted.
 """
 
 from __future__ import annotations
 
+import html as htmllib
 import io
 import re
 from datetime import date, datetime
@@ -88,3 +90,24 @@ def source_of(quote: str, docs: list[dict]) -> dict | None:
     """The document (of those with a "text") that holds this quote, or None."""
     q = norm(quote)
     return next((d for d in docs if q in norm(d.get("text", ""))), None)
+
+
+def html_title(page: str) -> str:
+    m = re.search(r"(?is)<title[^>]*>(.*?)</title>", page)
+    return " ".join(htmllib.unescape(m.group(1)).split()) if m else ""
+
+
+def html_text(page: str) -> str:
+    """The readable text of a web page, one paragraph, heading or list item per line: no scripts, styles, menus or forms, a line seen twice kept once,
+    a line of fewer than four words dropped (menus, buttons). Block tags end a line, so a sentence is never joined to the next paragraph."""
+    page = re.sub(r"(?is)<(script|style|noscript|nav|svg|select|button)\b[^>]*>.*?</\1>", " ", page)
+    page = re.sub(r"\s+", " ", re.sub(r"(?is)<!--.*?-->", " ", page))             # the page's own line breaks are only wrapping
+    page = re.sub(r"(?i)</?(p|div|li|ul|ol|tr|br|h[1-6]|table|section|article|dt|dd|blockquote)\b[^>]*>", "\n", page)
+    page = re.sub(r"(?s)<[^>]+>", " ", page)
+    out, seen = [], set()
+    for line in htmllib.unescape(page).replace("\xa0", " ").splitlines():
+        flat = " ".join(line.split())
+        if len(flat.split()) >= 4 and flat not in seen:
+            seen.add(flat)
+            out.append(flat)
+    return "\n".join(out)

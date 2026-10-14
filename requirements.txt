@@ -16,3 +16,4 @@ selenium>=4.20     # Visa Watch: opens Chrome for you to sign in to the portal (
 cryptography>=42   # Visa Watch: the saved portal session is encrypted on disk
 keyring>=25        # Visa Watch: the encryption key lives in the macOS Keychain
 pypdf>=4          # Mani Market Tamil: the text of a company's press release or presentation (reasons behind the numbers)
+youtube-transcript-api>=1.2  # Mani Market Tamil lessons: public transcripts of other finance channels read as raw material for a topic (the owner's own call, 2026-10-14, against YouTube's terms: no cookies, no sign-in, no proxy, capped and spaced, any block stops it for the day)

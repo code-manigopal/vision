@@ -6,7 +6,8 @@
 - Two kinds of long video, by the weekday of the release (channel option `pattern`, e.g. mon: analysis, tue: topic): "analysis" is one company's
   ratios from its filings (Scout picks a company not analysed in 180 days; Analyst reads fundamentals, shareholding, dividends and the price AT
   LEAST `price_lag_days` OLD, SEBI's rule for educational channels; fewer than 8 ratios (7 for a bank, lender or insurer) = skipped, the next company
-  is tried), "result" is the quarterly result below. "topic" is not built yet and falls back to a result.
+  is tried), "result" is the quarterly result below. "topic" is a finance lesson (masters/lessons.py: official pages, every line checked against them) when the channel's
+  `lessons` is on, and falls back to a result when none can be made; on a day the market is shut the two Short windows make a lesson Short (`lesson_shorts`). Lessons are always approved.
 - Results Scout: only inside the making window (`make_after` to `make_before`, night time; a manual run ignores it). Reads every result NSE lists
   as filed in the last `within_days` (services/nse.py `recent`, paged) and takes up to three companies of the channel's index (`index_csv`) whose
   newest quarter has not been filmed (kv `mm_done`, key SYMBOL:quarter; a skip made by an older parser does not count). The Analyst makes the
@@ -36,9 +37,10 @@ from typing import Any
 import httpx
 
 from ..agents import AgentResult, Stage, request_approval
-from ..services import filings_text, lmstudio, markets, news, nse, world
+from ..config import secret
+from ..services import filings_text, lmstudio, markets, news, nse, oauth, world, yt_channels, yt_transcripts
 from ..voice import clone
-from . import fundamentals, market, slides, youtube
+from . import fundamentals, lessons, market, slides, youtube
 from .tamil_say import numbers_as_words
 
 log = logging.getLogger("vision")
@@ -56,6 +58,7 @@ DISCLAIMER = market.DISCLAIMER_EN + "\n\n" + market.DISCLAIMER_TA          # the
 IST = ZoneInfo("Asia/Kolkata")
 REPORTS = {"premarket": "pre", "postmarket": "post"}                         # the two Shorts of a trading day, and how services/world.py names them
 REPORT_WINDOWS = {"premarket": ("07:00", "08:15"), "postmarket": ("18:00", "20:30")}      # Indian time: when each is made
+SHORTS = (*REPORTS, "lesson_short")                                          # jobs that make a vertical Short (the two market reports, and a lesson on a day the market is shut)
 
 
 def now_hm() -> str:
@@ -154,15 +157,22 @@ class MCrew(youtube.Crew):
 async def members(c: httpx.AsyncClient, store, url: str) -> set[str]:
     """The symbols in the channel's index list (a CSV with a Symbol column), kept a week."""
     got = store.kv_get(INDEX, url)
-    if got and time.time() - got["at"] < 7 * 86400 and got["symbols"]:
+    if got and time.time() - got["at"] < 7 * 86400 and got["symbols"] and "names" in got:
         return set(got["symbols"])
     r = await c.get(url, headers={"User-Agent": nse.UA["User-Agent"]}, timeout=30.0)
     r.raise_for_status()
-    syms = sorted({row["Symbol"].strip().upper() for row in csv.DictReader(io.StringIO(r.text.lstrip("﻿"))) if (row.get("Symbol") or "").strip()})
+    rows = [row for row in csv.DictReader(io.StringIO(r.text.lstrip("﻿"))) if (row.get("Symbol") or "").strip()]
+    syms = sorted({row["Symbol"].strip().upper() for row in rows})
     if not syms:
         raise RuntimeError("the index list holds no symbols")
-    store.kv_put(INDEX, url, {"at": time.time(), "symbols": syms})
+    store.kv_put(INDEX, url, {"at": time.time(), "symbols": syms, "names": sorted({(row.get("Company Name") or "").strip() for row in rows} - {""})})      # names: a lesson names no company
     return set(syms)
+
+
+def index_terms(store, url: str) -> tuple[list[str], list[str]]:
+    """(company names, symbols) of the channel's index as last read (members() keeps them a week); empty before the first read."""
+    got = store.kv_get(INDEX, url) or {}
+    return got.get("names") or [], got.get("symbols") or []
 
 
 def release_kind(store, ch: dict) -> tuple[str, str]:
@@ -201,6 +211,11 @@ class ResultsScout(MCrew):
         manual = ctx.get("reason") == "manual"                       # a manual run (the dashboard's Run) ignores the hours
         force = ctx.get("force") or {}                               # tests and scripts: {"kind": "analysis", "symbol": "ITC"} or {"kind": "premarket"}
         now = ctx.get("now") or now_ist()
+        if force.get("kind") == "lesson_short":                      # tests and scripts: a lesson Short for one topic, whatever the day
+            win, day = force.get("window") or "premarket", now.astimezone(IST).date()
+            ctx["job"] = {"kind": "lesson_short", "key": f"lesson_short:{win}:{day.isoformat()}", "window": win, "date": day.isoformat(), "name": f"lesson {win} {day:%d %b}",
+                          "topic": force.get("topic"), "dir": str(youtube.ROOT / "data" / "shorts" / self.ch["id"] / f"{day.isoformat()}-lesson-{REPORTS[win]}")}
+            return AgentResult("done", "FOUND", f"lesson Short ({win}) for {day:%d %b}")
         due = force["kind"] if force.get("kind") in REPORTS else "" if manual else report_window(now)
         if due and (found := await self.report(ctx, due, now, bool(force.get("kind")))) is not None:      # a report Short is due: it goes before the night's long video
             return found
@@ -216,6 +231,7 @@ class ResultsScout(MCrew):
             return AgentResult("idle", "DONE TONIGHT", f"{per} video made already tonight")
         kind, day = release_kind(store, ch)
         kind = force.get("kind") or kind
+        lesson = kind == "lesson" or (kind == "topic" and bool(ch.get("lessons")))       # a topic day makes a finance lesson (lessons.py); a result is the fallback
         async with self.client() as c:
             symbols = await members(c, store, ch.get("index_csv") or INDEX_URL)
             if kind == "analysis":
@@ -225,9 +241,12 @@ class ResultsScout(MCrew):
                 ctx["job"] = {"kind": "analysis", "symbol": order[0], "key": f"analysis:{order[0]}", "name": order[0], "more": order[1:1 + TRIES],
                               "dir": str(youtube.ROOT / "data" / "shorts" / ch["id"] / f"analysis-{order[0]}")}
                 return AgentResult("done", "FOUND", f"{order[0]}: fundamental analysis (release {day})")
+            if lesson and force.get("topic"):                        # a script or test asked for one topic: no result to fall back on
+                ctx["job"] = {"kind": "lesson", "key": f"lessonnight:{day}", "day": day, "name": "finance lesson", "topic": force["topic"], "fallback": None}
+                return AgentResult("done", "FOUND", f"finance lesson: {force['topic']}")
             days = int(ch.get("within_days") or 4)
             filed = await nse.recent(c, days)
-        later = " (a topic day; topic videos are not built yet, so a result)" if kind == "topic" else ""
+        later = "" if lesson else " (a topic day; lessons are switched off, so a result)" if kind == "topic" else ""
         fresh = time.time() - days * 86400
         picks: list[dict] = []
         for f in filed:
@@ -237,6 +256,9 @@ class ResultsScout(MCrew):
                               "dir": str(youtube.ROOT / "data" / "shorts" / ch["id"] / f"{f['end'].isoformat()}-{sym}-{q.replace(' ', '')}")})
                 if len(picks) == CANDIDATES:
                     break
+        if lesson:                                                   # the Analyst picks the topic; if no lesson can be made it makes tonight's first result instead
+            ctx["job"] = {"kind": "lesson", "key": f"lessonnight:{day}", "day": day, "name": "finance lesson", "topic": None, "fallback": {**picks[0], "more": picks[1:]} if picks else None}
+            return AgentResult("done", "FOUND", f"a finance lesson (release {day})" + (f"; if none can be made, {market.short(picks[0]['name'])} {picks[0]['quarter']} results" if picks else ""))
         if picks:
             ctx["job"] = {**picks[0], "more": picks[1:]}
             return AgentResult("done", "FOUND", f"{market.short(picks[0]['name'])} {picks[0]['quarter']} results{later}" + (f" (and {len(picks) - 1} more to try if it cannot be read)" if len(picks) > 1 else ""))
@@ -246,8 +268,8 @@ class ResultsScout(MCrew):
     async def report(self, ctx: dict, due: str, now: datetime, forced: bool) -> AgentResult | None:
         """The job for a pre-market or post-market Short: only on an NSE trading day (a forced run skips that check), once per Indian date. None = nothing due."""
         store, day = ctx["store"], now.astimezone(IST).date()
-        key = f"{due}:{day.isoformat()}"
-        if store.kv_has(DONE, key):
+        key, lkey = f"{due}:{day.isoformat()}", f"lesson_short:{due}:{day.isoformat()}"
+        if store.kv_has(DONE, key) or store.kv_has(DONE, lkey):
             return None
         if not forced:
             holidays = set()
@@ -255,6 +277,10 @@ class ResultsScout(MCrew):
                 async with self.client() as c:
                     holidays = await world.trading_holidays(c, store)
             if not world.trading_day(day, holidays):
+                if self.ch.get("lesson_shorts"):                     # the market is shut: a lesson Short takes the slot
+                    ctx["job"] = {"kind": "lesson_short", "key": lkey, "window": due, "date": day.isoformat(), "name": f"lesson {due} {day:%d %b}", "topic": None,
+                                  "dir": str(youtube.ROOT / "data" / "shorts" / self.ch["id"] / f"{day.isoformat()}-lesson-{REPORTS[due]}")}
+                    return AgentResult("done", "FOUND", f"lesson Short for {day:%a %d %b} ({'morning' if due == 'premarket' else 'evening'}; the market is shut)")
                 return AgentResult("idle", "NO MARKET", f"{day:%a %d %b} is not an NSE trading day: no {due} update")
         ctx["job"] = {"kind": due, "key": key, "date": day.isoformat(), "name": f"{due} {day:%d %b}", "dir": str(youtube.ROOT / "data" / "shorts" / self.ch["id"] / f"{day.isoformat()}-{due}")}
         return AgentResult("done", "FOUND", f"{due} update for {day:%d %b}")
@@ -267,6 +293,11 @@ class MarketAnalyst(MCrew):
         job = self.job(ctx)
         if not job:
             return self.idle()
+        if job.get("kind") in ("lesson", "lesson_short"):
+            done = await self.lesson(ctx, job)
+            if done is not None:
+                return done
+            job = ctx["job"]                                           # no lesson could be made: the first result of tonight, if the Scout found one
         if job.get("kind") in REPORTS:
             return await self.report(ctx, job)
         if job.get("kind") == "analysis":
@@ -295,6 +326,57 @@ class MarketAnalyst(MCrew):
         return AgentResult("done", "READ", f"{result['name']} {result['quarter']}: {len(result['rows'])} figures from the filing, " + ", ".join(extra)
                            + (f"; no figures for {', '.join(unread)}, marked tried" if unread else ""))
 
+
+    async def signals(self, ctx: dict) -> list[dict]:
+        """Recent videos of the channels named in `lesson_channels` with their views (yt_channels, at most once a day), using YOUTUBE_API_KEY when set, else this channel's own
+        sign-in. No names, no sign-in or any failure gives []: the topics then go by how long since each was made."""
+        names = self.ch.get("lesson_channels") or []
+        if not names:
+            return []
+        try:
+            key, token = secret("YOUTUBE_API_KEY"), None
+            if not key:
+                token = await oauth.access_token(youtube.account(self.ch), "youtube")
+            async with self.client() as c:
+                return (await yt_channels.signals(c, ctx["store"], names, token, key))["videos"]
+        except (oauth.AuthNeeded, httpx.HTTPError, ValueError, KeyError) as e:
+            log.info("market: no channel signals (%s)", e)
+            return []
+
+    async def lesson(self, ctx: dict, job: dict) -> AgentResult | None:
+        """Researches tonight's lesson (or lesson Short): the topics in order (signals first), each one's official pages, and the transcripts of the videos that matched.
+        Up to MAX_TOPICS topics with sources are lined up for the Writer; a topic whose pages are all dead is skipped for a few days (NO SOURCE). None = nothing could be
+        lined up and the Scout had a result to fall back on (ctx["job"] is now that result)."""
+        store, ch = ctx["store"], self.ch
+        short, sleep = job["kind"] == "lesson_short", self.opts.get("sleep", asyncio.sleep)
+        videos = await self.signals(ctx)
+        now = time.time()
+        order = ([(t, *yt_channels.score(t, videos, now)) for t in lessons.TOPICS if t["id"] == job["topic"]] if job.get("topic")
+                 else lessons.rank(store, lessons.TOPICS, videos, now, short))
+        cands, tried = [], []
+        async with self.client() as c:
+            for tp, score, hit in order:
+                if len(cands) >= lessons.MAX_TOPICS or len(tried) >= 6:
+                    break
+                pages = await lessons.fetch_sources(c, tp, sleep=sleep)
+                if not pages:
+                    lessons.skip(store, tp["id"], "no source")
+                    tried.append(tp["id"])
+                    continue
+                cands.append({"topic": tp, "pages": pages, "videos": hit, "score": score, "transcripts": []})
+        if not cands:
+            if job.get("fallback"):
+                ctx["job"] = job["fallback"]
+                return None
+            ctx.pop("job", None)
+            return AgentResult("wait", "NO SOURCE", "No topic had an official page to read" + (f" (tried {', '.join(tried)})" if tried else "") + "; no lesson tonight")
+        cap = int(ch.get("transcripts_per_day") or 10)
+        for cand in cands:                                             # raw material only; a block stops it for the day (yt_transcripts)
+            cand["transcripts"] = await yt_transcripts.read(store, cand["videos"], cap=cap, fetch=self.opts.get("transcript_fetch"), sleep=sleep)
+        job.update(cands=cands, tried=tried)
+        tx = yt_transcripts.state(store, date.today())
+        return AgentResult("done", "READ", f"{', '.join(c['topic']['id'] for c in cands)}: {sum(len(c['pages']) for c in cands)} official pages, {len(videos)} channel videos seen, "
+                           f"{sum(len(c['transcripts']) for c in cands)} transcripts read" + (" (YouTube blocked; no more today)" if tx["blocked"] else "") + (f"; no source for {', '.join(tried)}" if tried else ""))
 
     async def report(self, ctx: dict, job: dict) -> AgentResult:
         """The indices for a report Short (services/world.py). An index that is not from the expected session is left out; too few left = no Short today."""
@@ -326,7 +408,48 @@ class MarketAnalyst(MCrew):
 class TanglishWriter(MCrew):
     name, tier, note = "Tanglish Writer", "CLOUD", "slides and spoken lines from the figures"
 
+    async def lesson(self, ctx: dict) -> AgentResult:
+        """Writes the lesson (lessons.write: plan, then each slide's lines, every line checked against the official pages). A topic that keeps fewer than lessons.MIN_KEPT lines
+        (a Short: MIN_KEPT_SHORT) is skipped for a few days and the next lined-up one is tried."""
+        job, store, llm = ctx["job"], ctx["store"], ctx.get("llm")
+        if not job.get("cands"):
+            return self.idle()
+        if not llm or not llm.writer_available():
+            ctx.pop("job", None)
+            return AgentResult("wait", "NO WRITER", "The writer model is not available: no lesson tonight")
+        short = job["kind"] == "lesson_short"
+        names, symbols = index_terms(store, self.ch.get("index_csv") or INDEX_URL)
+        bad, thin = lessons.bad_pattern(names, symbols), []
+        for cand in job["cands"][:lessons.MAX_TOPICS]:
+            tp = cand["topic"]
+            covered = (store.kv_get(DONE, f"lessonshort:{tp['id']}") or {}).get("concepts") or []
+            try:
+                out = await lessons.write(llm, tp, cand["pages"], cand["transcripts"], bad, short, covered, self.ch.get("lesson_model") or None)
+            except lessons.Busy as e:                                    # the daily allowance is spent: nothing is wrong with the topic, so it is not skipped; the next run tries again
+                ctx.pop("job", None)
+                return AgentResult("wait", "WRITER BUSY", f"The writer's allowance is used up for now ({e}); no lesson on this run")
+            for d in out["dropped"]:
+                log.info("lessons: %s: line dropped (%s): %s", tp["id"], d["why"], d["en"])
+            if out["too_thin"]:
+                lessons.skip(store, tp["id"], "too thin")
+                thin.append(f"{tp['id']} ({out['kept']} of {out['proposed']} lines kept)")
+                continue
+            title = out["title"] + (" #Shorts" if short and "#shorts" not in out["title"].lower() else "")
+            job.update(topic=tp["id"], tp=tp, pages=cand["pages"], inspired=[{k: t.get(k) for k in ("title", "channel", "url")} for t in cand["transcripts"]], title=title[:100],
+                       deck=out["deck"], lines=out["lines"], kept=out["kept"], proposed=out["proposed"], dropped=out["dropped"], concept=out["concept"], angle=out["angle"])
+            if not short:
+                job["dir"] = str(youtube.ROOT / "data" / "shorts" / self.ch["id"] / f"lesson-{tp['id']}-{job['day']}")
+            if self.ch.get("voice_engine", "clone") == "clone":              # the same safety net as every video: a fixed line the voice would garble is a bug to see in the test, not here
+                back = [ln["say"] for ln in job["lines"] if clone.unspelt(ln["say"])]
+                if back:
+                    log.warning("lessons: the voice would garble: %s", back)
+            return AgentResult("done", "WRITTEN", f"{tp['title']}: {out['kept']} of {out['proposed']} lines kept, {len(out['dropped'])} dropped")
+        ctx.pop("job", None)
+        return AgentResult("wait", "TOO THIN", f"Too few lines passed the checks: {', '.join(thin)}; skipped for {lessons.SKIP_DAYS} days")
+
     async def run(self, ctx: dict) -> AgentResult:
+        if (ctx.get("job") or {}).get("kind") in ("lesson", "lesson_short"):
+            return await self.lesson(ctx)
         if (ctx.get("job") or {}).get("kind") in REPORTS:                # a report Short: templates only, no model anywhere
             job = self.job(ctx, "data")
             if not job:
@@ -400,15 +523,15 @@ class VoiceClone(MCrew):
             files = await edge_speak(lines, work)
         else:                                                             # an hour of work: in a thread, with the local model out of the memory
             def speak() -> list[Path]:
-                return clone.speak(lines, work, log=log.info, speed=float(ch.get("short_voice_speed") or clone.SHORT_SPEED) if job.get("kind") in REPORTS else clone.SPEED)
+                return clone.speak(lines, work, log=log.info, speed=float(ch.get("short_voice_speed") or clone.SHORT_SPEED) if job.get("kind") in SHORTS else clone.SPEED)
             try:
-                if ch.get("free_memory") and job.get("kind") not in REPORTS:       # only a long video's hour of voice needs the memory; a 40-second Short fits beside the local model
+                if ch.get("free_memory") and job.get("kind") not in SHORTS:       # only a long video's hour of voice needs the memory; a 40-second Short fits beside the local model
                     async with lmstudio.freed():
                         files = await asyncio.to_thread(speak)
                 else:
                     files = await asyncio.to_thread(speak)
             except clone.VoiceFailed as e:                                # a line that never sounded right: no video tonight, and Mani is told why
-                what = f"today's {job['kind']} Short" if job.get("kind") in REPORTS else "tonight's video"
+                what = f"today's {job['kind']} Short" if job.get("kind") in SHORTS else "tonight's video"
                 ctx["bus"].notice(f"voice:{ch['id']}", f"{ch['name']}: {what} was held back, the voice check failed ({e})", "")
                 return AgentResult("error", "VOICE HELD", str(e))
             ctx["bus"].clear_notice(f"voice:{ch['id']}")
@@ -495,10 +618,41 @@ class SlideEditor(MCrew):
         ctx["store"].kv_put(DONE, job["key"], {"at": time.time(), "file": str(final)})
         return AgentResult("done", "CUT", f"{youtube.clock(seconds)} {kind} Short for {data['date']:%d %b}")
 
+    async def lesson(self, ctx: dict, job: dict) -> AgentResult:
+        """A finance lesson (wide, with the disclaimer card) or lesson Short (vertical, the small disclaimer line on top). The record carries the topic, the official pages used,
+        the videos whose transcripts were read ("inspired", never shown in the video or the description) and what the checks dropped."""
+        ch, work, short, tp = self.ch, Path(job["dir"]), job["kind"] == "lesson_short", job["tp"]
+        final = await self.film(job, tall=True, top=market.SHORT_NOTE) if short else await self.film(job, source="Finance basics")
+        seconds = await asyncio.to_thread(slides.probe, final)
+        for f in work.iterdir():
+            if f != final and f.name != "captions.srt":
+                shutil.rmtree(f, ignore_errors=True) if f.is_dir() else f.unlink(missing_ok=True)
+        tags = lessons.tags(tp, short) + (["#Shorts"] if short else [])
+        why: dict[str, int] = {}
+        for d in job["dropped"]:
+            why[d["why"]] = why.get(d["why"], 0) + 1
+        ctx["store"].kv_put(youtube.LOG, work.name, {
+            "channel": ch["id"], "status": "ready", "format": "short" if short else "long", "kind": job["kind"], "made": time.time(), "title": job["title"],
+            "summary": lessons.summary(tp, job["pages"], job["title"], short, DISCLAIMER), "hashtags": tags, "script": " ".join(ln["say"] for ln in job["lines"]),
+            "source": {"url": job["pages"][0]["url"], "title": job["pages"][0]["label"]}, "seconds": round(seconds, 1), "file": str(final), "keywords": [], "credits": [], "music": "",
+            "original": False, "classic": None, "voice": ch.get("voice_engine", "clone"), "voice_qa": job.get("voice_qa"), "model_lines": job["kept"], "topic": tp["id"],
+            "topic_title": tp["title"], "concept": job.get("concept") or None, "sources": [{"label": p["label"], "url": p["url"]} for p in job["pages"]], "inspired": job["inspired"],
+            "lines_proposed": job["proposed"], "lines_dropped": len(job["dropped"]), "dropped_why": why, "angle": job.get("angle") or None,
+            **({"date": job["date"], "window": job["window"]} if short else {})})
+        if short:
+            ctx["store"].kv_put(DONE, job["key"], {"at": time.time(), "file": str(final)})
+            old = ctx["store"].kv_get(DONE, f"lessonshort:{tp['id']}") or {}
+            ctx["store"].kv_put(DONE, f"lessonshort:{tp['id']}", {"at": time.time(), "concepts": [*(old.get("concepts") or []), job.get("concept") or tp["title"]]})
+        else:
+            ctx["store"].kv_put(DONE, f"lesson:{tp['id']}", {"at": time.time(), "file": str(final)})
+        return AgentResult("done", "CUT", f"{youtube.clock(seconds)} {'Short' if short else 'lesson'} on {tp['title']}")
+
     async def run(self, ctx: dict) -> AgentResult:
         job = self.job(ctx, "spoken")
         if not job:
             return self.idle()
+        if job.get("kind") in ("lesson", "lesson_short"):
+            return await self.lesson(ctx, job)
         if job.get("kind") in REPORTS:
             return await self.report(ctx, job)
         ch, work, analysis = self.ch, Path(job["dir"]), job.get("kind") == "analysis"
@@ -570,9 +724,9 @@ class MarketUploader(youtube.Uploader):
                 bus.clear_notice(f"youtube-limit-{ch['id']}")
                 key = rec.pop("_key")
                 rec.pop("_ts", None)
-                if rec.get("kind") in youtube.REPORT_KINDS:     # a report Short: `report_privacy` scheduled goes public by itself; one too late for its news stays private, "stale"
-                    stale = youtube.report_release(rec["kind"], date.fromisoformat(rec["date"]), youtube._now()) is None
-                    if stale or ch["report_privacy"] == "scheduled":
+                if rec.get("kind") in youtube.SHORT_KINDS:     # a report Short: `report_privacy` scheduled goes public by itself; one too late for its news stays private, "stale"
+                    stale = youtube.short_when(rec, youtube._now()) is None        # (a lesson Short is never published without approval, only held back when it is stale)
+                    if stale or (ch["report_privacy"] == "scheduled" and rec["kind"] in youtube.REPORT_KINDS):
                         rec.update(status="stale" if stale else "scheduled", stale=stale, video_id=out["id"], url=f"https://youtu.be/{out['id']}", uploaded=time.time(),
                                    publish_at=None if stale else out["publish_at"])
                         store.kv_put(youtube.LOG, key, rec)
@@ -587,7 +741,8 @@ class MarketUploader(youtube.Uploader):
                 request_approval(ctx, self.name, f"Publish: {rec['title']}", {
                     "kind": "yt_publish", "key": f"yt_publish:{out['id']}", "channel": ch["id"], "record": key, "video_id": out["id"],
                     "url": f"https://studio.youtube.com/video/{out['id']}/edit", "title": rec["title"], "summary": rec["summary"], "seconds": rec["seconds"], "source": rec["source"]["url"],
-                    "backed": [f"{r['metric']}: {r['point']} (\u201c{r['quote']}\u201d, {r['doc']['subject']})" for r in rec.get("reasons") or []] + [f"news: {n['title']} ({n['source']})" for n in rec.get("news") or []]})
+                    "backed": [f"{r['metric']}: {r['point']} (\u201c{r['quote']}\u201d, {r['doc']['subject']})" for r in rec.get("reasons") or []] + [f"news: {n['title']} ({n['source']})" for n in rec.get("news") or []]
+                    + [f"source: {x['label']} {x['url']}" for x in rec.get("sources") or []] + [f"inspired by: {i['title']} ({i['channel']})" for i in rec.get("inspired") or []]})
                 bus.say(f"{ch['name']} · “{rec['title']}” is uploaded as private: your approval schedules it")
                 done.append(f"“{rec['title']}” uploaded private, awaiting your approval")
         return AgentResult("done", "UPLOADED", "; ".join(done))

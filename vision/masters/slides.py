@@ -11,6 +11,7 @@ voice is at that moment.
     notice: "items" = the disclaimer paragraphs, shown whole (older: "title" and "note");  board (tall Shorts): items are blocks {region, when, rows, foot}
     lines: a line may carry "hold" = the least seconds its picture stays (the disclaimer card, whose spoken line is short)
     table rows: {label, was, now, change, tone, note};  facts rows (one value, no comparison): {label, value, tone, note}
+    "note_always": True keeps the note on screen from the first line (a lesson's source chip); otherwise it appears with the last item
     quotes rows (up to four sentences of text, each behind a coloured chip): {label, text, tone}
     lines = [{"slide": 0, "show": 2, "say": "...", "en": "..."}]            # show = how many of the slide's items are visible; en = the English caption (optional)
 
@@ -57,6 +58,18 @@ DOODLE = {
            f'<circle cx="100" cy="90" r="11" fill="#1b1b1b"/></svg>',
     "coin": f'<svg viewBox="0 0 200 180"><circle cx="100" cy="90" r="66" fill="#f4b63f" {_S}/><circle cx="100" cy="90" r="50" fill="#ffe08a" {_S}/>'
             f'<path d="M80 62h42M80 80h42M82 62c30 0 30 34 0 34l34 34" fill="none" {_S}/></svg>',
+    # finance lessons: simple, one idea each
+    "piggy": f'<svg viewBox="0 0 200 180"><ellipse cx="96" cy="100" rx="62" ry="46" fill="#f8cdc8" {_S}/><path d="M146 84l14-14v34M60 60l-6-18l24 10" fill="#f8cdc8" {_S}/>'
+             f'<circle cx="128" cy="88" r="5" fill="#1b1b1b"/><path d="M70 142v20M118 142v20M84 62h28" fill="none" {_S}/><circle cx="154" cy="104" r="9" fill="#fff" {_S}/></svg>',
+    "calendar": f'<svg viewBox="0 0 200 180"><path d="M30 40h140v120H30z" fill="#fff" {_S}/><path d="M30 40h140v28H30z" fill="#d92d20" {_S}/><path d="M62 24v28M138 24v28" fill="none" {_S}/>'
+                + "".join(f'<path d="M{x} {y}h14v12h-14z" fill="#cfe3ff" {_S}/>' for x in (48, 82, 116) for y in (84, 116)) + "</svg>",
+    "goldbar": f'<svg viewBox="0 0 200 180"><path d="M20 130l24-50h112l24 50z" fill="#f4b63f" {_S}/><path d="M44 80l-10 20h132l-10-20" fill="#ffe08a" {_S}/><path d="M70 112h60" fill="none" {_S}/></svg>',
+    "rupee": f'<svg viewBox="0 0 200 180"><path d="M20 50h160v80H20z" fill="#bfe8cf" {_S}/><circle cx="100" cy="90" r="26" fill="#fff" {_S}/><path d="M88 78h26M88 90h26M90 78c24 0 24 24 0 24l22 16" fill="none" {_S}/>'
+             f'<circle cx="40" cy="70" r="5" fill="#1b1b1b"/><circle cx="160" cy="110" r="5" fill="#1b1b1b"/></svg>',
+    "umbrella": f'<svg viewBox="0 0 200 180"><path d="M100 14l64 22v48c0 40-28 66-64 82c-36-16-64-42-64-82V36z" fill="#cfe3ff" {_S}/><path d="M60 92c0-26 18-40 40-40s40 14 40 40z" fill="#d92d20" {_S}/>'
+                f'<path d="M100 52v62c0 12-14 12-14 2" fill="none" {_S}/></svg>',
+    "chart": f'<svg viewBox="0 0 200 180"><path d="M24 150h152M24 150V30" fill="none" {_S}/><path d="M40 120l36-30 28 18 56-56" {_G}/><circle cx="76" cy="90" r="6" fill="#fff" {_S}/><circle cx="104" cy="108" r="6" fill="#fff" {_S}/>'
+             f'<circle cx="160" cy="52" r="6" fill="#fff" {_S}/></svg>',
 }
 
 CSS = """
@@ -104,6 +117,8 @@ body{width:1080px;height:1920px}
 .r{display:grid;grid-template-columns:1fr auto 210px;align-items:baseline;gap:16px;padding:7px 0;border-top:2px dashed #d8d1bf;font-size:38px;font-weight:700}
 .r i{font:500 30px "JetBrains Mono",Menlo,monospace;color:#6b6455}.r span{font-family:"JetBrains Mono",Menlo,monospace;text-align:right}
 .r.big{font-size:54px;padding:12px 0;grid-template-columns:1fr auto 320px}.r.big i{font-size:40px}.r span{white-space:nowrap}
+.cards{flex-direction:column;gap:20px;margin:30px 120px 0 0}.card{display:flex;align-items:center;gap:26px;text-align:left;font-size:40px;padding:18px 26px}.card svg{width:150px;flex:none;margin:0}
+.note{margin:26px 120px 0 0;font-size:30px}
 .foot{border-top:2px dashed #d8d1bf;padding:8px 0 4px;font:500 28px "JetBrains Mono",Menlo,monospace;color:#6b6455}
 """
 
@@ -181,7 +196,7 @@ def _slide(s: dict, frame: str) -> str:
     else:
         body = '<div class="cards">' + "".join(f'<div class="card {it.get("tone", "good")}" data-i="{i}">{DOODLE.get(it.get("icon"), "")}{_mix(it["text"])}</div>'
                                                for i, it in enumerate(items)) + "</div>"
-    note = f'<div class="note" data-i="{len(items)}">{_mix(s["note"])}</div>' if s.get("note") else ""
+    note = f'<div class="note" data-i="{0 if s.get("note_always") else len(items)}">{_mix(s["note"])}</div>' if s.get("note") else ""      # note_always: a source chip is there from the first line
     return f'<section class="slide">{frame}<span class="pill">{_mix(s["title"])}</span>{body}{note}</section>'
 
 

@@ -37,6 +37,8 @@ SOUNDS = {
     # the reasons, key ratios and news of a results video
     "guidance": "கைடன்ஸ்", "headline": "ஹெட்லைன்", "headlines": "ஹெட்லைன்ஸ்", "news": "நியூஸ்", "sources": "சோர்ஸஸ்", "screen": "ஸ்க்ரீன்", "ratios": "ரேஷியோஸ்",
     "ratio": "ரேஷியோ",
+    # finance lessons
+    "lesson": "லெசன்", "lessons": "லெசன்ஸ்",
     # financials: lenders (NBFCs) and insurers
     "combined ratio": "கம்பைன்ட் ரேஷியோ", "credit cost": "க்ரெடிட் காஸ்ட்", "net interest margin": "நெட் இன்ட்ரெஸ்ட் மார்ஜின்", "interest income": "இன்ட்ரெஸ்ட் இன்கம்",
     "finance costs": "ஃபைனான்ஸ் காஸ்ட்ஸ்", "first year": "ஃபர்ஸ்ட் இயர்", "stage 3": "ஸ்டேஜ் த்ரீ", "credit": "க்ரெடிட்", "cost": "காஸ்ட்", "costs": "காஸ்ட்ஸ்",
