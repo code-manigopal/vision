@@ -576,3 +576,13 @@ def test_the_titles_name_what_each_form_shows():
     assert "NII, Profit, Asset Quality" in t({"name": "X Limited", "quarter": "Q2 FY27", "kind": "nbfc", "lender": True})
     assert "Revenue, Profit, Margin" in t({"name": "X Limited", "quarter": "Q2 FY27", "bank": False}) and "NII, Profit, NPA" in t({"name": "X", "quarter": "Q1 FY27", "bank": True})
     assert "Revenue, Profit, EPS" in t({"name": "X Limited", "quarter": "Q2 FY27", "kind": "nbfc", "lender": False})
+
+
+def test_a_forced_result_takes_the_named_company_even_if_filmed_and_a_backlog_does_not_stop_it(env):
+    env["store"].kv_put(market_crew.DONE, "SAMPLE:Q2 FY27", {"at": 1})
+    for n in range(2):
+        env["store"].kv_put(youtube.LOG, f"x{n}", {"channel": "manimarket", "status": "awaiting", "made": 1})
+    ch = youtube.channel({**RAW, "review": True})
+    ctx = scout_ctx(env, reason="manual", force={"kind": "result", "symbol": "sample"})
+    res = asyncio.run(market_crew.ResultsScout(ch, client_factory=web(env["yt"])).run(ctx))
+    assert res.label == "FOUND" and ctx["job"]["key"] == "SAMPLE:Q2 FY27" and ctx["job"]["review"] is True and "_review" in ctx["job"]["dir"]

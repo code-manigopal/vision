@@ -1444,6 +1444,8 @@ class Uploader(Crew):
             when = short_when(rec, _now()) if ch["report_privacy"] == "scheduled" and not lesson else None      # a lesson is never published without approval
         else:
             when = next_slot(ctx["store"], ch, fmt="long" if long else "short") if ch["privacy"] == "scheduled" and not lesson else None     # private now, public by itself at its slot
+        if rec.get("review"):                       # a review upload (Mani Market Tamil): private, never a release time
+            when = None
         marks = rec.get("chapters") or []           # YouTube shows chapters from three or more timestamps starting at 0:00
         chapters = "\n\n" + "\n".join(f"{clock(m['t'])} {m['heading']}" for m in marks) if long and len(marks) >= 3 and marks[0]["t"] == 0 else ""
         seo = rec.get("seo") or {}                  # the strategist's search tags and opening lines, when it gave them
@@ -1453,7 +1455,7 @@ class Uploader(Crew):
         if rec.get("kind") in ("result", "analysis", *SHORT_KINDS, "lesson"):   # a results, analysis or report video's description is written whole (the source and the disclaimer last)
             about = rec["summary"]
         body = {"snippet": {"title": rec["title"][:100], "categoryId": str(ch["category"]), "tags": seo.get("tags") or [t.lstrip("#") for t in tags], "description": about},
-                "status": {"privacyStatus": "private" if when or report or lesson or ch["privacy"] == "approval" else ch["privacy"], "selfDeclaredMadeForKids": False, "containsSyntheticMedia": bool(ch["synthetic_flag"]),
+                "status": {"privacyStatus": "private" if when or report or lesson or rec.get("review") or ch["privacy"] == "approval" else ch["privacy"], "selfDeclaredMadeForKids": False, "containsSyntheticMedia": bool(ch["synthetic_flag"]),
                            **({"publishAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(when))} if when else {})}}
         size = Path(rec["file"]).stat().st_size
         auth = {"Authorization": f"Bearer {token}"}
@@ -1588,7 +1590,7 @@ class AnalyticsManager(Crew):
     name, tier, note = "Analytics Manager", "API", "follows each Short, reports the channel"
 
     async def _refresh(self, ctx: dict, log: list[dict]) -> None:
-        live = [v for v in log if v.get("video_id") and v.get("status") in ("unlisted", "private", "public", "scheduled")]
+        live = [v for v in log if v.get("video_id") and v.get("status") in ("unlisted", "private", "public", "scheduled", "review")]
         if not live:
             return
         try:
@@ -1604,6 +1606,13 @@ class AnalyticsManager(Crew):
         for v in live[:50]:
             item = found.get(v["video_id"])
             was = v["status"]
+            if was == "review":                    # uploaded for Mani to watch: only his deleting it on YouTube changes its status
+                v["status"] = "review" if item else "deleted"
+                if item:
+                    v["stats"] = {k: int(item.get("statistics", {}).get(f"{k}Count", 0)) for k in ("view", "like", "comment")}
+                    v["checked"] = time.time()
+                ctx["store"].kv_put(LOG, v["_key"], {k: x for k, x in v.items() if not k.startswith("_")})
+                continue
             v["status"] = item["status"]["privacyStatus"] if item else "deleted"
             due = (item or {}).get("status", {}).get("publishAt")
             if due:                                # private with a publishing time = scheduled, whether VISION or Mani set it

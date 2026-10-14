@@ -242,8 +242,8 @@ def figures(v: dict) -> list[tuple]:
 
 
 def youtube(store):
-    stages = [("ready", "Waiting for upload"), ("awaiting", "Awaiting your approval"), ("review", "Unlisted · your review"), ("scheduled", "Scheduled"), ("public", "Public"), ("gone", "Deleted / private"), ("stale", "Stale · not published")]
-    of = {"ready": "ready", "awaiting": "awaiting", "unlisted": "review", "scheduled": "scheduled", "public": "public", "deleted": "gone", "private": "gone", "stale": "stale"}
+    stages = [("ready", "Waiting for upload"), ("awaiting", "Awaiting your approval"), ("review", "Unlisted · your review"), ("scheduled", "Scheduled"), ("public", "Public"), ("gone", "Deleted / private"), ("stale", "Stale · not published"), ("forreview", "For review")]
+    of = {"ready": "ready", "awaiting": "awaiting", "unlisted": "review", "scheduled": "scheduled", "public": "public", "deleted": "gone", "private": "gone", "stale": "stale", "review": "forreview"}
 
     def one(v):
         st, stats, src = of.get(v.get("status")), v.get("stats") or {}, v.get("source") or {}

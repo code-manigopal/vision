@@ -219,8 +219,8 @@ masters:
           director: Mani Market Tamil Director
           crew: market                   # its own crew (vision/masters/market_crew.py): a quarterly result from NSE's filings, told in Tanglish over slides
           language: ta
-          privacy: approval              # uploaded private, then you approve it in VISION (dashboard or Telegram): approved = scheduled for the next release slot
-          report_privacy: approval        # Mani, 2026-10-14: nothing goes public until he has reviewed one of every kind; then `scheduled` (a report is only good for about 12 hours, so it then publishes with no review, held back only when a data or voice check fails) | the pre-market / post-market Shorts: approval = private until you approve (a pre-market one after 09:10 IST is stale and never published) | scheduled = published with NO review (pre-market 15 minutes after it is ready if before 09:10 IST, post-market at 21:00 IST), held back only when a data or voice check fails; not decided yet
+          privacy: scheduled             # Mani, 2026-10-14 (reviewed one of every kind): results and analysis are scheduled for the next 10:00 IST slot with no review | approval = private until you approve it. Lessons always wait for approval
+          report_privacy: scheduled       # Mani, 2026-10-14 (reviewed one of every kind): a report is only good for about 12 hours, so it publishes with no review, held back only when a data or voice check fails | the pre-market / post-market Shorts: approval = private until you approve (a pre-market one after 09:10 IST is stale and never published) | scheduled = published with NO review (pre-market 15 minutes after it is ready if before 09:10 IST, post-market at 21:00 IST), held back only when a data or voice check fails; not decided yet
           timezone: Asia/Kolkata         # release slots are this zone's wall time
           voice_engine: clone            # clone = Mani's own voice (about an hour a video) | edge = Edge's Tamil voice (fast, artificial)
           free_memory: true              # clone only: LM Studio's model is unloaded while the voice is made, then loaded again
@@ -240,6 +240,8 @@ masters:
             - Pranjal Kamra
             - Ankur Warikoo
             - Finance With Sharan
+            - Almost Everything
+            - Madurai Veeran Money Coach   # Tamil (Mani, 2026-10-14)
             - Akshat Shrivastava
             - Money Pechu                # Tamil; could not be checked (needs the YouTube lookup, 100 quota units a name, once): remove it if it resolves to the wrong channel
           lesson_model: "qwen/qwen3.8-27b"               # blank = the usual writer model; writes the lesson in English (the slides and lines, each backed by quoted sentences): about 7,000 tokens for a lesson, 3,000 for a Short. Groq's free day is 200,000 PER MODEL, shared with every other writer in VISION: name another Groq model here (e.g. openai/gpt-oss-20b) to give lessons an allowance of their own

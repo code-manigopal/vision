@@ -404,3 +404,25 @@ def test_the_disclaimers_are_said_word_for_word_whatever_the_model_returns():
     assert said[0].get("fixed") and said[-1].get("fixed")
     out, _ = asyncio.run(market.reword(Model({"lines": {str(i + 1): ln["say"] + " சரியா?" for i, ln in enumerate(said)}}), said, r))
     assert out[0]["say"] == market.NOTICE_SAY and out[-1]["say"] == said[-1]["say"] and out[2]["say"].endswith("சரியா?")
+
+
+def test_the_presenter_is_cut_from_a_doodle_sheet_aligned_and_transparent(tmp_path):
+    """A 3 x 2 sheet (mouth closed/half/open, eyes open then shut) on white: six frames of the presenter's square, background clear, faces kept."""
+    from PIL import Image, ImageDraw
+    sheet = Image.new("RGB", (600, 400), "white")
+    d = ImageDraw.Draw(sheet)
+    for r in range(2):
+        for c in range(3):
+            x, y = c * 200 + 40 + c * 3, r * 200 + 30 - r * 2          # the generator does not centre tiles exactly
+            d.rectangle((x, y, x + 120, y + 150), fill=(30, 60, 40), outline="black")
+            d.ellipse((x + 40, y + 20, x + 80, y + 50), fill="white", outline="black")   # a white eye inside the drawing must stay
+    path = tmp_path / "sheet.png"
+    sheet.save(path)
+    faces = slides.own_faces(tmp_path, path)
+    assert sorted(faces) == [(m, e) for m in range(3) for e in range(2)]
+    a, b = Image.open(faces[(0, 0)]), Image.open(faces[(2, 1)])
+    assert a.size == (slides.FACE, slides.FACE) and a.getbbox() == b.getbbox()          # same place in every frame
+    assert a.getpixel((0, 0))[3] == 0 and a.getpixel((slides.FACE // 2, slides.FACE - 5))[3] == 255
+    eye = [p for p in a.getdata() if p[3] == 255 and p[:3] == (255, 255, 255)]
+    assert eye                                                                           # the eye's white is not cut out
+    assert slides.own_faces(tmp_path, tmp_path / "missing.png") is None

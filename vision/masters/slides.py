@@ -215,6 +215,50 @@ def page(deck: list[dict], channel: str = "", tag: str = "", source: str = "", t
               "s.querySelectorAll('[data-i]').forEach(e=>e.style.visibility=+e.dataset.i<n?'visible':'hidden')})}</script></body></html>")
 
 
+PRESENTER = Path(__file__).resolve().parent.parent.parent / "vault" / "presenter"
+
+
+def own_faces(work: Path, sheet: Path | None = None) -> dict | None:
+    """Mani's own doodle as the presenter (2026-10-14): one sheet, 3 x 2 tiles, top row eyes open with the mouth closed, half open, open, bottom
+    row the same with the eyes shut (vault/presenter/*.png, the prompt he generated it with asked for exactly that). Each tile is cut, its white
+    background made transparent from the edges inwards (the whites of the eyes, the teeth and the glasses stay), aligned on the drawing's own
+    top-left so the frames do not jump, and fitted into the presenter's square, standing on its bottom edge. None when there is no sheet."""
+    from PIL import Image, ImageDraw
+    sheet = sheet or next(iter(sorted(PRESENTER.glob("*.png"))), None) if PRESENTER.is_dir() else sheet
+    if not sheet or not Path(sheet).exists():
+        return None
+    im = Image.open(sheet).convert("RGB")
+    tw, th = im.width // 3, im.height // 2
+    cuts = []
+    for r in range(2):
+        for c in range(3):
+            t = im.crop((c * tw, r * th, (c + 1) * tw, (r + 1) * th))
+            box = Image.eval(t.convert("L"), lambda v: 255 if v < 235 else 0).getbbox()
+            if not box:
+                return None
+            cuts.append((r, c, t, box))
+    w = max(b[2] - b[0] for *_, b in cuts)
+    h = max(b[3] - b[1] for *_, b in cuts)
+    out = {}
+    for r, c, t, (x0, y0, _, _) in cuts:
+        tile = t.crop((x0, y0, x0 + w, y0 + h)).convert("RGBA")
+        key = (255, 0, 255)                             # flood the outside white from every edge pixel of the frame, then make it clear
+        flat = tile.convert("RGB")
+        for x, y in [(x, 0) for x in range(0, w, 8)] + [(x, h - 1) for x in range(0, w, 8)] + [(0, y) for y in range(0, h, 8)] + [(w - 1, y) for y in range(0, h, 8)]:
+            if min(flat.getpixel((x, y))) >= 235:
+                ImageDraw.floodfill(flat, (x, y), key, thresh=40)
+        mask = Image.frombytes("L", flat.size, bytes(0 if px == key else 255 for px in flat.getdata()))
+        tile.putalpha(mask)
+        scale = min(FACE / w, FACE / h)
+        tile = tile.resize((max(1, round(w * scale)), max(1, round(h * scale))), Image.LANCZOS)
+        square = Image.new("RGBA", (FACE, FACE), (0, 0, 0, 0))
+        square.paste(tile, ((FACE - tile.width) // 2, FACE - tile.height), tile)
+        path = work / f"own-face-{c}{r}.png"            # mouth = column, eyes shut = row
+        square.save(path)
+        out[(c, r)] = path
+    return out
+
+
 def pictures(deck: list[dict], lines: list[dict], work: Path, tall: bool = False, captions: list[str] | None = None, **frame) -> tuple:
     """One picture of the slides per spoken line, and the presenter's six faces (transparent). Needs Chrome. `tall` = a Short (1080x1920).
     With `captions` (the texts to draw, caption_texts) a third result comes back: {text: transparent strip}, and "" is the empty strip."""
@@ -246,6 +290,7 @@ def pictures(deck: list[dict], lines: list[dict], work: Path, tall: bool = False
             for e in range(2):
                 drv.execute_script("document.body.className = arguments[0]", f"m{m} e{e}")
                 faces[(m, e)] = shot(work / f"face-{m}{e}.png")
+        faces = own_faces(work) or faces                # Mani's own doodle, when its six tiles are in vault/presenter
         if captions is None:
             return pngs, faces
         box = CAP[tall]
@@ -290,7 +335,14 @@ def thumb_page(hook: str, name: str = "", logo: str = "", channel: str = "", lab
     return (f'<!doctype html><html lang="ta"><meta charset="utf-8"><style>{THUMB_CSS}</style><body>'
             + (f'<div class="pill" style="font-size:{44 if len(name) <= 26 else 36 if len(name) <= 34 else 30}px">{html.escape(name)}</div>' if name else "") + (f'<div class="tag">{html.escape(label)}</div>' if label else "")
             + f'<div class="hook" style="font-size:{size}px">{body}</div>{img}<div class="mark">{html.escape(channel)}</div>'
-            f'<div class="face m1 e0">{FACE_SVG}</div></body></html>')
+            f'<div class="face m1 e0">{own_face_img() or FACE_SVG}</div></body></html>')
+
+
+def own_face_img() -> str:
+    """Mani's doodle (closed mouth, eyes open) for the cover, as an <img>; "" when there is no sheet (the stand-in drawing is used)."""
+    import tempfile
+    faces = own_faces(Path(tempfile.mkdtemp(prefix="vision-face-")))
+    return f'<img src="{faces[(0, 0)].as_uri()}" style="width:100%;height:100%;display:block">' if faces else ""
 
 
 def thumbnail(work: Path, out: Path, hook: str, name: str = "", logo: str = "", channel: str = "", label: str = "", tone: str = "flat") -> Path:

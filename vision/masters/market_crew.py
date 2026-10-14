@@ -65,6 +65,18 @@ LESSON_KINDS = ("lesson", "lesson_short")
 SHORTS = (*REPORTS, "lesson_short")                                          # jobs that make a vertical Short (the two market reports, and a lesson on a day the market is shut)
 
 
+def jobdir(ch: dict, name: str) -> str:
+    """Where a job's files go. A review job (channel option `review`: one video of every kind uploaded private for Mani to watch) lives apart under `_review`, with a name
+    of its own, so it never meets the real job of the same day (the log key is the folder's name)."""
+    base = youtube.ROOT / "data" / "shorts" / ch["id"]
+    return str(base / "_review" / f"review-{name}" if ch.get("review") else base / name)
+
+
+def stamp(job: dict) -> dict:
+    """The status of a finished video's record: `ready` (the Uploader asks Mani), or `review` for a review job (uploaded private, no release time, no approval)."""
+    return {"status": "review", "review": True} if job.get("review") else {"status": "ready"}
+
+
 def now_hm() -> str:
     return time.strftime("%H:%M")
 
@@ -257,14 +269,20 @@ class ResultsScout(MCrew):
     name, tier, note = "Results Scout", "API", "finds tonight's company in the index"
 
     async def run(self, ctx: dict) -> AgentResult:
+        res = await self.pick(ctx)
+        if self.ch.get("review") and ctx.get("job"):                 # review mode: the video is uploaded private for Mani to watch, with no release time and no approval
+            ctx["job"]["review"] = True
+        return res
+
+    async def pick(self, ctx: dict) -> AgentResult:
         ch, store = self.ch, ctx["store"]
         manual = ctx.get("reason") == "manual"                       # a manual run (the dashboard's Run) ignores the hours
-        force = ctx.get("force") or {}                               # tests and scripts: {"kind": "analysis", "symbol": "ITC"} or {"kind": "premarket"}
+        force = ctx.get("force") or {}                               # tests and scripts: {"kind": "analysis", "symbol": "ITC"}, {"kind": "result", "symbol": "TCS"}, {"kind": "premarket"} or {"kind": "lesson", "topic": "mf-basics"}
         now = ctx.get("now") or now_ist()
         if force.get("kind") == "lesson_short":                      # tests and scripts: a lesson Short for one topic, whatever the day
             win, day = force.get("window") or "premarket", now.astimezone(IST).date()
             ctx["job"] = {"kind": "lesson_short", "key": f"lesson_short:{win}:{day.isoformat()}", "window": win, "date": day.isoformat(), "name": f"lesson {win} {day:%d %b}",
-                          "topic": force.get("topic"), "dir": str(youtube.ROOT / "data" / "shorts" / self.ch["id"] / f"{day.isoformat()}-lesson-{REPORTS[win]}")}
+                          "topic": force.get("topic"), "dir": jobdir(self.ch, f"{day.isoformat()}-lesson-{REPORTS[win]}")}
             return AgentResult("done", "FOUND", f"lesson Short ({win}) for {day:%d %b}")
         due = force["kind"] if force.get("kind") in REPORTS else "" if manual else report_window(now)
         if due and (found := await self.report(ctx, due, now, bool(force.get("kind")))) is not None:      # a report Short is due: it goes before the night's long video
@@ -274,7 +292,7 @@ class ResultsScout(MCrew):
             return AgentResult("idle", "NOT YET", f"Videos are made between {after} and {before}")
         mine = [v for v in store.kv_list(youtube.LOG) if v.get("channel") == ch["id"] and v.get("format") != "short"]       # the long videos; the report Shorts keep their own count
         waiting = sum(v.get("status") in ("ready", "awaiting") for v in mine)
-        if waiting >= BACKLOG:
+        if waiting >= BACKLOG and not force:
             return AgentResult("idle", "BACKLOG", f"{waiting} finished videos are waiting to upload or for your approval; no new ones until they clear")
         per = int(ch.get("per_run") or 1)
         if not manual and sum((v.get("made") or 0) > time.time() - 12 * 3600 for v in mine) >= per:
@@ -289,21 +307,25 @@ class ResultsScout(MCrew):
                 if not order:
                     return AgentResult("done", "NOTHING NEW", f"All {len(symbols)} companies in the index were analysed in the last {REPEAT_DAYS} days")
                 ctx["job"] = {"kind": "analysis", "symbol": order[0], "key": f"analysis:{order[0]}", "name": order[0], "more": order[1:1 + TRIES],
-                              "dir": str(youtube.ROOT / "data" / "shorts" / ch["id"] / f"analysis-{order[0]}")}
+                              "dir": jobdir(ch, f"analysis-{order[0]}")}
                 return AgentResult("done", "FOUND", f"{order[0]}: fundamental analysis (release {day})")
             if lesson and force.get("topic"):                        # a script or test asked for one topic: no result to fall back on
                 ctx["job"] = {"kind": "lesson", "key": f"lessonnight:{day}", "day": day, "name": "finance lesson", "topic": force["topic"], "fallback": None}
                 return AgentResult("done", "FOUND", f"finance lesson: {force['topic']}")
             days = int(ch.get("within_days") or 4)
-            filed = await nse.recent(c, days)
+            named = kind == "result" and force.get("symbol")         # a script named the company: its newest result, however long ago and whether or not it was filmed
+            filed = await nse.recent(c, 30 if named else days)
+            days = 30 if named else days
         later = "" if lesson else " (a topic day; lessons are switched off, so a result)" if kind == "topic" else ""
         fresh = time.time() - days * 86400
         picks: list[dict] = []
         for f in filed:
             q, sym = nse.quarter(f["end"]), f["symbol"].upper()
-            if sym in symbols and nse.filed_at(f["filed"]).timestamp() > fresh and done_at(store, f"{sym}:{q}") is None and not any(p["key"] == f"{sym}:{q}" for p in picks):
+            if named and sym != force["symbol"].upper():
+                continue
+            if sym in symbols and nse.filed_at(f["filed"]).timestamp() > fresh and (named or done_at(store, f"{sym}:{q}") is None) and not any(p["key"] == f"{sym}:{q}" for p in picks):
                 picks.append({"kind": "result", "symbol": sym, "quarter": q, "key": f"{sym}:{q}", "name": f["name"], "end": f["end"].isoformat(),
-                              "dir": str(youtube.ROOT / "data" / "shorts" / ch["id"] / f"{f['end'].isoformat()}-{sym}-{q.replace(' ', '')}")})
+                              "dir": jobdir(ch, f"{f['end'].isoformat()}-{sym}-{q.replace(' ', '')}")})
                 if len(picks) == CANDIDATES:
                     break
         if lesson:                                                   # the Analyst picks the topic; if no lesson can be made it makes tonight's first result instead
@@ -319,7 +341,7 @@ class ResultsScout(MCrew):
         """The job for a pre-market or post-market Short: only on an NSE trading day (a forced run skips that check), once per Indian date. None = nothing due."""
         store, day = ctx["store"], now.astimezone(IST).date()
         key, lkey = f"{due}:{day.isoformat()}", f"lesson_short:{due}:{day.isoformat()}"
-        if store.kv_has(DONE, key) or store.kv_has(DONE, lkey):
+        if not forced and (store.kv_has(DONE, key) or store.kv_has(DONE, lkey)):
             return None
         if not forced:
             holidays = set()
@@ -329,10 +351,10 @@ class ResultsScout(MCrew):
             if not world.trading_day(day, holidays):
                 if self.ch.get("lesson_shorts"):                     # the market is shut: a lesson Short takes the slot
                     ctx["job"] = {"kind": "lesson_short", "key": lkey, "window": due, "date": day.isoformat(), "name": f"lesson {due} {day:%d %b}", "topic": None,
-                                  "dir": str(youtube.ROOT / "data" / "shorts" / self.ch["id"] / f"{day.isoformat()}-lesson-{REPORTS[due]}")}
+                                  "dir": jobdir(self.ch, f"{day.isoformat()}-lesson-{REPORTS[due]}")}
                     return AgentResult("done", "FOUND", f"lesson Short for {day:%a %d %b} ({'morning' if due == 'premarket' else 'evening'}; the market is shut)")
                 return AgentResult("idle", "NO MARKET", f"{day:%a %d %b} is not an NSE trading day: no {due} update")
-        ctx["job"] = {"kind": due, "key": key, "date": day.isoformat(), "name": f"{due} {day:%d %b}", "dir": str(youtube.ROOT / "data" / "shorts" / self.ch["id"] / f"{day.isoformat()}-{due}")}
+        ctx["job"] = {"kind": due, "key": key, "date": day.isoformat(), "name": f"{due} {day:%d %b}", "dir": jobdir(self.ch, f"{day.isoformat()}-{due}")}
         return AgentResult("done", "FOUND", f"{due} update for {day:%d %b}")
 
 
@@ -448,7 +470,7 @@ class MarketAnalyst(MCrew):
                 f, rows, price = await gather(c, sym, lag)
                 if f and len(rows) >= fundamentals.minimum(f):
                     job.update(symbol=sym, key=f"analysis:{sym}", name=f["name"], fundamentals=f, ratios=rows, price=price,
-                               dir=str(youtube.ROOT / "data" / "shorts" / self.ch["id"] / f"analysis-{sym}-{f['ttm_to']}"))
+                               dir=jobdir(self.ch, f"analysis-{sym}-{f['ttm_to']}"))
                     return AgentResult("done", "READ", f"{f['name']}: {len(rows)} ratios from the filings" + ("" if price else ", no price"))
                 skip(store, f"analysis:{sym}", "too few ratios")
                 tried.append(sym)
@@ -491,7 +513,7 @@ class TanglishWriter(MCrew):
                        deck=out["deck"], lines=out["lines"], kept=out["kept"], proposed=out["proposed"], dropped=out["dropped"], concept=out["concept"], angle=out["angle"],
                        new_words=out["new_words"], steps=out["steps"])
             if not short:
-                job["dir"] = str(youtube.ROOT / "data" / "shorts" / self.ch["id"] / f"lesson-{tp['id']}-{job['day']}")
+                job["dir"] = jobdir(self.ch, f"lesson-{tp['id']}-{job['day']}")
             if self.ch.get("voice_engine", "clone") == "clone":              # the same safety net as every video: a fixed line the voice would garble is a bug to see in the test, not here
                 back = [ln["say"] for ln in job["lines"] if clone.unspelt(ln["say"])]
                 if back:
@@ -683,11 +705,12 @@ class SlideEditor(MCrew):
         has = {i["key"] for r in data["regions"] for i in r["items"]}
         tags = ["#StockMarketTamil", "#TamilFinance", "#Nifty", "#GIFTNifty" if kind == "premarket" else "#Sensex"]
         ctx["store"].kv_put(youtube.LOG, Path(job["dir"]).name, {
-            "channel": ch["id"], "status": "ready", "format": "short", "kind": kind, "made": time.time(), "title": self.report_title(kind, data["date"]),
+            "channel": ch["id"], **stamp(job), "format": "short", "kind": kind, "made": time.time(), "title": self.report_title(kind, data["date"]),
             "summary": self.report_summary(kind, data), "hashtags": tags, "script": " ".join(ln["say"] for ln in job["lines"]), "seconds": round(seconds, 1), "file": str(final),
             "source": {"url": "https://www.nseindia.com/", "title": "NSE, Yahoo Finance"}, "date": data["date"].isoformat(), "report": world.plain(data), "keywords": [], "credits": [],
             "music": "", "original": False, "classic": None, "voice": ch.get("voice_engine", "clone"), "voice_qa": job.get("voice_qa"), "model_lines": 0, "indices": sorted(has)})
-        ctx["store"].kv_put(DONE, job["key"], {"at": time.time(), "file": str(final)})
+        if not job.get("review"):                                    # a review video is not "the day's": the real job of the day is still to be made
+            ctx["store"].kv_put(DONE, job["key"], {"at": time.time(), "file": str(final)})
         return AgentResult("done", "CUT", f"{youtube.clock(seconds)} {kind} Short for {data['date']:%d %b}")
 
     async def lesson(self, ctx: dict, job: dict) -> AgentResult:
@@ -705,14 +728,16 @@ class SlideEditor(MCrew):
         for d in job["dropped"]:
             why[d["why"]] = why.get(d["why"], 0) + 1
         ctx["store"].kv_put(youtube.LOG, work.name, {
-            "channel": ch["id"], "status": "ready", "format": "short" if short else "long", "kind": job["kind"], "made": time.time(), "title": job["title"],
+            "channel": ch["id"], **stamp(job), "format": "short" if short else "long", "kind": job["kind"], "made": time.time(), "title": job["title"],
             "summary": lessons.summary(tp, job["pages"], job["title"], short, DISCLAIMER), "hashtags": tags, "script": " ".join(ln["say"] for ln in job["lines"]),
             "source": {"url": job["pages"][0]["url"], "title": job["pages"][0]["label"]}, "seconds": round(seconds, 1), "file": str(final), "keywords": [], "credits": [], "music": "",
             "original": False, "classic": None, "voice": ch.get("voice_engine", "clone"), "voice_qa": job.get("voice_qa"), "model_lines": job["kept"], "topic": tp["id"],
             "topic_title": tp["title"], "concept": job.get("concept") or None, "sources": [{"label": p["label"], "url": p["url"]} for p in job["pages"]], "inspired": job["inspired"],
             "lines_proposed": job["proposed"], "lines_dropped": len(job["dropped"]), "dropped_why": why, "angle": job.get("angle") or None, "new_words": job.get("new_words") or {},
             **({"date": job["date"], "window": job["window"]} if short else {"thumb": thumb})})
-        if short:
+        if job.get("review"):
+            pass
+        elif short:
             ctx["store"].kv_put(DONE, job["key"], {"at": time.time(), "file": str(final)})
             old = ctx["store"].kv_get(DONE, f"lessonshort:{tp['id']}") or {}
             ctx["store"].kv_put(DONE, f"lessonshort:{tp['id']}", {"at": time.time(), "concepts": [*(old.get("concepts") or []), job.get("concept") or tp["title"]]})
@@ -753,13 +778,14 @@ class SlideEditor(MCrew):
                 "reasons": [{k: r[k] for k in ("metric", "direction", "point", "quote", "doc")} for r in job.get("reasons") or []], "news": news_kept,
                 "key_ratios": [{k: r[k] for k in ("key", "label", "value", "unit", "note")} for r in job.get("key_ratios") or []]}
         ctx["store"].kv_put(youtube.LOG, Path(job["dir"]).name, {
-            "channel": ch["id"], "status": "ready", "format": "long", "kind": job.get("kind", "result"), "made": time.time(), "title": title, "summary": summary,
+            "channel": ch["id"], **stamp(job), "format": "long", "kind": job.get("kind", "result"), "made": time.time(), "title": title, "summary": summary,
             "hashtags": tags, "script": " ".join(ln["say"] for ln in job["lines"]), "source": source, "seconds": round(seconds, 1),
             "file": str(final), "symbol": job["symbol"], "quarter": quarter, "keywords": [], "credits": [], "music": "", "original": False, "classic": None,
             "voice": ch.get("voice_engine", "clone"), "voice_qa": job.get("voice_qa"), "model_lines": job["kept"], "thumb": thumb,
             "new_words": tamil_say.learned_in(" ".join(ln["say"] for ln in job["lines"])),
             "logo": {k: logo[k] for k in ("source", "licence", "artist") if logo.get(k)} if logo else None, **extra})
-        ctx["store"].kv_put(DONE, job["key"], {"at": time.time(), "file": str(final)})
+        if not job.get("review"):
+            ctx["store"].kv_put(DONE, job["key"], {"at": time.time(), "file": str(final)})
         return AgentResult("done", "CUT", f"{youtube.clock(seconds)} video for {job['symbol']} {quarter}")
 
 
@@ -772,7 +798,7 @@ class MarketUploader(youtube.Uploader):
     async def run(self, ctx: dict) -> AgentResult:
         ch, store, bus = self.ch, ctx["store"], ctx["bus"]
         mine = [v for v in store.kv_list(youtube.LOG) if v.get("channel") == ch["id"]]
-        ready = [v for v in mine if v.get("status") == "ready" and Path(v.get("file") or "").exists()]
+        ready = [v for v in mine if (v.get("status") == "ready" or (v.get("status") == "review" and v.get("review") and not v.get("video_id"))) and Path(v.get("file") or "").exists()]
         owed = [v for v in mine if v.get("status") == "awaiting" and v.get("approved") and v.get("video_id")]
         if not ready and not owed:
             return AgentResult("idle", "IDLE", "Nothing to upload")
@@ -805,6 +831,12 @@ class MarketUploader(youtube.Uploader):
                         log.warning("market: thumbnail upload failed (%s)", e)
                 key = rec.pop("_key")
                 rec.pop("_ts", None)
+                if rec.get("review"):                          # for Mani to watch: private, no release time, no approval; it stays `review` until he deletes it on YouTube
+                    rec.update(status="review", video_id=out["id"], url=f"https://youtu.be/{out['id']}", uploaded=time.time(), publish_at=None)
+                    store.kv_put(youtube.LOG, key, rec)
+                    bus.say(f"{ch['name']} · “{rec['title']}” is uploaded as private for your review")
+                    done.append(f"“{rec['title']}” uploaded private for review")
+                    continue
                 if rec.get("kind") in youtube.SHORT_KINDS:     # a report Short: `report_privacy` scheduled goes public by itself; one too late for its news stays private, "stale"
                     stale = youtube.short_when(rec, youtube._now()) is None        # (a lesson Short is never published without approval, only held back when it is stale)
                     if stale or (ch["report_privacy"] == "scheduled" and rec["kind"] in youtube.REPORT_KINDS):
@@ -819,6 +851,12 @@ class MarketUploader(youtube.Uploader):
                         continue
                 rec.update(status="awaiting", video_id=out["id"], url=f"https://youtu.be/{out['id']}", uploaded=time.time(), publish_at=None)
                 store.kv_put(youtube.LOG, key, rec)
+                if ch["privacy"] == "scheduled" and rec.get("format") == "long" and rec.get("kind") not in youtube.LESSON_KINDS:
+                    # Mani, 2026-10-14, after reviewing one of every kind: results and analysis go out with no review, at the next 10:00 IST slot
+                    said = await youtube.publish_approved(ctx, ch, key, rec, self.opts.get("client_factory"))
+                    bus.say(f"{ch['name']} · “{rec['title']}”: {said}")
+                    done.append(f"“{rec['title']}” uploaded, {said[0].lower() + said[1:]}")
+                    continue
                 request_approval(ctx, self.name, f"Publish: {rec['title']}", {
                     "kind": "yt_publish", "key": f"yt_publish:{out['id']}", "channel": ch["id"], "record": key, "video_id": out["id"],
                     "url": f"https://studio.youtube.com/video/{out['id']}/edit", "watch": f"https://youtu.be/{out['id']}", "title": rec["title"], "summary": rec["summary"], "seconds": rec["seconds"],
