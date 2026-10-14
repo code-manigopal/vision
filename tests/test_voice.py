@@ -125,3 +125,16 @@ def test_while_the_local_model_is_set_aside_no_request_reaches_lm_studio(monkeyp
         assert not lmstudio.set_aside() and await llm.local_available()
     asyncio.run(go())
     assert len(calls) == 1                                  # only the check after the block reached the local server
+
+
+def test_a_stuck_recogniser_gets_one_second_listen_before_a_line_fails(monkeypatch):
+    monkeypatch.setattr(listen, "silences", lambda wav: {"lead": 0.0, "tail": 0.0, "gap": 0.2})
+    said = "நம்ம ச்சேனல சப்ஸ்க்ரைப் பண்ணுங்க"
+    calls = []
+
+    def hear(wav, temperature=0.0):
+        calls.append(temperature)
+        return "நம்ம்த்துத்துத்துத்துத்துத்து" if temperature == 0.0 else said
+    assert listen.check(Path("x.wav"), said, hear=hear)["ok"] and calls == [0.0, 0.2]
+    calls.clear()
+    assert not listen.check(Path("x.wav"), said, hear=lambda wav, temperature=0.0: calls.append(temperature) or "வேற ஏதோ")["ok"] and calls == [0.0, 0.2]

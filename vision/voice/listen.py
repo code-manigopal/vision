@@ -39,9 +39,9 @@ def score(say: str, heard: str) -> float:
     return round(difflib.SequenceMatcher(None, a, b, autojunk=False).ratio(), 3) if a and b else 0.0
 
 
-def heard(wav: Path, model: str = MODEL) -> str:
+def heard(wav: Path, model: str = MODEL, temperature: float = 0.0) -> str:
     import mlx_whisper
-    return mlx_whisper.transcribe(str(wav), path_or_hf_repo=model, language="ta", condition_on_previous_text=False)["text"].strip()
+    return mlx_whisper.transcribe(str(wav), path_or_hf_repo=model, language="ta", condition_on_previous_text=False, temperature=temperature)["text"].strip()
 
 
 def silences(wav: Path, run=subprocess.run) -> dict:
@@ -61,6 +61,11 @@ def silences(wav: Path, run=subprocess.run) -> dict:
 def check(wav: Path, say: str, hear=heard) -> dict:
     s = silences(wav)
     sc = score(say, hear(wav))
+    if sc < MIN_SCORE:                                  # Whisper can loop on one syllable ("த்துத்துத்து...", seen 2026-10-14 on a good line that then scored 0.85):
+        try:                                            # a low score gets one second listen, slightly less greedy, and the better of the two counts
+            sc = max(sc, score(say, hear(wav, temperature=0.2)))
+        except TypeError:                               # a listener that takes no temperature (tests' fakes)
+            pass
     why = [f"heard only {sc:.2f} of the line (needs {MIN_SCORE})"] * (sc < MIN_SCORE) + [f"a {s['gap']} s hole inside the line"] * (s["gap"] > MAX_GAP) \
         + [f"{max(s['lead'], s['tail'])} s of silence at an end"] * (max(s["lead"], s["tail"]) > MAX_EDGE)
     return {"ok": not why, "score": sc, **s, "why": "; ".join(why)}
