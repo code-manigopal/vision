@@ -13,7 +13,7 @@ from zoneinfo import ZoneInfo
 import httpx
 import pytest
 from PIL import Image
-from test_market_crew import RAW, tone
+from test_market_crew import RAW, thumbnailer, tone
 
 from vision.agents import Director, Master, Stage
 from vision.bus import EventBus, Store
@@ -661,7 +661,7 @@ def crew_env(tmp_path, monkeypatch, now, kind="topic", model=None, topics=(TP, T
 
     async def nap(s):
         return None
-    d = Director(ch["director"], market_crew.crew(ch, client_factory=web(state), synth=tone, pictures=pictures, transcript_fetch=tx, sleep=nap), reporter="Market Analytics")
+    d = Director(ch["director"], market_crew.crew(ch, client_factory=web(state), synth=tone, pictures=pictures, thumbnailer=thumbnailer, transcript_fetch=tx, sleep=nap), reporter="Market Analytics")
     m = Master("youtube", "YOUTUBE MANAGER", [Stage("CHANNELS", [d])], reporter=ch["director"], mode="live")
     cfg = Config(masters={"youtube": {"mode": "live", "options": {"channels": [full]}}})
     m.services.update(llm=model or Model(), cfg=cfg)
@@ -681,7 +681,7 @@ def test_a_topic_night_makes_a_lesson_from_the_official_page_and_it_always_waits
         assert [crew[n]["status"] for n in ("Results Scout", "Market Analyst", "Tanglish Writer", "Voice Clone", "Slide Editor", "Market Uploader")] == ["done"] * 6, crew
         rec, = store.kv_list(youtube.LOG)
         assert rec["kind"] == "lesson" and rec["format"] == "long" and rec["status"] == "awaiting" and rec["topic"] == "fd-test" and rec["title"] == "How does a bank FD work?"
-        assert rec["sources"] == [{"label": "RBI FAQ on deposits", "url": "https://official.test/fd"}] and rec["lines_dropped"] == 0 and rec["voice"] == "clone"
+        assert rec["sources"] == [{"label": "RBI FAQ on deposits", "url": "https://official.test/fd"}] and rec["lines_dropped"] == 0 and rec["voice"] == "clone" and rec["thumb"].endswith("thumb.jpg")
         assert [i["title"] for i in rec["inspired"]] == ["FD vs RD explained", "Fixed deposit rates explained"] and fetched == ["v1", "v2"] and len(state["gets"]) == 2
         assert rec["summary"].endswith(market_crew.DISCLAIMER) and "Sources:\nRBI FAQ on deposits: https://official.test/fd" in rec["summary"]
         assert "FD vs RD explained" not in rec["summary"] and "Good Channel" not in rec["summary"] and all("FD vs RD" not in ln["say"] for ln in SEEN["lines"])

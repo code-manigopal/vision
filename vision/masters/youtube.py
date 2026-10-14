@@ -1376,6 +1376,13 @@ def channel_for(cfg, channel_id: str) -> dict | None:
     return None
 
 
+async def set_thumbnail(c: httpx.AsyncClient, auth: dict, rec: dict) -> str:
+    """The record's thumb.jpg as the uploaded video's cover (thumbnails.set). A refusal (an unverified channel, a file over 2 MB) is a note, never an error."""
+    r = await c.post("https://www.googleapis.com/upload/youtube/v3/thumbnails/set", params={"videoId": rec["video_id"], "uploadType": "media"},
+                     content=Path(rec["thumb"]).read_bytes(), headers={**auth, "Content-Type": "image/jpeg"})
+    return "thumbnail set" if r.status_code == 200 else f"thumbnail failed: {_reason(r)}"
+
+
 async def publish_approved(ctx: dict, ch: dict, key: str, rec: dict, make=None) -> str:
     """Set an approved private video's release time on YouTube (videos.update) and mark it scheduled. No sign-in: it stays awaiting (and
     approved) and the channel's Uploader tries again on its next run."""
@@ -1472,9 +1479,7 @@ class Uploader(Crew):
         auth, notes = {"Authorization": f"Bearer {token}"}, []
         try:
             if thumb:
-                r = await c.post("https://www.googleapis.com/upload/youtube/v3/thumbnails/set", params={"videoId": rec["video_id"], "uploadType": "media"},
-                                 content=Path(thumb).read_bytes(), headers={**auth, "Content-Type": "image/jpeg"})
-                notes.append("thumbnail set" if r.status_code == 200 else f"thumbnail failed: {_reason(r)}")
+                notes.append(await set_thumbnail(c, auth, rec))
             if name:
                 slot = f"{ch['id']}:playlist:{name}"
                 pid = (store.kv_get(STATE, slot) or {}).get("id")

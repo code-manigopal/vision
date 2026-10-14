@@ -38,9 +38,9 @@ import httpx
 
 from ..agents import AgentResult, Stage, request_approval
 from ..config import secret
-from ..services import filings_text, lmstudio, markets, news, nse, oauth, world, yt_channels, yt_transcripts
+from ..services import filings_text, lmstudio, logos, markets, news, nse, oauth, world, yt_channels, yt_transcripts
 from ..voice import clone
-from . import fundamentals, lessons, market, slides, youtube
+from . import fundamentals, lessons, market, slides, thumbs, youtube
 from .tamil_say import numbers_as_words
 
 log = logging.getLogger("vision")
@@ -600,27 +600,27 @@ class SlideEditor(MCrew):
     def title(result: dict) -> str:
         figures = {"bank": "NII, Profit, NPA", "lender": "NII, Profit, Asset Quality", "life": "Premium, Profit, Solvency", "general": "Premium, Profit, Combined Ratio",
                    "plain": "Revenue, Profit, EPS"}.get(nse.shape(result), "Revenue, Profit, Margin")
-        return f"{market.short(result['name'])} {result['quarter']} Results தமிழில் | {figures} என்ன சொல்லுது?"[:100]
+        return thumbs.result_title(result) or f"{market.short(result['name'])} {result['quarter']} Results தமிழில் | {figures} என்ன சொல்லுது?"[:100]
 
     @staticmethod
-    def result_summary(result: dict, tags: list[str], docs: list[dict], headlines: list[dict]) -> str:
-        """The description: what it is, the hashtags, every source used (the filing, each company document, each news item), the disclaimer last."""
+    def result_summary(result: dict, tags: list[str], docs: list[dict], headlines: list[dict], logo: str = "") -> str:
+        """The description: what it is, the hashtags, every source used (the filing, each company document, each news item, the logo's page), the disclaimer last."""
         seen = [f"Source: NSE filing ({result['source']})"]
         seen += [f"Company document: {d['subject']}, {market.dmy(d['at'][:10])}, filed with NSE ({d['url']})" for d in docs]
-        seen += [f"News: {n['source']}, {market.dmy(n['at'])} ({n['link']})" for n in headlines]
+        seen += [f"News: {n['source']}, {market.dmy(n['at'])} ({n['link']})" for n in headlines] + [logo] * bool(logo)
         return (f"{market.short(result['name'])} {result['quarter']} results explained in Tanglish: the figures as the company filed them, nothing more.\n\n"
                 + " ".join(tags) + "\n\n" + "\n".join(seen) + f"\n{DISCLAIMER}")
 
     @staticmethod
-    def analysis_title(f: dict) -> str:
+    def analysis_title(f: dict, rows: list[dict] = ()) -> str:
         figures = {"bank": "ROE, NII, Profit", "lender": "ROE, NII, Profit", "life": "ROE, Premium, Solvency", "general": "ROE, Premium, Solvency",
                    "plain": "ROE, Profit, Margin"}.get(nse.shape(f), "ROE, Debt, Margin")
-        return f"{market.short(f['name'])} Fundamental Analysis தமிழில் | {figures} என்ன சொல்லுது?"[:100]
+        return thumbs.analysis_title(f, rows) or f"{market.short(f['name'])} Fundamental Analysis தமிழில் | {figures} என்ன சொல்லுது?"[:100]
 
     @staticmethod
-    def analysis_summary(f: dict, price: dict | None, tags: list[str]) -> str:
-        """The description: what it is, the hashtags, every source, the price's date and why it is old, and the disclaimer last."""
-        seen = [f"NSE filing: {u}" for u in f["sources"]] + ["Shareholding: NSE"]
+    def analysis_summary(f: dict, price: dict | None, tags: list[str], logo: str = "") -> str:
+        """The description: what it is, the hashtags, every source (and the logo's page), the price's date and why it is old, and the disclaimer last."""
+        seen = [f"NSE filing: {u}" for u in f["sources"]] + ["Shareholding: NSE"] + [logo] * bool(logo)
         if price:
             seen.append(f"Price as of {market.dmy(price['date'])} (Yahoo Finance), older than 30 days as SEBI's rule for educational content requires")
         return (f"{market.short(f['name'])} fundamental analysis in Tanglish: ratios worked out from the company's own NSE filings, information only.\n\n"
@@ -653,6 +653,25 @@ class SlideEditor(MCrew):
         return await asyncio.to_thread(slides.assemble, work, pngs, lines, job["spoken"], work / "final.mp4", faces=faces, pause=PAUSE, captions=caps,
                                        **({"size": slides.TALL} if tall else {}))
 
+    async def cover(self, job: dict, name: str, symbol: str = "", label: str = "") -> tuple[str, dict | None]:
+        """thumb.jpg for a long video: the hook from its own figures on the channel's slide look, with the company's Commons logo when it has one (services/logos.py).
+        Returns (path, the logo used or None); a failure gives ("", None) and the video goes out without a cover."""
+        hook, tone = thumbs.hook_for(job)
+        if not hook:
+            return "", None
+        work, logo = Path(job["dir"]), None
+        try:
+            if symbol:
+                async with self.client() as c:
+                    logo = await logos.find(c, symbol, market.short(name), **{k: self.opts[o] for k, o in (("root", "logo_root"), ("sleep", "sleep")) if self.opts.get(o)})
+            make = self.opts.get("thumbnailer") or slides.thumbnail
+            out = await asyncio.to_thread(make, work, work / "thumb.jpg", hook, market.short(name), (logo or {}).get("path", ""), self.ch["name"], label, tone)
+            (work / "thumb.html").unlink(missing_ok=True)
+            return str(out), logo
+        except Exception as e:  # noqa: BLE001
+            log.warning("market: no thumbnail (%s)", e)
+            return "", None
+
     async def report(self, ctx: dict, job: dict) -> AgentResult:
         """A pre-market or post-market Short: the vertical slides with the small disclaimer line on top, no disclaimer card or spoken disclaimer."""
         ch, work, data, kind = self.ch, Path(job["dir"]), job["data"], job["kind"]
@@ -680,6 +699,7 @@ class SlideEditor(MCrew):
         for f in work.iterdir():
             if f != final and f.name != "captions.srt":
                 shutil.rmtree(f, ignore_errors=True) if f.is_dir() else f.unlink(missing_ok=True)
+        thumb = "" if short else (await self.cover(job, tp["group"].title(), label="FINANCE BASICS"))[0]          # a Short has no custom cover
         tags = lessons.tags(tp, short) + (["#Shorts"] if short else [])
         why: dict[str, int] = {}
         for d in job["dropped"]:
@@ -691,7 +711,7 @@ class SlideEditor(MCrew):
             "original": False, "classic": None, "voice": ch.get("voice_engine", "clone"), "voice_qa": job.get("voice_qa"), "model_lines": job["kept"], "topic": tp["id"],
             "topic_title": tp["title"], "concept": job.get("concept") or None, "sources": [{"label": p["label"], "url": p["url"]} for p in job["pages"]], "inspired": job["inspired"],
             "lines_proposed": job["proposed"], "lines_dropped": len(job["dropped"]), "dropped_why": why, "angle": job.get("angle") or None, "new_words": job.get("new_words") or {},
-            **({"date": job["date"], "window": job["window"]} if short else {})})
+            **({"date": job["date"], "window": job["window"]} if short else {"thumb": thumb})})
         if short:
             ctx["store"].kv_put(DONE, job["key"], {"at": time.time(), "file": str(final)})
             old = ctx["store"].kv_get(DONE, f"lessonshort:{tp['id']}") or {}
@@ -715,19 +735,20 @@ class SlideEditor(MCrew):
         for f in work.iterdir():                                          # the pictures and working audio are large; the video, its captions file and its log entry stay
             if f != final and f.name != "captions.srt":
                 shutil.rmtree(f, ignore_errors=True) if f.is_dir() else f.unlink(missing_ok=True)
+        quarter = nse.quarter(date.fromisoformat(result["ttm_to"])) if analysis else job["quarter"]
+        thumb, logo = await self.cover(job, result["name"], job["symbol"], "FUNDAMENTALS" if analysis else f"{quarter} RESULTS")
+        credit = logos.credit(logo)
         if analysis:
-            quarter = nse.quarter(date.fromisoformat(result["ttm_to"]))
             tags = ["#" + job["symbol"], "#FundamentalAnalysis", "#StockMarketTamil", "#NSE", "#TamilFinance"]
-            title, summary = self.analysis_title(result), self.analysis_summary(result, job.get("price"), tags)
+            title, summary = self.analysis_title(result, job["ratios"]), self.analysis_summary(result, job.get("price"), tags, credit)
             source = {"url": result["sources"][0], "title": market.analysis_source(result)}
             extra = {"ratios": [{k: r[k] for k in ("key", "label", "value", "unit")} for r in job["ratios"]], "price_date": (job.get("price") or {}).get("date")}
         else:
-            quarter = job["quarter"]
             tags = ["#" + job["symbol"], "#" + result["quarter"].replace(" ", "") + "Results", "#StockMarketTamil", "#NSE", "#TamilFinance"]
             title = self.title(result)
             used = {r["doc"]["url"]: r["doc"] for r in job.get("reasons") or []}               # only a document a reason came from is credited
             news_kept = [{k: n.get(k) for k in ("title", "source", "link", "at")} for n in job.get("news") or []]
-            summary = self.result_summary(result, tags, list(used.values()), news_kept)
+            summary = self.result_summary(result, tags, list(used.values()), news_kept, credit)
             source, extra = {"url": result["source"], "title": market.source(result)}, {
                 "reasons": [{k: r[k] for k in ("metric", "direction", "point", "quote", "doc")} for r in job.get("reasons") or []], "news": news_kept,
                 "key_ratios": [{k: r[k] for k in ("key", "label", "value", "unit", "note")} for r in job.get("key_ratios") or []]}
@@ -735,7 +756,8 @@ class SlideEditor(MCrew):
             "channel": ch["id"], "status": "ready", "format": "long", "kind": job.get("kind", "result"), "made": time.time(), "title": title, "summary": summary,
             "hashtags": tags, "script": " ".join(ln["say"] for ln in job["lines"]), "source": source, "seconds": round(seconds, 1),
             "file": str(final), "symbol": job["symbol"], "quarter": quarter, "keywords": [], "credits": [], "music": "", "original": False, "classic": None,
-            "voice": ch.get("voice_engine", "clone"), "voice_qa": job.get("voice_qa"), "model_lines": job["kept"], **extra})
+            "voice": ch.get("voice_engine", "clone"), "voice_qa": job.get("voice_qa"), "model_lines": job["kept"], "thumb": thumb,
+            "logo": {k: logo[k] for k in ("source", "licence", "artist") if logo.get(k)} if logo else None, **extra})
         ctx["store"].kv_put(DONE, job["key"], {"at": time.time(), "file": str(final)})
         return AgentResult("done", "CUT", f"{youtube.clock(seconds)} video for {job['symbol']} {quarter}")
 
@@ -775,6 +797,11 @@ class MarketUploader(youtube.Uploader):
                                                             "The finished video is kept and goes up on a later run. Nothing to do.")
                     return AgentResult("wait", "UPLOAD LIMIT", "YouTube's daily upload limit reached; the video waits")
                 bus.clear_notice(f"youtube-limit-{ch['id']}")
+                if rec.get("format") == "long" and Path(rec.get("thumb") or "-").exists():          # a long video's cover (a Short cannot take one); a refusal is a note
+                    try:
+                        bus.say(f"{ch['name']} · “{rec['title']}”: " + await youtube.set_thumbnail(c, {"Authorization": f"Bearer {token}"}, {**rec, "video_id": out["id"]}))
+                    except (httpx.HTTPError, OSError) as e:
+                        log.warning("market: thumbnail upload failed (%s)", e)
                 key = rec.pop("_key")
                 rec.pop("_ts", None)
                 if rec.get("kind") in youtube.SHORT_KINDS:     # a report Short: `report_privacy` scheduled goes public by itself; one too late for its news stays private, "stale"

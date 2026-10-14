@@ -262,6 +262,63 @@ def pictures(deck: list[dict], lines: list[dict], work: Path, tall: bool = False
         drv.quit()
 
 
+# the cover of a long video, 1280x720: the slides' own paper, green pill and gold shadow, the hook in big type, the presenter at the bottom right; a company's logo only as a
+# small plain mark in a white card (never styled as the company's material)
+THUMB_CSS = """
+*{box-sizing:border-box;margin:0}
+body{width:1280px;height:720px;overflow:hidden;font-family:"Baloo Thambi 2","Mukta Malar","Tamil Sangam MN",sans-serif;color:#1b1b1b;position:relative;
+ background:#fbf8f1 linear-gradient(#e9e3d4 1px,transparent 1px) 0 0/100% 36px}
+.pill{position:absolute;left:60px;top:48px;max-width:780px;background:#14532d;color:#fff;font-size:44px;font-weight:700;padding:6px 34px;border-radius:12px;box-shadow:7px 7px 0 #f4b63f;white-space:nowrap;overflow:hidden}
+.tag{position:absolute;left:62px;top:150px;font:600 22px "JetBrains Mono",Menlo,monospace;color:#b42318;border:3px dashed #b42318;border-radius:9px;padding:4px 14px;transform:rotate(-2deg)}
+.hook{position:absolute;left:60px;top:215px;width:800px;font-weight:800;line-height:1.08;letter-spacing:-1px}
+.hook b{font-weight:800}.good{color:#1f9d55}.bad{color:#d92d20}.flat{color:#14532d}
+.logo{position:absolute;right:60px;top:44px;width:280px;height:150px;background:#fff;border:4px solid #1b1b1b;border-radius:18px;box-shadow:8px 8px 0 #f4b63f;display:flex;align-items:center;justify-content:center;padding:14px}
+.logo img{max-width:100%;max-height:100%;object-fit:contain}
+.mark{position:absolute;left:60px;bottom:26px;font-size:30px;font-weight:700;color:#14532d}
+.face{position:absolute;right:20px;bottom:0;width:360px;height:360px}.face svg{width:360px;height:360px}
+.m,.e{display:none}.m1 .mouth1,.e0 .eyes0{display:inline}
+"""
+
+
+def thumb_page(hook: str, name: str = "", logo: str = "", channel: str = "", label: str = "", tone: str = "flat") -> str:
+    """The cover as one page. `logo` is a file path or URL of the company's mark (a plain card, top right); without one the name carries the top-left pill alone.
+    The hook's figure takes the tone's colour (good green, bad red, flat green)."""
+    name = re.sub(r"\s+(Company|Corporation)$", "", name)
+    size = 150 if len(hook) <= 14 else 124 if len(hook) <= 20 else 100 if len(hook) <= 28 else 84
+    body = re.sub(r"(\d[\d.,]*%?)", rf'<b class="{tone}">\1</b>', html.escape(hook))
+    img = f'<div class="logo"><img src="{html.escape(logo) if "://" in logo else Path(logo).as_uri()}"></div>' if logo else ""
+    return (f'<!doctype html><html lang="ta"><meta charset="utf-8"><style>{THUMB_CSS}</style><body>'
+            + (f'<div class="pill" style="font-size:{44 if len(name) <= 26 else 36 if len(name) <= 34 else 30}px">{html.escape(name)}</div>' if name else "") + (f'<div class="tag">{html.escape(label)}</div>' if label else "")
+            + f'<div class="hook" style="font-size:{size}px">{body}</div>{img}<div class="mark">{html.escape(channel)}</div>'
+            f'<div class="face m1 e0">{FACE_SVG}</div></body></html>')
+
+
+def thumbnail(work: Path, out: Path, hook: str, name: str = "", logo: str = "", channel: str = "", label: str = "", tone: str = "flat") -> Path:
+    """Draws thumb_page in headless Chrome (the same path as the slides, so Tamil letters are shaped by the browser) and saves out as a JPEG 1280x720 under 2 MB."""
+    from io import BytesIO
+
+    from PIL import Image
+    from selenium import webdriver
+    work.mkdir(parents=True, exist_ok=True)
+    (work / "thumb.html").write_text(thumb_page(hook, name, logo, channel, label, tone), encoding="utf-8")
+    opts = webdriver.ChromeOptions()
+    opts.add_argument("--headless=new")
+    opts.add_argument("--hide-scrollbars")
+    drv = webdriver.Chrome(options=opts)
+    try:
+        drv.execute_cdp_cmd("Emulation.setDeviceMetricsOverride", {"width": 1280, "height": 720, "deviceScaleFactor": 1, "mobile": False})
+        drv.get((work / "thumb.html").as_uri())
+        drv.execute_async_script("var d=arguments[arguments.length-1];document.fonts.ready.then(()=>setTimeout(()=>d(1),300),()=>d(0))")
+        img = Image.open(BytesIO(base64.b64decode(drv.execute_cdp_cmd("Page.captureScreenshot", {"format": "png"})["data"]))).convert("RGB")
+    finally:
+        drv.quit()
+    for q in (92, 85, 75, 65):                                      # a thumbnail may be at most 2 MB
+        img.save(out, "JPEG", quality=q)
+        if out.stat().st_size < 2_000_000:
+            break
+    return out
+
+
 def _tokens(piece: str) -> list[str]:
     """The words of a piece, a unit kept with the number before it ("₹73,188 crore" is one token)."""
     out: list[str] = []

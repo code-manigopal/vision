@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+from pathlib import Path
 import re
 import shutil
 import subprocess
@@ -64,6 +65,17 @@ def web(yt):
             return httpx.Response(200, json=[{"exDate": (datetime.now() - timedelta(days=100)).strftime("%d-%b-%Y"), "subject": "Dividend - Rs 6 Per Share"}])
         if "finance/chart/SAMPLE.NS" in u:
             return httpx.Response(200, json=chart())
+        if yt.get("logo") and "commons.wikimedia.org" in u:                # the company's logo from Wikimedia Commons (mocked)
+            if req.url.params.get("list") == "search":
+                return httpx.Response(200, json={"query": {"search": [{"title": "File:Sample old logo.svg"}, {"title": "File:Sample Logo.svg"}]}})
+            return httpx.Response(200, json={"query": {"pages": {"1": {"title": "File:Sample Logo.svg", "imageinfo": [{
+                "url": "https://upload.wikimedia.org/x/Sample_Logo.svg", "descriptionurl": "https://commons.wikimedia.org/wiki/File:Sample_Logo.svg", "mime": "image/svg+xml",
+                "size": 120, "extmetadata": {"LicenseShortName": {"value": "Public domain"}, "Artist": {"value": "<a>Someone</a>"}}}]}}}})
+        if u.startswith("https://upload.wikimedia.org/"):
+            return httpx.Response(200, content=b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect width="10" height="10"/></svg>')
+        if "thumbnails/set" in u:
+            yt["thumb_set"] = (req.url.params["videoId"], len(req.content))
+            return httpx.Response(200, json={})
         if "upload/youtube/v3/videos" in u:
             yt["meta"] = json.loads(req.content)
             return httpx.Response(200, headers={"Location": "https://upload.test/session1"})
@@ -94,6 +106,15 @@ async def tone(text, stem):
 
 
 SEEN = []
+THUMBS = []
+
+
+def thumbnailer(work, out, hook, name, logo, channel, label, tone):
+    """Stands in for the Chrome drawing of the cover: records what it was asked to draw and writes a small JPEG."""
+    THUMBS.append({"hook": hook, "name": name, "logo": logo, "channel": channel, "label": label, "tone": tone})
+    work.mkdir(parents=True, exist_ok=True)
+    Image.new("RGB", (1280, 720), (250, 248, 241)).save(out, "JPEG")
+    return out
 
 
 def pictures(deck, lines, work, **frame):
@@ -151,7 +172,7 @@ def build_env(tmp_path, monkeypatch, raw, analysis=False):
     monkeypatch.setattr(oauth, "access_token", token)
     yt = {"analysis": analysis}
     ch = youtube.channel(raw)
-    d = Director(ch["director"], market_crew.crew(ch, client_factory=web(yt), synth=tone, pictures=pictures), reporter="Market Analytics")
+    d = Director(ch["director"], market_crew.crew(ch, client_factory=web(yt), synth=tone, pictures=pictures, thumbnailer=thumbnailer, logo_root=tmp_path / "logos"), reporter="Market Analytics")
     m = Master("youtube", "YOUTUBE MANAGER", [Stage("CHANNELS", [d])], reporter=ch["director"], mode="live")
     cfg = Config(masters={"youtube": {"mode": "live", "options": {"channels": [raw]}}})
     m.services.update(llm=NoWriter(), cfg=cfg)
@@ -169,13 +190,20 @@ def made(env):
 
 @FFMPEG
 def test_a_night_makes_one_video_uploads_it_private_and_asks_for_approval(env):
+    env["yt"]["logo"] = True
+    THUMBS.clear()
     report, log = made(env)
     crew = {a["name"]: a for a in env["bus"].state["masters"]["youtube"]["agents"]}
     assert [crew[n]["status"] for n in ("Results Scout", "Market Analyst", "Tanglish Writer", "Voice Clone", "Slide Editor", "Market Uploader")] == ["done"] * 6, crew
     rec, = log
     assert rec["status"] == "awaiting" and rec["kind"] == "result" and rec["format"] == "long" and (rec["symbol"], rec["quarter"]) == ("SAMPLE", "Q2 FY27")
-    assert rec["title"] == "Sample Q2 FY27 Results தமிழில் | Revenue, Profit, Margin என்ன சொல்லுது?" and rec["video_id"] == "vid1" and rec["publish_at"] is None
-    assert rec["summary"].endswith(f"Source: NSE filing ({rec['source']['url']})\n{market_crew.DISCLAIMER}") and rec["source"]["url"].endswith("now.xml")
+    assert rec["title"].startswith("Sample Q2 FY27 Results | Profit ") and rec["title"].endswith("| தமிழில்") and len(rec["title"]) <= 100 and rec["video_id"] == "vid1" and rec["publish_at"] is None
+    credit = "Logo: https://commons.wikimedia.org/wiki/File:Sample_Logo.svg (Public domain)"                 # the logo's page is a source, the disclaimer stays last
+    assert rec["summary"].endswith(f"Source: NSE filing ({rec['source']['url']})\n{credit}\n{market_crew.DISCLAIMER}") and rec["source"]["url"].endswith("now.xml")
+    thumb, = THUMBS                                                       # the cover: the hook from the figures, the company, the cached Commons logo; set on the video after the upload
+    assert rec["thumb"].endswith("thumb.jpg") and Path(rec["thumb"]).exists() and thumb["hook"].startswith("Profit ") and thumb["name"] == "Sample" and thumb["label"] == "Q2 FY27 RESULTS"
+    assert thumb["logo"].endswith("SAMPLE.svg") and Path(thumb["logo"]).exists() and rec["logo"] == {"source": "https://commons.wikimedia.org/wiki/File:Sample_Logo.svg", "licence": "Public domain", "artist": "Someone"}
+    assert env["yt"]["thumb_set"][0] == "vid1" and env["yt"]["thumb_set"][1] > 0
     assert rec["script"].startswith("வணக்கம்") or "investment recommendation" in rec["script"]
     status = env["yt"]["meta"]["status"]
     assert status["privacyStatus"] == "private" and "publishAt" not in status and env["yt"]["meta"]["snippet"]["categoryId"] == "27"
@@ -183,7 +211,7 @@ def test_a_night_makes_one_video_uploads_it_private_and_asks_for_approval(env):
     ap, = env["store"].pending_approvals()
     assert ap["payload"]["kind"] == "yt_publish" and ap["payload"]["key"] == "yt_publish:vid1" and ap["title"].startswith("Publish: Sample Q2 FY27")
     assert "Mani Market Tamil: 1 awaiting your approval" in report and env["store"].kv_has(market_crew.DONE, "SAMPLE:Q2 FY27")
-    assert [p.name for p in (env["tmp"] / "data" / "shorts" / "manimarket").glob("*/*")] == ["final.mp4"]
+    assert sorted(p.name for p in (env["tmp"] / "data" / "shorts" / "manimarket").glob("*/*")) == ["final.mp4", "thumb.jpg"]
     assert not env["bus"].state["notices"]
     again, log = made(env)                                   # the same company is not filmed twice; the awaiting video is left alone
     assert len(log) == 1 and log[0]["status"] == "awaiting" and "1 awaiting your approval" in again
@@ -335,14 +363,14 @@ def test_an_analysis_night_makes_a_video_from_the_filings_with_only_an_old_price
     rec, = log
     sym = rec["symbol"]
     assert rec["status"] == "awaiting" and rec["kind"] == "analysis" and rec["format"] == "long" and sym in ("SAMPLE", "OTHER") and rec["quarter"] == "Q1 FY27"
-    assert rec["title"] == f"{'Sample' if sym == 'SAMPLE' else 'Sample'} Fundamental Analysis தமிழில் | ROE, Debt, Margin என்ன சொல்லுது?"
+    assert rec["title"].startswith("Sample Fundamental Analysis | ROE ") and rec["title"].endswith("எப்படி? | தமிழில்") and Path(rec["thumb"]).exists()
     assert rec["summary"].endswith(market_crew.DISCLAIMER) and "Shareholding: NSE" in rec["summary"] and "nsearchives.test/f_jun26.xml" in rec["summary"]
     day = rec["price_date"]
     assert datetime.strptime(day, "%Y-%m-%d").date() <= datetime.now().date() - timedelta(days=31)
     assert f"Price as of {datetime.strptime(day, '%Y-%m-%d').strftime('%d %b %Y')} (Yahoo Finance), older than 30 days as SEBI's rule" in rec["summary"]
     assert "9999" not in rec["summary"] + rec["script"] and all(r["value"] < 9000 for r in rec["ratios"] if r["key"] in ("price", "high")) and "price" in {r["key"] for r in rec["ratios"]}
     assert env["yt"]["meta"]["snippet"]["description"] == rec["summary"] and env["store"].kv_has(market_crew.DONE, f"analysis:{sym}")
-    assert [p.parent.name for p in (env["tmp"] / "data" / "shorts" / "manimarket").glob("*/*")] == ["analysis-SAMPLE-2026-06-30"] or sym == "OTHER"
+    assert sorted({p.parent.name for p in (env["tmp"] / "data" / "shorts" / "manimarket").glob("*/*")}) == ["analysis-SAMPLE-2026-06-30"] or sym == "OTHER"
     ap, = env["store"].pending_approvals()
     assert ap["payload"]["kind"] == "yt_publish" and ap["title"].startswith("Publish: Sample Fundamental Analysis")
 
