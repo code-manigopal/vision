@@ -55,7 +55,7 @@ SOUNDS = {
     "insurance": "இன்ஷூரன்ஸ்", "reinsurance": "ரீஇன்ஷூரன்ஸ்", "policy": "பாலிசி", "policies": "பாலிசீஸ்", "claim": "க்ளெய்ம்", "claims": "க்ளெய்ம்ஸ்",
     "underwriting": "அண்டர்ரைட்டிங்", "irdai": "ஐஆர்டிஏஐ", "lender": "லெண்டர்", "nbfc": "என்பிஎஃப்சி", "aum": "ஏயுஎம்", "year": "இயர்",
     # the pre-market and post-market Shorts: index names as a Tamil speaker says them, abbreviations run together; "S&P 500" is a phrase so its & and 500 are not read as a number
-    "bank nifty": "பேங்க் நிஃப்டி", "gift nifty": "கிஃப்ட் நிஃப்டி", "sgx nifty": "எஸ்ஜிஎக்ஸ் நிஃப்டி", "nifty": "நிஃப்டி", "sensex": "சென்செக்ஸ்", "s&p 500": "எஸ் அண்ட் பி ஃபைவ் ஹண்ட்ரட்",
+    "bank nifty": "பேங்க் நிஃப்டி", "gift nifty": "கிஃப்ட் நிஃப்டி", "sgx nifty": "எஸ்ஜிஎக்ஸ் நிஃப்டி", "nifty": "நிஃப்டி", "sensex": "ஸென்செக்ஸ்", "s&p 500": "எஸ் அண்ட் பி ஃபைவ் ஹண்ட்ரட்",
     "dow jones": "டவ் ஜோன்ஸ்", "nasdaq": "நாஸ்டாக்", "nikkei": "நிக்கே", "kospi": "காஸ்பி", "hang seng": "ஹாங் செங்", "ftse": "ஃபுட்ஸி", "dax": "டாக்ஸ்", "cac": "காக்",
     "points": "பாயிண்ட்ஸ்", "us": "யூஎஸ்", "europe": "யூரோப்", "asia": "ஏஷியா", "pre-market": "ப்ரீ மார்க்கெட்", "post-market": "போஸ்ட் மார்க்கெட்",
     "open": "ஓபன்", "subscribe": "சப்ஸ்க்ரைப்", "update": "அப்டேட்",
