@@ -688,6 +688,7 @@ def test_a_topic_night_makes_a_lesson_from_the_official_page_and_it_always_waits
         meta = state["meta"]
         assert meta["status"]["privacyStatus"] == "private" and "publishAt" not in meta["status"] and meta["snippet"]["description"] == rec["summary"]
         ap, = store.pending_approvals()
+        assert ap["payload"]["video"] == "lesson" and ap["payload"]["sources"] == rec["sources"] and ap["payload"]["watch"].startswith("https://youtu.be/")
         assert ap["payload"]["kind"] == "yt_publish" and any(b.startswith("source: RBI FAQ on deposits") for b in ap["payload"]["backed"]) \
             and any(b.startswith("inspired by: FD vs RD explained") for b in ap["payload"]["backed"])
         assert store.kv_has(market_crew.DONE, "lesson:fd-test") and SEEN["tall"] is False and SEEN["deck"][0] == market.NOTICE

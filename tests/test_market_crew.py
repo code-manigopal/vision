@@ -210,6 +210,7 @@ def test_a_night_makes_one_video_uploads_it_private_and_asks_for_approval(env):
     assert env["yt"]["meta"]["snippet"]["description"] == rec["summary"] and "#SAMPLE" in rec["summary"]
     ap, = env["store"].pending_approvals()
     assert ap["payload"]["kind"] == "yt_publish" and ap["payload"]["key"] == "yt_publish:vid1" and ap["title"].startswith("Publish: Sample Q2 FY27")
+    assert ap["payload"]["watch"] == "https://youtu.be/vid1" and ap["payload"]["video"] == "result" and ap["payload"]["new_words"] == {} and ap["payload"]["sources"] == [] and ap["payload"]["seconds"] == rec["seconds"]
     assert "Mani Market Tamil: 1 awaiting your approval" in report and env["store"].kv_has(market_crew.DONE, "SAMPLE:Q2 FY27")
     assert sorted(p.name for p in (env["tmp"] / "data" / "shorts" / "manimarket").glob("*/*")) == ["final.mp4", "thumb.jpg"]
     assert not env["bus"].state["notices"]

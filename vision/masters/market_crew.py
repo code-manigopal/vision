@@ -40,7 +40,7 @@ from ..agents import AgentResult, Stage, request_approval
 from ..config import secret
 from ..services import filings_text, lmstudio, logos, markets, news, nse, oauth, world, yt_channels, yt_transcripts
 from ..voice import clone
-from . import fundamentals, lessons, market, slides, thumbs, youtube
+from . import fundamentals, lessons, market, slides, tamil_say, thumbs, youtube
 from .tamil_say import numbers_as_words
 
 log = logging.getLogger("vision")
@@ -757,6 +757,7 @@ class SlideEditor(MCrew):
             "hashtags": tags, "script": " ".join(ln["say"] for ln in job["lines"]), "source": source, "seconds": round(seconds, 1),
             "file": str(final), "symbol": job["symbol"], "quarter": quarter, "keywords": [], "credits": [], "music": "", "original": False, "classic": None,
             "voice": ch.get("voice_engine", "clone"), "voice_qa": job.get("voice_qa"), "model_lines": job["kept"], "thumb": thumb,
+            "new_words": tamil_say.learned_in(" ".join(ln["say"] for ln in job["lines"])),
             "logo": {k: logo[k] for k in ("source", "licence", "artist") if logo.get(k)} if logo else None, **extra})
         ctx["store"].kv_put(DONE, job["key"], {"at": time.time(), "file": str(final)})
         return AgentResult("done", "CUT", f"{youtube.clock(seconds)} video for {job['symbol']} {quarter}")
@@ -820,7 +821,8 @@ class MarketUploader(youtube.Uploader):
                 store.kv_put(youtube.LOG, key, rec)
                 request_approval(ctx, self.name, f"Publish: {rec['title']}", {
                     "kind": "yt_publish", "key": f"yt_publish:{out['id']}", "channel": ch["id"], "record": key, "video_id": out["id"],
-                    "url": f"https://studio.youtube.com/video/{out['id']}/edit", "title": rec["title"], "summary": rec["summary"], "seconds": rec["seconds"], "source": rec["source"]["url"],
+                    "url": f"https://studio.youtube.com/video/{out['id']}/edit", "watch": f"https://youtu.be/{out['id']}", "title": rec["title"], "summary": rec["summary"], "seconds": rec["seconds"],
+                    "source": rec["source"]["url"], "video": rec.get("kind"), "new_words": rec.get("new_words") or {}, "sources": rec.get("sources") or [],
                     "backed": [f"{r['metric']}: {r['point']} (\u201c{r['quote']}\u201d, {r['doc']['subject']})" for r in rec.get("reasons") or []] + [f"news: {n['title']} ({n['source']})" for n in rec.get("news") or []]
                     + [f"source: {x['label']} {x['url']}" for x in rec.get("sources") or []] + [f"inspired by: {i['title']} ({i['channel']})" for i in rec.get("inspired") or []]
                     + ([f"new words for the voice (check by ear): {', '.join(f'{k} = {v}' for k, v in rec['new_words'].items())}"] if rec.get("new_words") else [])})

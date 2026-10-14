@@ -2751,6 +2751,19 @@ class Component extends DCLogic {
           c.body = em.subject ? 'From their email: ' + em.subject + '\n\n' + (em.snippet || '') : ''; c.okLabel = 'Accept and book'; c.say = title + '.';
         } else if (p.kind === 'job_package') {
           c.rows = [R('Package', p.folder || 'not saved')]; c.link = p.url; c.linkLabel = 'Open posting'; c.body = 'The tailored résumé and cover letter are in the package folder. Approving marks it ready for you to submit; VISION never applies for you.';
+        } else if (p.kind === 'yt_publish') {
+          // a private upload waiting for a yes: what backs each statement (reasons with their quote and source, headlines with their publication), a lesson's official pages and the new words to check by ear
+          const KIND = { result: 'Quarterly results', analysis: 'Fundamental analysis', lesson: 'Finance lesson', lesson_short: 'Lesson Short', premarket: 'Pre-market Short', postmarket: 'Post-market Short' };
+          const nw = p.new_words && typeof p.new_words === 'object' ? p.new_words : {}, srcs = Array.isArray(p.sources) ? p.sources : [], secs = Math.round(Number(p.seconds) || 0);
+          const bk = (Array.isArray(p.backed) ? p.backed : []).filter((b) => !(srcs.length && /^source: /.test(b)) && !(Object.keys(nw).length && /^new words for the voice/.test(b)));
+          const play = p.watch || p.url, len = secs ? Math.floor(secs / 60) + ':' + pad(secs % 60) : '';
+          c.kick = 'DECISION · ' + mn + (KIND[p.video] ? ' · ' + KIND[p.video].toUpperCase() : ''); c.okLabel = 'Approve and schedule';
+          c.rows = [R('Video', KIND[p.video] || '—'), R('Length', len || '—'), R('Backed by', bk.length ? bk.length + (bk.length === 1 ? ' statement' : ' statements') : 'nothing recorded'), R('New words', Object.keys(nw).length || 'none')];
+          c.body = (bk.length ? 'BACKED BY\n' + bk.map((b) => '• ' + b).join('\n') : 'Nothing is recorded as backing this video.')
+            + (Object.keys(nw).length ? '\n\nNEW WORDS FOR THE VOICE (check by ear)\n' + Object.keys(nw).map((k) => '• ' + k + ' → ' + nw[k]).join('\n') : '');
+          c.link = play; c.linkLabel = 'Play';
+          c.say = title + '.' + (len ? ' It is ' + Math.floor(secs / 60) + ' minutes ' + (secs % 60) + ' seconds.' : '') + (bk.length ? ' ' + bk.length + (bk.length === 1 ? ' statement is' : ' statements are') + ' backed by a source.' : '');
+          c.atts = (p.watch && p.url ? [{ label: 'Studio ↗', open: () => window.open(p.url, '_blank') }] : []).concat(srcs.filter((x) => x && x.url).map((x) => ({ label: (x.label || x.url) + ' ↗', open: () => window.open(x.url, '_blank') })));
         }
         if (pv) Object.assign(c, { prevOpen: true, prevName: pv.name, prevSrc: pv.src, prevType: pv.type, prevSandbox: pv.sandbox });
         deck.push(c);

@@ -19,7 +19,10 @@ const live = {
       { id: 2, master: 'email', title: 'Reply to Anna: Meeting', payload: { kind: 'email_reply', draft: 'p:1' } },
       { id: 3, master: 'trading', title: 'Sell 352 EUR/USD @ ~1.12864', payload: { kind: 'trade', instrument: 'EUR_USD', units: -352, price: 1.12864, stop: 1.13258, tp: 1.12339, rating: 'Underweight', reason: 'Momentum is fading.', created: Date.now() / 1000 - 600 } },
       { id: 4, master: 'calendar', title: 'Meeting with Anna: Thu', payload: { kind: 'meeting_accept', start: '2026-10-08T14:00:00', end: '2026-10-08T14:30:00', attendees: ['anna@x.com'], account: 'personal', email: { subject: 'Meet?', snippet: 'Can we meet' } } },
-      { id: 5, master: 'jobs', title: 'Application package: Analyst @ Acme (fit 82)', payload: { kind: 'job_package', url: 'https://jobs/1', folder: 'data/applications/acme' } }],
+      { id: 5, master: 'jobs', title: 'Application package: Analyst @ Acme (fit 82)', payload: { kind: 'job_package', url: 'https://jobs/1', folder: 'data/applications/acme' } },
+      { id: 6, master: 'youtube', title: 'Publish: Acme Q2 FY27 Results | Profit 15% ஏறிருக்கு | தமிழில்', payload: { kind: 'yt_publish', video: 'result', seconds: 431.4, url: 'https://studio.youtube.com/video/vid9/edit', watch: 'https://youtu.be/vid9',
+        backed: ['revenue: Acme says demand held (“demand held in the quarter”, Press Release)', 'news: Acme Q2 profit rises (The Mint)', 'source: RBI FAQ on deposits https://rbi.test/fd', 'new words for the voice (check by ear): channel = ச்சேனல்'],
+        new_words: { channel: 'ச்சேனல்' }, sources: [{ label: 'RBI FAQ on deposits', url: 'https://rbi.test/fd' }] } }],
     boot: { active: false, done: 66, total: 66 }, telegram: { connected: true }, voice: {}, system: [{ id: 'cpu', label: 'CPU', pct: 10, hot: 80, detail: '' }] } };
 const SAMPLES = ['Episode 04', '28 flights', '1,840', 'Team standup', 'DEMO DATA', 'steps · avg', 'reminder 15 min', 'OANDA mismatch', '22 and cloudy', '7:00'];
 let fails = 0; const seen = new Set();
@@ -84,7 +87,7 @@ globalThis.fetch = async (url, opt) => { if (opt && opt.method === 'POST') { pos
 const dq = mk({ liveUp: true, live: live.full }); dq.speak = () => {};
 dq.renderVals(); dq.openDecide(2); dq.renderVals(); await wait(150); let dv = dq.renderVals(); await wait(30); dv = dq.renderVals();
 let dc = dv.deckCards.find((x) => x.center);
-if (dq.state.mode !== 'decide' || dv.deckCards.length !== 5 || !dc || !dc.showMail) fail('email decision card did not load the original', dq.state.mode, dv.deckCards.length, dc && dc.title);
+if (dq.state.mode !== 'decide' || dv.deckCards.length !== 6 || !dc || !dc.showMail) fail('email decision card did not load the original', dq.state.mode, dv.deckCards.length, dc && dc.title);
 else {
   if (!/Anna Lee/.test(dc.mailHead) || !/Thursday\?/.test(dc.mailBody) || !/Thursday works/.test(dc.draftBody)) fail('email card content wrong');
   if (dc.atts.length !== 2 || !/agenda\.pdf · 200 KB/.test(dc.atts[0].label)) fail('attachments not listed', JSON.stringify(dc.atts.map((x) => x.label)));
@@ -99,6 +102,14 @@ dc.demo(); dc = dq.renderVals().deckCards.find((x) => x.center); if (!dc.prevBox
 dq.deckGo(2); dc = dq.renderVals().deckCards.find((x) => x.center);
 if (!/Sell 352 units/.test(JSON.stringify(dc.rows)) || !/in 20 min/.test(JSON.stringify(dc.rows)) || dc.okLabel !== 'Approve trade') fail('trade card wrong', JSON.stringify(dc.rows));
 dc.reject(); if (posts[posts.length - 1] !== '/api/approvals/3/rejected') fail('reject did not post', posts.join());
+// a private upload waiting for a yes: length, Play link, what backs each statement, the new words; a sparse payload shows honest "nothing recorded", never sample values
+dq.deckGo(3); dc = dq.renderVals().deckCards.find((x) => x.center);
+if (!/^Publish: Acme Q2/.test(dc.title) || dc.okLabel !== 'Approve and schedule' || dc.link !== 'https://youtu.be/vid9' || dc.linkLabel !== 'Play') fail('yt_publish card wrong', dc.title, dc.link);
+if (!/7:11/.test(JSON.stringify(dc.rows)) || !/Quarterly results/.test(JSON.stringify(dc.rows)) || !/2 statements/.test(JSON.stringify(dc.rows))) fail('yt_publish rows wrong', JSON.stringify(dc.rows));
+if (!/BACKED BY\n• revenue: .*Press Release/.test(dc.body) || !/• news: .*\(The Mint\)/.test(dc.body) || /source: RBI/.test(dc.body) || !/channel → ச்சேனல்/.test(dc.body)) fail('yt_publish body wrong', dc.body);
+if (dc.atts.map((x) => x.label).join() !== 'Studio ↗,RBI FAQ on deposits ↗') fail('yt_publish chips wrong', JSON.stringify(dc.atts.map((x) => x.label)));
+{ const sp = mk({ liveUp: true, live: Object.assign({}, live.full, { approvals: [{ id: 7, master: 'youtube', title: 'Publish: Bare', payload: { kind: 'yt_publish' } }] }), mode: 'decide' }).renderVals().deckCards[0];
+  if (!/nothing recorded/.test(JSON.stringify(sp.rows)) || !/Nothing is recorded/.test(sp.body) || sp.link || sp.atts.length || /\d+:\d\d/.test(JSON.stringify(sp.rows))) fail('a bare yt_publish payload should show nothing invented', JSON.stringify(sp.rows), sp.body); }
 const nd = mk({ liveUp: true, live: live.empty, mode: 'decide' }).renderVals().deckCards;
 if (nd.length !== 1 || nd[0].title !== 'Nothing waiting' || nd[0].hasActs) fail('empty decision deck wrong');
 // master desk: stages as chips, one card per record, artifacts previewed in the card
