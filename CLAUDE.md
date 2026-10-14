@@ -34,7 +34,7 @@ bash scripts/setup.sh                     # venv + deps + .env from template + c
 .venv/bin/python -m vision fonts          # fetch the ten caption fonts + write the sample sheet data/shorts/_sample/caption-fonts.png
 .venv/bin/python -m vision sfx            # add 3 sound effects per kind to assets/sfx/ (or: sfx whoosh 5)
 .venv/bin/python -m vision visa list      # Visa Watch accounts: add | list | update | pause | resume | remove | check <id>
-.venv/bin/python -m pytest -q             # 261 tests, all external services mocked
+.venv/bin/python -m pytest -q             # 452 tests, all external services mocked
 bash scripts/install_launchagent.sh       # auto-start at login + restart on crash
 tail -f logs/vision.log
 ```
@@ -52,7 +52,7 @@ vision/
   server.py        FastAPI: dashboard, /ws, /api/*, OAuth + Fyers login callbacks
   ask.py           AskEngine: LLM tool-calling over master data; session memory 30 min
   voice/           TTS (kokoro | piper | macos), STT (mlx-whisper), WakeWord (openWakeWord), clone.py + indic_f5.py (Mani's cloned Tamil voice)
-  channels/telegram.py   briefs, alerts, reminders, notices, /commands, approve/reject buttons
+  channels/telegram.py   briefs, alerts, reminders, notices, /commands (incl. `/say word = Tamil spelling`, `/say! ...` to force), approve/reject buttons
   services/        llm.py (LM Studio OpenAI-compatible + Anthropic + a hosted "writer" tier on Groq), oauth.py (Google/Microsoft),
                    reddit.py (official API, read-only), gdrive.py (Drive folder, read-only), bgm.py (music library from Openverse), gutenberg.py (public-domain story books), stock_video.py (Pexels/Pixabay footage), genmedia.py (AI footage provider slot),
                    mailcal.py (Gmail/GCal/Graph), traffic_api.py (TomTom), news.py (Google News RSS),
@@ -101,6 +101,7 @@ Tests: mock HTTP with `httpx.MockTransport`; use `FakeLLM` from tests/test_phase
 · `GET /api/desk/{master}` (read-only pipeline: stages + items + artifacts) · `GET /api/files/{path}` (only `data/sites`, `data/applications`)
 · `GET/POST /api/visa/accounts`, `POST /api/visa/accounts/{id}` (`{cities, booked, password?}` or `{action: signin|pause|resume|check|forget}`), `DELETE /api/visa/accounts/{id}` (a password is never returned; a request from another origin is refused)
 · `POST /api/tts {text, voice?}` → wav · `GET /api/voices` (Kokoro's English voices) · `POST /api/stt` (raw audio body) → `{text}` · `GET /api/traffic?city=` · `GET /api/weather/grid` (globe weather, ~100 points, cached 1 h)
+· `GET /api/voice/fix?word=` → `{word, source: fix|table|learned|none, spelling}` · `POST /api/voice/fix {word, spelling, force?}` (Mani's pronunciation fixes; local origin only; 400 with the reason when refused)
 · `/auth/{google|microsoft|youtube}/login?account=` + `/callback` · `/auth/fyers/login` + `/callback` · `WS /ws`
 
 WebSocket events: `snapshot, agent, master_report(+data), boot, log, notice, notice_clear, approval,
@@ -126,7 +127,7 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   card at a time (`startBrief` / `deckSpeak`); each desk with something to tell has its own card (key `desk:<id>`, one row
   per part of its report; Mani's choice, 2026-10-13: no combined "Your desks" card); clicking a red agent or asking "what's wrong" opens issue cards and VISION
   explains via `/api/issues/explain`. Tilt, scan lines and tint are switches in the voice menu (`vision-holo`).
-  Mode `decide` is the decision deck: one wide card per approval (Review button, or "show my decisions"); an email reply
+  Mode `decide` is the decision deck: one wide card per approval (Review button, or "show my decisions"); a `yt_publish` card shows the video kind and length, a Play link, "Backed by" (each reason with its quote and source, each headline with its publication), the lesson's official pages and the new voice words, and says "nothing recorded" when the payload has none; an email reply
   shows the original beside the draft with attachment chips (`/api/approvals/{id}/email`, previewed in the card), a pitch
   previews its demo site, a trade shows its numbers, reasoning and time left. Decisions never auto-advance.
   Mode `desk` is a master's desk ("Desk ›" in the agent panel, "show my approved pitches", "open the jobs desk"):
@@ -517,10 +518,30 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   as டைமுக்கு, market and finance, ...). `tamil_say._join` now glides with ய after a front vowel sign (ி ீ ெ ே ை: டெய்லி-உம் -> டெய்லியும்) and வ elsewhere; the 13 golden
   lines in `tests/test_voice.py` come out unchanged. The sample scripts render captions by default (`--no-captions`), use the template wording (`--reword` opts in to the
   model; `--plain` is accepted and does nothing) and take `--mani` for the cloned voice (suffix `-mani`); the English line is printed under each spoken line in the .txt.
-  Not built yet: news Shorts for non-trading days, thumbnails and SEO for this channel, and the presenter drawn from
+  Not built yet: news Shorts for non-trading days, SEO for this channel, and the presenter drawn from
   Mani's own character art (now a stand-in drawing). `publish_times` in the channel's options is unused. A live Europe session in the post-market Short has only
   been tested on made-up data (the sample was run in the morning); sample: `scripts/market_report_sample.py premarket|postmarket [--any-time] [--date D]`.
   Edge's voice function is `market_crew.edge_speak`; the sample scripts in `scripts/` are for trying looks and voices by hand.
+  **Voice fixes (`tamil_say.fixes/set_fix/source`, `data/voice_fixes.json`, git-ignored):** Mani's own spellings `{lower-case English word or phrase: Tamil letters}`, applied by
+  `voiced` BEFORE `SOUNDS` and the learned table (his word wins; longest match first, whole words, case ignored; the "ch" rule is not applied to his spelling). Set by Telegram
+  `/say word = ச்சேனல்` (`/say word` shows the spelling and where it comes from; only from TELEGRAM_CHAT_ID) or `POST /api/voice/fix`. A word that is in a line of the approved HDFC
+  reference (`tests/golden_voice.json`) is refused ("change it there first") unless `force` / `/say!`; the golden file is never changed by it, so `tests/test_voice.py` fails
+  until the reference is re-recorded (the reply says so and it is logged). No dashboard control (the desk's "New words" row has only the API).
+  **Covers and titles for long videos (`masters/thumbs.py`, `services/logos.py`, `slides.thumb_page/thumbnail`, `scripts/market_thumb_sample.py`):** the Slide Editor makes `thumb.jpg`
+  (1280x720, under 2 MB, headless Chrome like the slides: paper, green pill, Baloo/Tamil type, the presenter bottom right) for results, analysis and lessons (a Short has none; YouTube
+  gives it no use). The 2-5 word Tanglish hook is picked by code from the video's own figures (profit up/down/same against last year, else the headline figure; an analysis's ROE as a
+  question; a lesson's subject: "FD vs RD: எது?"), every hook and title through `thumbs.clean` (ADVICE, FORECAST, RUDE, `youtube.promises`, 100 characters). Result title: "TCS Q2 FY27
+  Results | Profit 15% ஏறிருக்கு, Margin ஏன் இறங்குச்சு? | தமிழில்" (the margin question only when profit rose and margin fell; without it if too long; no figures = the old title).
+  A company's logo comes from Wikimedia Commons' API (`logos.find`, GET, 1 s apart, a User-Agent that names VISION or Commons answers 403): a file only if its title has every
+  significant word of the company's name and "logo", SVG or PNG, not "old/former/dated"; cached in `data/logos/<SYMBOL>.<ext>` + `.json` (licence, artist, source page), never fetched
+  again, no match remembered 30 days. It sits in a small white card; the channel's look dominates. The description lists "Logo: <Commons page> (<licence>)" before the disclaimer; the
+  record has `thumb` and `logo`. `youtube.set_thumbnail` is called by the Market Uploader right after a long upload (it never called `_extras` before, so no cover was ever set); a
+  refusal is a note. The approval payload now also carries `watch` (youtu.be link), `video` (the record's kind), `new_words` (learned words used, for results too) and `sources`.
+  **Learning from views (`market_crew.learn`, `by_own_views`):** Market Analytics writes kv `yt_state` `manimarket:insights`: average views a day since going public (publish time,
+  else upload time) over public videos older than 2 days, per kind (result, analysis, lesson, premarket, postmarket, lesson_short) and per lesson topic group, and the top kind (shown
+  in the channel's report line). Nothing changes until 8 such videos of a kind exist; then, where the owner's pattern leaves a choice, the lesson topic: `youtube.choose` over the groups
+  (more views a day first, `LEARN_EXPLORE` 0.2 held to 70 %/groups for the rest, told counts from the log) puts that group's topics first (inside a group the signal/least-recent order
+  stands). Which company kind is analysed is NOT affected (weekday pattern, 180-day rule).
   **Finance lessons (Mani, 2026-10-14; `masters/lessons.py`, `services/yt_channels.py`, `services/yt_transcripts.py`; options `lessons`, `lesson_shorts`, `lesson_channels`,
   `transcripts_per_day`):** on a `topic` release day (tue, thu, sun) the Scout lines up a lesson in place of a result (the night's first result stays as the fallback if no lesson can
   be made: all sources dead, no writer); on a day the market is shut (Sat, Sun, an NSE holiday) the two Short windows (07:00-08:15 and 18:00-20:30 IST) make a lesson Short in place of the
