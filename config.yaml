@@ -163,7 +163,7 @@ masters:
     trust: ACT             # makes Shorts and uploads them as unlisted; you make them public (or delete them) on YouTube
     mode: live
     cycle_minutes: 360     # every six hours: follows up on published Shorts and reads new comments
-    run_at: ["23:00 | Mani Market long video | manimarket", "03:00 | Long videos (both channels) | both", "05:00 | Confessions Shorts | confessions", "07:02 Asia/Kolkata | Mani Market pre-market Short | manimarket", "18:02 Asia/Kolkata | Mani Market post-market Short | manimarket"]   # 23:00 starts Mani Market Tamil's night (a result video, about an hour of voice); 03:00 makes the day's long video, 05:00 the day's Shorts; each is uploaded and scheduled for release. A time followed by a zone is that zone's clock (India has no daylight saving; the Mac's Toronto does): 07:02 and 18:02 IST make Mani Market Tamil's pre-market and post-market Shorts
+    run_at: ["23:00 | Mani Market long video | manimarket", "01:00 | Mani Market long video (second try) | manimarket", "03:00 | Confessions long video | confessions", "05:00 | Confessions Shorts | confessions", "07:02 Asia/Kolkata | Mani Market pre-market Short | manimarket", "18:02 Asia/Kolkata | Mani Market post-market Short | manimarket"]   # 23:00 starts Mani Market Tamil's night (a result video, about an hour of voice); 03:00 makes the day's long video, 05:00 the day's Shorts; each is uploaded and scheduled for release. A time followed by a zone is that zone's clock (India has no daylight saving; the Mac's Toronto does): 07:02 and 18:02 IST make Mani Market Tamil's pre-market and post-market Shorts
     options:
       channels:            # one Director (with its own crew) per channel; the director's name must match catalog.json
         - id: confessions
@@ -228,7 +228,7 @@ masters:
           reword: false                  # false = the template wording is what Mani approved, said as written | true = the writer model may rephrase lines (numbers are guarded)
           captions: true                 # English captions burned into every video and Short (and captions.srt beside it); written by code beside each Tamil line, no model
           make_after: "23:00"            # a video is started only between these hours (a manual run ignores them)
-          make_before: "04:00"
+          make_before: "02:30"           # ends before 03:00 so its voice (cloned model, ~5 GB) never runs beside Confessions' long video (Mani, 2026-10-14)
           per_run: 1                     # videos made a night
           pattern: {mon: analysis, tue: topic, wed: analysis, thu: topic, fri: analysis, sat: analysis, sun: topic}   # the long video by the weekday it is RELEASED on (IST): analysis = one company's ratios from its filings; topic is not built yet (a result is made instead)
           lessons: true                  # topic days (tue, thu, sun in `pattern`) make a finance lesson from official pages (vision/masters/lessons.py); a fresh result is the fallback when none can be made. Always needs your approval
