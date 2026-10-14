@@ -58,6 +58,10 @@ DISCLAIMER = market.DISCLAIMER_EN + "\n\n" + market.DISCLAIMER_TA          # the
 IST = ZoneInfo("Asia/Kolkata")
 REPORTS = {"premarket": "pre", "postmarket": "post"}                         # the two Shorts of a trading day, and how services/world.py names them
 REPORT_WINDOWS = {"premarket": ("07:00", "08:15"), "postmarket": ("18:00", "20:30")}      # Indian time: when each is made
+LEARN_MIN = 8                    # public videos of a kind before its own views change anything
+LEARN_AGE = 2                    # days a public video must be old before its views a day count
+LEARN_EXPLORE = 0.2              # the share of lessons the groups that do worse still get (held to 70% / groups, as youtube.choose does elsewhere)
+LESSON_KINDS = ("lesson", "lesson_short")
 SHORTS = (*REPORTS, "lesson_short")                                          # jobs that make a vertical Short (the two market reports, and a lesson on a day the market is shut)
 
 
@@ -78,6 +82,52 @@ def report_window(now: datetime) -> str:
 def in_window(after: str, before: str, now: str) -> bool:
     """Is `now` (HH:MM) between the two hours? The window may run through midnight (23:00 to 04:00)."""
     return (now >= after or now < before) if after > before else after <= now < before
+
+
+def views_per_day(v: dict, now: float) -> float | None:
+    """A public video's views a day since it went public (None: not public, or younger than LEARN_AGE days, or no figures yet)."""
+    since = v.get("publish_at") or v.get("uploaded") or v.get("made")
+    if v.get("status") != "public" or not since or "view" not in (v.get("stats") or {}) or (now - since) / 86400 <= LEARN_AGE:
+        return None
+    return v["stats"]["view"] / ((now - since) / 86400)
+
+
+def learn(log: list[dict], now: float | None = None) -> dict:
+    """What the channel's own public videos show, kept in kv yt_state `<channel>:insights`: average views a day per kind and per lesson topic group, and the top kind
+    (among kinds with LEARN_MIN videos). Information for choosing between equal options; nothing here buys or fakes reach."""
+    now, group = now or time.time(), {t["id"]: t["group"] for t in lessons.TOPICS}
+    kinds: dict[str, list[float]] = {}
+    groups: dict[str, list[float]] = {}
+    for v in log:
+        vpd = views_per_day(v, now)
+        if vpd is None:
+            continue
+        kinds.setdefault(v.get("kind") or "result", []).append(vpd)
+        if v.get("kind") in LESSON_KINDS and group.get(v.get("topic")):
+            groups.setdefault(group[v["topic"]], []).append(vpd)
+    avg = lambda d: {k: {"videos": len(x), "per_day": round(sum(x) / len(x), 1)} for k, x in sorted(d.items())}          # noqa: E731
+    out = {"at": now, "kinds": avg(kinds), "groups": avg(groups), "top": None}
+    best = [(k, e["per_day"]) for k, e in out["kinds"].items() if e["videos"] >= LEARN_MIN]
+    if best:
+        k, vpd = max(best, key=lambda x: x[1])
+        out["top"] = {"kind": k, "per_day": vpd}
+    return out
+
+
+def by_own_views(order: list[tuple], insights: dict | None, log: list[dict], kind: str) -> list[tuple]:
+    """The lesson topics in the order to try them: once LEARN_MIN public videos of this kind have views a day, the topic group chosen by youtube.choose (groups with more
+    views a day first, LEARN_EXPLORE of the lessons going to the rest) comes first; inside a group the given order stands. Before that, or with no insights, unchanged."""
+    ins = insights or {}
+    groups = list(dict.fromkeys(o[0]["group"] for o in order))
+    if not groups or (ins.get("kinds", {}).get(kind) or {}).get("videos", 0) < LEARN_MIN:
+        return order
+    group = {t["id"]: t["group"] for t in lessons.TOPICS}
+    told: dict[str, int] = {}
+    for v in log:
+        if v.get("kind") in LESSON_KINDS and v.get("status") != "deleted" and group.get(v.get("topic")):
+            told[group[v["topic"]]] = told.get(group[v["topic"]], 0) + 1
+    first = youtube.choose(groups, told, {g: e["per_day"] for g, e in (ins.get("groups") or {}).items() if g in groups}, min(LEARN_EXPLORE, 0.7 / len(groups)))
+    return [o for o in order if o[0]["group"] == first] + [o for o in order if o[0]["group"] != first]
 
 
 async def edge_speak(lines: list[dict], work: Path, voice: str = EDGE_VOICE, rate: str = EDGE_RATE) -> list[Path]:
@@ -352,7 +402,8 @@ class MarketAnalyst(MCrew):
         videos = await self.signals(ctx)
         now = time.time()
         order = ([(t, *yt_channels.score(t, videos, now)) for t in lessons.TOPICS if t["id"] == job["topic"]] if job.get("topic")
-                 else lessons.rank(store, lessons.TOPICS, videos, now, short))
+                 else by_own_views(lessons.rank(store, lessons.TOPICS, videos, now, short), store.kv_get(youtube.STATE, f"{ch['id']}:insights"),
+                                   [v for v in store.kv_list(youtube.LOG) if v.get("channel") == ch["id"]], job["kind"]))
         cands, tried = [], []
         async with self.client() as c:
             for tp, score, hit in order:
@@ -761,9 +812,12 @@ class MarketAnalytics(youtube.AnalyticsManager):
         mine = [v for v in store.kv_list(youtube.LOG) if v.get("channel") == ch["id"]]
         if mine:
             await self._refresh(ctx, mine)          # an awaiting video is left alone: it is not in the statuses followed until it is scheduled
-        line = youtube.peer_line(store, ch)
         mine = [v for v in store.kv_list(youtube.LOG) if v.get("channel") == ch["id"]]
-        return AgentResult("done", "LOGGED", line, {"channel": ch["id"], "made": len(mine), "awaiting": sum(v.get("status") == "awaiting" for v in mine),
+        insights = learn(mine)
+        store.kv_put(youtube.STATE, f"{ch['id']}:insights", insights)
+        top = insights["top"]
+        line = youtube.peer_line(store, ch) + (f"; best kind: {top['kind']}, {top['per_day']:g} views a day" if top else "")
+        return AgentResult("done", "LOGGED", line, {"channel": ch["id"], "made": len(mine), "awaiting": sum(v.get("status") == "awaiting" for v in mine), "insights": insights,
                                                     "videos": [{k: v.get(k) for k in ("title", "status", "url", "seconds", "stats", "source")} for v in mine[:20]]})
 
 
