@@ -569,3 +569,11 @@ def test_reports_do_not_count_toward_the_long_videos_backlog(tmp_path, monkeypat
         store.kv_put(youtube.LOG, f"x{n}", {"channel": "manimarket", "status": "awaiting", "made": 1, "format": "short", "kind": "premarket"})
     res = asyncio.run(market_crew.ResultsScout(youtube.channel(RAW), client_factory=world_handler(yt)).run({"store": store, "bus": bus, "reason": "schedule", "now": datetime(2026, 10, 14, 12, 0, tzinfo=IST)}))
     assert res.label != "BACKLOG"
+
+
+def test_run_at_label_after_a_bar_is_ignored_by_run_time():
+    from vision.orchestrator import run_spec
+    assert run_time("07:02 Asia/Kolkata | Pre-market Short") == (7, 2, ZoneInfo("Asia/Kolkata"))
+    assert run_time("05:00 | Shorts") == (5, 0, None)
+    assert run_spec("05:00 | Shorts")[3] == "Shorts" and run_spec("05:00")[3] == ""
+    assert run_spec("03:00 | Long videos | both")[3:] == ("Long videos", "both") and run_spec("03:00 | Long videos")[4] == ""

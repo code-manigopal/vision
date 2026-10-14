@@ -203,6 +203,13 @@ def create_app(*, boot_on_start: bool = True, schedules: bool = True, telegram_o
     async def state():
         return app.state.bus.snapshot()["state"]
 
+    @app.get("/api/schedule")
+    async def schedule():
+        orch = app.state.orch
+        if orch.asleep:
+            return {"standby": True, "items": []}
+        return {"standby": False, "items": orch.schedule()}
+
     @app.post("/api/boot")
     async def reboot():
         app.state.orch.wake()

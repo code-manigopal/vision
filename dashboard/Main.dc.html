@@ -901,10 +901,12 @@ div:has(>.barglow){height:8px!important;background:rgba(255,255,255,.07)!importa
 
   <!-- BOTTOM: 24H TIMELINE -->
   <div style="height: 128px; flex-shrink: 0; display: flex; gap: 20px; padding: 0 28px 20px; box-sizing: border-box">
-    <div class="panel" style="flex-grow: 1; background: rgba(13,15,20,0.82); border: 1px solid #262A33; padding: 10px 16px; display: flex; flex-direction: column; gap: 10px; border-radius: 8px">
+    <div class="panel" style="flex-grow: 1; background: rgba(13,15,20,0.82); border: 1px solid #262A33; padding: 10px 16px; display: flex; flex-direction: column; gap: 10px; border-radius: 8px; overflow: visible">
       <div style="display: flex; justify-content: space-between">
-        <div style="font-family: 'Michroma', sans-serif; font-size: 11px; letter-spacing: 2px; color: #FBCA03">24H TIMELINE</div>
+        <div style="display: flex; align-items: center; gap: 12px"><span style="font-family: 'Michroma', sans-serif; font-size: 11px; letter-spacing: 2px; color: #FBCA03">24H TIMELINE</span>
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 9px; color: #9A8F76; display: flex; gap: 10px"><span><span style="color: #1f9d55">◆</span> Mani Market</span><span><span style="color: #AA0505">◆</span> Confessions</span><span><span style="color: #FBCA03">◆</span> both / other</span><span><span style="color: #67C7EB">◆</span> Telegram</span></span></div>
         <div style="display: flex; align-items: center; gap: 8px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #C9C0AC">
+          <span style="color: #B97D10">{{schedTxt}}</span>
           <span style="width: 7px; height: 7px; border-radius: 50%; background: #67C7EB; box-shadow: 0 0 6px #67C7EB"></span>
           <span style="color: #67C7EB">TELEGRAM</span> {{tgStatus}}
         </div>
@@ -915,10 +917,18 @@ div:has(>.barglow){height:8px!important;background:rgba(255,255,255,.07)!importa
         <div style="position: absolute; left: 38%; top: 10px; width: 10%; height: 20px; background: #B97D10"></div>
         <div style="position: absolute; left: 50%; top: 10px; width: 4%; height: 20px; background: #6A0C0B"></div>
         </sc-if>
-        <div style="position: absolute; left: 25%; top: 0; width: 2px; height: 40px; background: #67C7EB"></div>
-        <div style="position: absolute; left: calc(25% + 5px); top: 3px; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #67C7EB">06:00 TG</div>
-        <div style="position: absolute; left: 75%; top: 0; width: 2px; height: 40px; background: #67C7EB"></div>
-        <div style="position: absolute; left: calc(75% + 5px); top: 3px; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #67C7EB">18:00 TG</div>
+        <sc-for list="{{tlMarks}}" as="tm" hint-placeholder-count="5">
+        <div onMouseEnter="{{tm.enter}}" onMouseLeave="{{tm.leave}}" style="position: absolute; left: {{tm.left}}; top: {{tm.top}}; display: flex; align-items: center; gap: 4px; opacity: {{tm.op}}; transform: translateX(-4px); cursor: default">
+          <span style="display: block; width: 8px; height: 8px; transform: rotate(45deg); background: {{tm.col}}; box-shadow: 0 0 6px {{tm.col}}; outline: {{tm.ring}}; outline-offset: 2px"></span>
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: {{tm.col}}">{{tm.time}}</span>
+        </div>
+        </sc-for>
+        <sc-if value="{{tlHovOn}}" hint-placeholder-val="{{ false }}">
+        <div class="glass" style="left: {{tlHov.hpct}}; bottom: 46px; transform: translateX(-50%); width: auto; min-width: 150px; max-width: 320px; padding: 8px 12px; gap: 3px; pointer-events: none">
+          <span style="font-family: 'Michroma', sans-serif; font-size: 10px; letter-spacing: 1.5px; color: {{tlHov.col}}">{{tlHov.name}}</span>
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #EDE6D6">{{tlHov.when}}</span>
+        </div>
+        </sc-if>
         <div style="position: absolute; left: {{nowPct}}; top: 0; width: 2px; height: 40px; background: #FBCA03; box-shadow: 0 0 8px #FBCA03"></div>
       </div>
     </div>
@@ -1121,7 +1131,7 @@ class Component extends DCLogic {
   constructor(props) {
     super(props);
     this.state = { mode: 'ambient', master: 'trading', accOpen: false, now: new Date(), tick: 0,
-      a: 0, voiceMenu: false, voices: [], voiceName: null, kVoices: [], kVoice: null, wakeOn: false, wakeLive: false, wakeHeard: false, wakeLast: '', wakeErr: '', wxGrid: null, deckI: 0, deckTalk: false, mail: {}, prev: null, desk: {}, deskFor: null, deskStage: null, issueText: {}, holoTilt: true, holoScan: true, holoBlue: false, wx: true, page: 0, orbA: 0, orbHov: null, speaking: false, pulse: 0, boot: true, bootT: 0, rotLon: -40, rotLat: 22, drag: null, hov: null, mind: false, openT: 0, sel: 'root', cmd: '', listening: false, flash: '', flashUntil: 0,
+      a: 0, voiceMenu: false, voices: [], voiceName: null, kVoices: [], kVoice: null, wakeOn: false, wakeLive: false, wakeHeard: false, wakeLast: '', wakeErr: '', wxGrid: null, sched: null, tlHov: null, deckI: 0, deckTalk: false, mail: {}, prev: null, desk: {}, deskFor: null, deskStage: null, issueText: {}, holoTilt: true, holoScan: true, holoBlue: false, wx: true, page: 0, orbA: 0, orbHov: null, speaking: false, pulse: 0, boot: true, bootT: 0, rotLon: -40, rotLat: 22, drag: null, hov: null, mind: false, openT: 0, sel: 'root', cmd: '', listening: false, flash: '', flashUntil: 0,
       cpu: 13, ram: 94, gpu: 2, vram: 16, music: true, confirmOff: false, off: null, offT: 0,
       log: [
         { t: '13:22', msg: 'Screenwriter · draft 2 of Episode 04 started' },
@@ -1226,7 +1236,7 @@ class Component extends DCLogic {
   componentWillUnmount() {
     this.dead = true; clearTimeout(this.wsRetry); window.removeEventListener('keydown', this.onKey); try { this.ws && this.ws.close(); } catch (e) {}
     try { window.speechSynthesis && window.speechSynthesis.removeEventListener('voiceschanged', this.loadVoices); } catch (e) {}
-    clearInterval(this.timer);
+    clearInterval(this.timer); clearInterval(this.schedTimer);
     clearInterval(this.anim);
     this.wakeStop();
     clearInterval(this.musicTimer); window.removeEventListener('pointerdown', this.onGesture); window.removeEventListener('keydown', this.onGesture);
@@ -1719,7 +1729,7 @@ class Component extends DCLogic {
     const open = () => {
       const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
       this.ws = ws;
-      ws.onopen = () => this.setState({ liveUp: true });
+      ws.onopen = () => { this.setState({ liveUp: true }); this.loadSched(); };
       ws.onmessage = (e) => { let m = null; try { m = JSON.parse(e.data); } catch (err) { return; } this.onLive(m); };
       ws.onclose = () => { this.setState({ liveUp: false }); if (!this.dead) this.wsRetry = setTimeout(open, 3000); };
     };
@@ -1894,6 +1904,11 @@ class Component extends DCLogic {
     let j = null;
     try { const r = await fetch('/api/desk/' + m); j = r.ok ? await r.json() : null; } catch (e) {}
     this.setState({ desk: Object.assign({}, this.state.desk, { [m]: j || { failed: true } }) });
+  }
+  async loadSched() {
+    // the fixed-time jobs of the next 24 hours (master run_at runs + briefs) for the 24H TIMELINE; asked again every 10 minutes
+    if (!this.schedTimer) this.schedTimer = setInterval(() => { if (this.state.liveUp && !this.dead) this.loadSched(); }, 600000);
+    try { const r = await fetch('/api/schedule'); const j = r.ok ? await r.json() : null; this.setState({ sched: j && j.items ? j : null }); } catch (e) { this.setState({ sched: null }); }
   }
   async loadWxGrid() {
     // real weather for the globe: ~100 points worldwide, cached an hour on the backend
@@ -2135,6 +2150,24 @@ class Component extends DCLogic {
     });
     // Connected: real data or an honest "waiting", never the sample values (those are for the unconnected preview).
     const CON = !!(s.liveUp && s.live);
+    // ---- 24H TIMELINE: one diamond per fixed-time job (gold = a master's run, blue = a Telegram brief), by the Mac's clock ----
+    const tlDemo = [['06:00', 'brief', 'Morning brief (Telegram)'], ['07:02', 'run', 'Demo run', 'manimarket', '16:32 IST'], ['12:00', 'run', 'Demo run', 'both'], ['18:00', 'brief', 'Evening brief (Telegram)'], ['23:00', 'run', 'Demo run', 'confessions']]
+      .map((x, i) => { const [h, mi] = x[0].split(':').map(Number); const t = new Date(d); t.setHours(h, mi, 0, 0); if (t < d) t.setDate(t.getDate() + 1); return { at: t.getTime() / 1000, local: x[0], kind: x[1], label: x[2] + ' (demo)', channel: x[3] || '', zone_local: x[4] || '' }; });
+    const tlItems = CON ? (s.sched && s.sched.items ? s.sched.items : []) : tlDemo;
+    const tlNext = tlItems.filter((x) => x.at * 1000 > d.getTime()).sort((a, b) => a.at - b.at)[0];
+    const tlNow = d.getHours() * 60 + d.getMinutes(), tlLast = [-99, -99];
+    const tlMarks = tlItems.slice().sort((a, b) => (a.local < b.local ? -1 : a.local > b.local ? 1 : 0)).map((x) => {
+      const [h, mi] = String(x.local).split(':').map(Number), mins = h * 60 + mi, pct = mins / 1440 * 100;
+      const row = pct - tlLast[0] >= 2.5 ? 0 : pct - tlLast[1] >= 2.5 ? 1 : (tlLast[0] <= tlLast[1] ? 0 : 1);
+      tlLast[row] = pct;
+      const isNext = tlNext === x, past = mins < tlNow && !isNext, col = x.kind === 'brief' ? '#67C7EB' : ({ manimarket: '#1f9d55', confessions: '#AA0505', both: '#FBCA03' })[x.channel] || '#FBCA03';
+      const key = x.local + '|' + x.label;
+      return { key, hpct: Math.max(12, Math.min(88, pct)).toFixed(2) + '%', left: pct.toFixed(2) + '%', top: row ? '23px' : '4px', col, op: past ? '0.4' : '1', ring: isNext ? '1px solid #FBCA03' : 'none', time: x.local,
+        name: x.label, when: x.local + (x.zone_local ? ' · ' + x.zone_local.replace(' ', ' ') : '') + (past ? ' · tomorrow' : ''),
+        enter: () => this.setState({ tlHov: key }), leave: () => this.setState({ tlHov: null }) };
+    });
+    const tlH = tlMarks.find((x) => x.key === s.tlHov);
+    const schedTxt = CON ? (!s.sched ? 'schedule: waiting' : s.sched.standby ? 'schedule: standby' : tlNext ? 'NEXT: ' + tlNext.local + ' ' + tlNext.label : 'nothing scheduled') : (tlNext ? 'NEXT: ' + tlNext.local + ' ' + tlNext.label : '');
     const liveSum = {};
     if (CON) {
       const LM = LV.masters || {};
@@ -3019,7 +3052,7 @@ class Component extends DCLogic {
       label, cls: s.master === id ? 'tab-on' : 'tab', pick: () => this.setState({ master: id })
     }));
 
-    return { clock, nowPct, modes,
+    return { clock, nowPct, tlMarks, schedTxt, tlHovOn: !!tlH, tlHov: tlH || {}, modes,
       graphRef: (el) => { this.graphEl = el; }, topRef: (el) => { this.topEl = el; },
       scrollGraph: () => this.scrollToGraph(), scrollTop: () => this.scrollToTop(),
       gtabs, graphMasterName: sel.name, gWorking: workingNames.join(', ') || 'none', gWaiting: waitingNames.join(', ') || 'nothing',

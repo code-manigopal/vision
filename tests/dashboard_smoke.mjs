@@ -144,6 +144,23 @@ for (const q of ['how are we doing', 'hey vision, how are you', "what's up", 'Ho
   wq.setState({ wx: false }); if (wq.renderVals().wxRn) fail('weather switch should hide the icons');
   const pv = mk({ mode: 'world' }).renderVals(); if (!pv.wFlights.length || !pv.wxCl || pv.wxBtn !== 'Weather: on') fail('preview globe should still show sample flights and weather');
 }
+{ // the 24H TIMELINE: connected with a schedule, connected without one (nothing invented), preview (a labelled demo)
+  const base = new Date(2026, 9, 14, 10, 0, 0); const at = (h, m, dd = 0) => new Date(2026, 9, 14 + dd, h, m).getTime() / 1000;
+  const items = [{ at: at(12, 0), local: '12:00', kind: 'run', master: 'world', label: 'World Watch' }, { at: at(18, 0), local: '18:00', kind: 'brief', master: '', label: 'Evening brief (Telegram)' },
+    { at: at(18, 1), local: '18:01', kind: 'run', master: 'youtube', label: 'Mani Market post-market Short', channel: 'manimarket', zone: 'Asia/Kolkata', zone_local: '03:31 IST' }, { at: at(23, 0), local: '23:00', kind: 'run', master: 'youtube', label: 'Mani Market long video', channel: 'confessions' }, { at: at(6, 0, 1), local: '06:00', kind: 'brief', master: '', label: 'Morning brief (Telegram)' }];
+  const t1 = mk({ liveUp: true, live: live.full, now: base, sched: { standby: false, items } }).renderVals();
+  if (t1.tlMarks.length !== 5 || t1.schedTxt !== 'NEXT: 12:00 World Watch') fail('timeline with a schedule', t1.tlMarks.length, t1.schedTxt);
+  const m18 = t1.tlMarks.filter((x) => x.time.startsWith('18:')); if (m18.length !== 2 || m18[0].top === m18[1].top) fail('close markers should take different rows', JSON.stringify(m18.map((x) => x.top)));
+  if (t1.tlMarks.find((x) => x.time === '06:00').op !== '0.4' || t1.tlMarks.find((x) => x.time === '12:00').ring === 'none' || t1.tlMarks.find((x) => x.time === '18:00').col !== '#67C7EB') fail('timeline past/next/brief styling');
+  const mm = t1.tlMarks.find((x) => x.time === '18:01'), cf = t1.tlMarks.find((x) => x.time === '23:00');
+  if (mm.col !== '#1f9d55' || cf.col !== '#AA0505' || t1.tlMarks.find((x) => x.time === '12:00').col !== '#FBCA03') fail('channel colours', mm.col, cf.col);
+  { const h = mk({ liveUp: true, live: live.full, now: base, sched: { standby: false, items } }); const hv = h.renderVals(); hv.tlMarks.find((x) => x.time === '18:01').enter(); const hv2 = h.renderVals();
+    if (!hv2.tlHovOn || hv2.tlHov.name !== 'Mani Market post-market Short' || hv2.tlHov.when !== '18:01 · 03:31 IST') fail('hover label', JSON.stringify(hv2.tlHov)); hv2.tlMarks[0].leave(); if (h.renderVals().tlHovOn) fail('hover label should close'); }
+  const t2 = mk({ liveUp: true, live: live.full, now: base }).renderVals();
+  if (t2.tlMarks.length || t2.schedTxt !== 'schedule: waiting') fail('connected without a schedule must show none', t2.tlMarks.length, t2.schedTxt);
+  const t3 = mk({ liveUp: true, live: live.full, now: base, sched: { standby: true, items: [] } }).renderVals(); if (t3.tlMarks.length || !/standby/.test(t3.schedTxt)) fail('standby timeline', t3.schedTxt);
+  const t4 = mk({ now: base }).renderVals(); if (t4.tlMarks.length < 3 || !/^NEXT: /.test(t4.schedTxt) || !/demo/.test(t4.tlMarks[0].name)) fail('preview timeline should be the labelled demo', t4.schedTxt);
+}
 console.log('spoken:', said.map((x) => x.slice(0, 70)));
 console.log(fails ? fails + ' problem(s)' : 'dashboard logic OK: no crashes, no sample values while connected, deck works');
 process.exit(fails ? 1 : 0);

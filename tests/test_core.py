@@ -246,3 +246,33 @@ def test_notice_can_be_closed_for_a_day():
     bus._closed["kite"] = ("Log in", 0.0)                             # closed more than a day ago
     bus.notice("kite", "Log in")
     assert "kite" in bus.state["notices"]
+
+
+def test_api_schedule(monkeypatch):
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    from fastapi.testclient import TestClient
+    from vision.server import create_app
+    monkeypatch.setenv("VISION_HOME", os.getcwd())
+    app = create_app(boot_on_start=False, schedules=False, telegram_on=False, voice_on=False)
+    with TestClient(app) as c:
+        orch = app.state.orch
+        orch.cfg.masters["youtube"].run_at = ["05:00 | Confessions Shorts | confessions", "07:02 Asia/Kolkata | Pre-market Short | manimarket"]
+        orch.cfg.masters["world"].run_at = ["12:00"]
+        mac = ZoneInfo(orch.cfg.vision.timezone)
+        now = datetime(2026, 10, 14, 0, 30, tzinfo=mac)
+        items = orch.schedule(now=now)
+        by = {(i["master"], i["label"]): i for i in items}
+        assert by[("youtube", "Confessions Shorts")]["local"] == "05:00"
+        pre = by[("youtube", "Pre-market Short")]                         # 07:02 IST is 21:32 EDT
+        assert pre["local"] == "21:32" and pre["kind"] == "run" and pre["channel"] == "manimarket" and pre["zone_local"] == "07:02 IST"
+        assert by[("youtube", "Confessions Shorts")]["channel"] == "confessions" and "zone_local" not in by[("youtube", "Confessions Shorts")]
+        assert by[("world", orch.by_id["world"].name)]["local"] == "12:00"   # no label: the master's name
+        briefs = [i for i in items if i["kind"] == "brief"]
+        assert [(b["local"], b["label"]) for b in briefs] == [("06:00", "Morning brief (Telegram)"), ("18:00", "Evening brief (Telegram)")]
+        assert all(i["kind"] in ("run", "brief") for i in items) and [i["at"] for i in items] == sorted(i["at"] for i in items)
+        assert all(0 < i["at"] - now.timestamp() <= 86400 for i in items)   # interval cycles and reminders are not here
+        live = c.get("/api/schedule").json()
+        assert live["standby"] is False and live["items"]
+        c.post("/api/shutdown")
+        assert c.get("/api/schedule").json() == {"standby": True, "items": []}

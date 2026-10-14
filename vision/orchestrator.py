@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -19,11 +20,18 @@ from .services.llm import LLM
 log = logging.getLogger("vision")
 
 
-def run_time(spec: str) -> tuple[int, int, ZoneInfo | None]:
-    """A master's `run_at` entry: "05:00" (the Mac's clock) or "07:02 Asia/Kolkata" (that zone's clock; India has no daylight saving, Toronto has) -> hour, minute, zone."""
-    hm, _, zone = spec.strip().partition(" ")
+def run_spec(spec: str) -> tuple[int, int, ZoneInfo | None, str, str]:
+    """A `run_at` entry: "05:00" (the Mac's clock), "07:02 Asia/Kolkata" (that zone's clock), either with a label and a channel after bars: "07:02 Asia/Kolkata | Pre-market Short | manimarket" -> hour, minute, zone, label, channel."""
+    when, _, rest = spec.partition("|")
+    label, _, channel = rest.partition("|")      # "07:02 Asia/Kolkata | label | channel" (the channel is optional)
+    hm, _, zone = when.strip().partition(" ")
     h, m = (int(x) for x in hm.split(":"))
-    return h, m, ZoneInfo(zone.strip()) if zone.strip() else None
+    return h, m, ZoneInfo(zone.strip()) if zone.strip() else None, label.strip(), channel.strip()
+
+
+def run_time(spec: str) -> tuple[int, int, ZoneInfo | None]:
+    """A master's `run_at` entry -> hour, minute, zone (a label after `|` is ignored; India has no daylight saving, Toronto has)."""
+    return run_spec(spec)[:3]
 
 
 class Orchestrator:
@@ -91,6 +99,7 @@ class Orchestrator:
                                    id=f"cycle:{m.id}", max_instances=1, coalesce=True, replace_existing=True)
             for hhmm in self.cfg.master(m.id).run_at:            # and at fixed times of day, where a master asks for them
                 h, mnt, zone = run_time(hhmm)
+                hhmm = hhmm.partition("|")[0].strip()
                 self.scheduler.add_job(self.run_master, CronTrigger(hour=h, minute=mnt, **({"timezone": zone} if zone else {})), args=[m.id, "schedule"],
                                        id=f"at:{m.id}:{hhmm}", max_instances=1, coalesce=True, replace_existing=True)
         for hhmm in self.cfg.vision.brief_times:
@@ -100,6 +109,32 @@ class Orchestrator:
         self.scheduler.add_job(self.fire_reminders, IntervalTrigger(seconds=60), id="reminders", replace_existing=True)
         self.scheduler.start()
         self._watch = asyncio.create_task(self.watch_approvals())
+
+    def schedule(self, hours: int = 24, now: datetime | None = None) -> list[dict]:
+        """Fire times in the next `hours` of the fixed-time jobs only (master `run_at` runs, briefs), in the Mac's zone; interval cycles and reminders are left out."""
+        tz = ZoneInfo(self.cfg.vision.timezone)
+        now = (now or datetime.now(tz)).astimezone(tz)
+        end = now + timedelta(hours=hours)
+        out: list[dict] = []
+
+        def add(trigger: CronTrigger, kind: str, master: str, label: str, channel: str = "", zone: ZoneInfo | None = None) -> None:
+            t = trigger.get_next_fire_time(None, now)
+            while t is not None and t <= end:
+                out.append({"at": int(t.timestamp()), "local": t.astimezone(tz).strftime("%H:%M"), "kind": kind, "master": master, "label": label, "channel": channel})
+                if zone:
+                    out[-1].update(zone=str(zone), zone_local=t.astimezone(zone).strftime("%H:%M %Z"))
+                t = trigger.get_next_fire_time(t, t + timedelta(seconds=1))
+
+        for m in self.masters:
+            if not m.enabled:
+                continue
+            for spec in self.cfg.master(m.id).run_at:
+                h, mnt, zone, label, channel = run_spec(spec)
+                add(CronTrigger(hour=h, minute=mnt, timezone=zone or tz), "run", m.id, label or getattr(m, "name", "") or m.id, channel, zone)
+        for hhmm in self.cfg.vision.brief_times:
+            h, mnt = (int(x) for x in hhmm.split(":"))
+            add(CronTrigger(hour=h, minute=mnt, timezone=tz), "brief", "", ("Morning" if h < 12 else "Evening") + " brief (Telegram)")
+        return sorted(out, key=lambda e: e["at"])
 
     async def run_master(self, master_id: str, reason: str = "manual") -> str:
         if self.asleep:

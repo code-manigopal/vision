@@ -100,7 +100,7 @@ Tests: mock HTTP with `httpx.MockTransport`; use `FakeLLM` from tests/test_phase
 · `GET /api/issues` · `POST /api/issues/explain {master, agent}` → `{text, source}` · `GET /api/approvals/{id}/email` (full body + attachments) · `GET /api/approvals/{id}/attachments/{att}` (streamed, never stored)
 · `GET /api/desk/{master}` (read-only pipeline: stages + items + artifacts) · `GET /api/files/{path}` (only `data/sites`, `data/applications`)
 · `GET/POST /api/visa/accounts`, `POST /api/visa/accounts/{id}` (`{cities, booked, password?}` or `{action: signin|pause|resume|check|forget}`), `DELETE /api/visa/accounts/{id}` (a password is never returned; a request from another origin is refused)
-· `POST /api/tts {text, voice?}` → wav · `GET /api/voices` (Kokoro's English voices) · `POST /api/stt` (raw audio body) → `{text}` · `GET /api/traffic?city=` · `GET /api/weather/grid` (globe weather, ~100 points, cached 1 h)
+· `POST /api/tts {text, voice?}` → wav · `GET /api/voices` (Kokoro's English voices) · `POST /api/stt` (raw audio body) → `{text}` · `GET /api/schedule` (fire times in the next 24 h of the fixed-time jobs only: master `run_at` runs and briefs, `{at, local, kind, master, label, channel, zone_local?}`; `{standby: true, items: []}` in standby) · `GET /api/traffic?city=` · `GET /api/weather/grid` (globe weather, ~100 points, cached 1 h)
 · `GET /api/voice/fix?word=` → `{word, source: fix|table|learned|none, spelling}` · `POST /api/voice/fix {word, spelling, force?}` (Mani's pronunciation fixes; local origin only; 400 with the reason when refused)
 · `/auth/{google|microsoft|youtube}/login?account=` + `/callback` · `/auth/fyers/login` + `/callback` · `WS /ws`
 
@@ -147,6 +147,7 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
 - Music: `dashboard/audio/inspired.mp3` during the boot roll call, fading into `roadside.mp3` as a quiet loop
   that ducks while VISION speaks or listens. Switch in the voice menu (`vision-music` in localStorage).
 - Power button: confirmation → `/api/shutdown` → the roll call in reverse → standby screen; "Power on" calls `/api/boot`.
+- 24H timeline (Mani, 2026-10-14): one diamond per fixed-time job from `/api/schedule` (fetched on connect and every 10 min; `run_at` entries may read `"07:02 Asia/Kolkata | label | channel"`), placed by the Mac's clock, colour by channel (Mani Market green, Confessions red, both gold, Telegram briefs blue), hover card with name and time (and IST for a zoned run); the next one is outlined, later-today-already-passed ones dimmed; connected without the schedule it says "schedule: waiting", preview shows a labelled demo.
 - Chronograph look (Mani's choice, 2026-10-12): one CSS block at the end of the `<style>` in Main.dc.html restyles the HUD
   (still tick-mark dial round the emblem, one thin red arc, bracket-corner panels, segmented bars, diamond status marks,
   underline tabs, no glow). Delete that block to get the earlier look back.
