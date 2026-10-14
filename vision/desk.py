@@ -10,7 +10,7 @@ from pathlib import Path
 
 from .config import ROOT
 
-ALLOWED = ("sites", "applications")   # folders under ROOT/data that /api/files may serve
+ALLOWED = ("sites", "applications", "ebooks")   # folders under ROOT/data that /api/files may serve
 LIMIT = 60
 REPORT_MASTERS = ("invest", "world")
 CATALOG = Path(__file__).parent / "masters" / "catalog.json"
@@ -241,6 +241,31 @@ def figures(v: dict) -> list[tuple]:
             ("Left out", ", ".join(f"{d['name']} ({d['why']})" for d in r.get("dropped") or []) or None)]
 
 
+def ebooks(store):
+    stages = [("making", "Being made"), ("awaiting", "Awaiting you"), ("ready", "Ready to upload"), ("published", "Published"), ("parked", "Parked")]
+    of = {"planned": "making", "written": "making", "drawing": "making", "checked": "making", "awaiting": "awaiting", "ready": "ready",
+          "published": "published", "parked": "parked"}
+
+    def one(b):
+        st = of.get(b.get("status"))
+        if not st:
+            return None
+        pages = [s for s in b.get("scenes") or [] if s.get("state") != "dropped"][: b.get("pictures", 30)]
+        ok = sum(1 for s in pages if s.get("state") == "ok")
+        L = b.get("listing") or {}
+        rows = _rows(("Theme", b.get("theme")), ("Ages", b.get("ages")), ("Pages ready", f"{ok} of {b.get('pictures')}" if pages else None),
+                     ("Dropped scenes", sum(1 for s in b.get("scenes") or [] if s.get("state") == "dropped") or None),
+                     ("Price", f"${L['price']} (about ${L['royalty']} a copy, printing ~${L['print_cost']})" if L.get("price") else None),
+                     ("Keywords", ", ".join(L.get("keywords") or [])), ("Categories", " | ".join(L.get("categories") or [])),
+                     ("AI disclosure", "; ".join(f"{k}: {v}" for k, v in (L.get("ai") or {}).items())),
+                     ("Interior", f"{b['pages']} pages" if b.get("pages") else None), ("ASIN", b.get("asin")))
+        body = (b.get("subtitle") or "") + ("\n\n" + L["description"] if L.get("description") else "")
+        files = [f for f in [file_ref(b.get("cover_png"), "Cover"), file_ref(b.get("contact"), "All pages"), file_ref(b.get("interior"), "Interior PDF"),
+                             file_ref(b.get("cover"), "Cover PDF")] if f]
+        return _item(b.get("id"), st, b.get("title") or b.get("theme"), b.get("subtitle") or "", b.get("made"), rows, body, [], files)
+    return stages, _each(_kv(store, "ebooks", 500), one)
+
+
 def youtube(store):
     stages = [("ready", "Waiting for upload"), ("awaiting", "Awaiting your approval"), ("review", "Unlisted · your review"), ("scheduled", "Scheduled"), ("public", "Public"), ("gone", "Deleted / private"), ("stale", "Stale · not published"), ("forreview", "For review")]
     of = {"ready": "ready", "awaiting": "awaiting", "unlisted": "review", "scheduled": "scheduled", "public": "public", "deleted": "gone", "private": "gone", "stale": "stale", "review": "forreview"}
@@ -271,7 +296,7 @@ def reports(store, master: str):
     return [("reports", "Reports")], _each(rows, lambda r: _item("report:" + _s(r["id"]), "reports", r.get("summary"), "", r.get("ts")))
 
 
-BUILDERS = {"web": web, "jobs": jobs, "email": email, "calendar": calendar, "trading": trading, "youtube": youtube}
+BUILDERS = {"ebooks": ebooks, "web": web, "jobs": jobs, "email": email, "calendar": calendar, "trading": trading, "youtube": youtube}
 
 
 def build(store, master_id: str) -> dict | None:

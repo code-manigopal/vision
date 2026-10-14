@@ -34,6 +34,7 @@ bash scripts/setup.sh                     # venv + deps + .env from template + c
 .venv/bin/python -m vision fonts          # fetch the ten caption fonts + write the sample sheet data/shorts/_sample/caption-fonts.png
 .venv/bin/python -m vision sfx            # add 3 sound effects per kind to assets/sfx/ (or: sfx whoosh 5)
 .venv/bin/python -m vision visa list      # Visa Watch accounts: add | list | update | pause | resume | remove | check <id>
+.venv/bin/python -m vision ebooks list    # E-books Manager: list | published <book> [ASIN] | redraw <book> <page>
 .venv/bin/python -m pytest -q             # 452 tests, all external services mocked
 bash scripts/install_launchagent.sh       # auto-start at login + restart on crash
 tail -f logs/vision.log
@@ -60,6 +61,7 @@ vision/
                    fyers.py, kite_mcp.py (Zerodha via hosted Kite MCP, persistent session), wealthsimple.py (CSV),
                    nse.py (NSE results filings, read-only), lmstudio.py (unload/reload LM Studio's models around heavy work),
                    world.py (index moves, GIFT Nifty and NSE trading days for the market Shorts), sysmon.py (Instruments: CPU/memory via psutil, GPU via ioreg or nvidia-smi),
+                   cfai.py (Cloudflare Workers AI: FLUX.2 klein drawing + Llama 3.2 Vision, free daily neurons counted in kv `cfai`),
                    visa_portal.py (US visa portal for Canada, read-only: Selenium for the person's own sign-in, httpx GETs after), keyvault.py (Fernet key in the macOS Keychain)
   masters/         catalog.json (shared with the dashboard) + one module per live master; market.py + fundamentals.py + market_crew.py + slides.py + tamil_say.py + names_ta.json (Mani Market Tamil)
 dashboard/
@@ -75,7 +77,7 @@ tests/             test_core, test_telegram, test_phase34, test_phase567
    `AgentResult.summary` (+ `data`) becomes the master report. Briefs use master reports only.
    Reporters: email=Summarizer, calendar=Scheduler, trading=Portfolio Manager, invest=Daily P&L Reporter,
    web=Proposal Drafter, jobs=Application Tracker, world=News Summarizer (news, weather, flights, traffic),
-   visa=Slot Watcher, youtube=Confessions Everywhere Director (its crew reports to it through Analytics Manager; it also adds Mani Market Tamil's line, whose own crew reports through Market Analytics).
+   visa=Slot Watcher, ebooks=Shelf Manager, youtube=Confessions Everywhere Director (its crew reports to it through Analytics Manager; it also adds Mani Market Tamil's line, whose own crew reports through Market Analytics).
 2. **Errors skip the chain**: a failing agent turns red, alerts the master log (Telegram once/30 min),
    and blocks later stages — unless the agent sets `blocking = False` (sync/data agents do).
 3. **Side effects need approval** (the YOU gate): sending email, booking meetings, job packages,
@@ -292,6 +294,23 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   owners give full authority over dates), off by default: on = the first acceptable date is booked without asking, once,
   then the account stops looking and Mani is told; off = Approve / Reject as above.** The portal
   only lists dates for an account with an open application (a schedule number); Mani's own June 2026 appointment is done.
+- **E-books Manager** (`masters/ebooks.py` + `ebook_art.py` checks + `ebook_print.py` PDFs; Mani, 2026-10-14; took Traffic Desk's slot): KDP
+  paperback coloring books for children under the brand **Grow Kids Max Studio** (author field), one book at a time, **quality before volume**,
+  **zero cost**. Theme Planner (`options.queue` "Theme | ages", then `THEMES`) → Page Writer (Groq `options.model`, pictures + spares scenes,
+  brand/character names refused, `BRANDS`) → Illustrator (Cloudflare FLUX.2 klein 1024x1328, `tries` per page per round, stops before
+  `neuron_budget`; a used-up allowance is RESTING, never an error; carries on after 00:00 UTC) → Page Inspector (code: `ebook_art.issues`
+  grey > 0.30 after a median filter, solid black > 3 %, hairlines, empty/too dense, spaces too small for the age, near-copies by dHash; then
+  Llama 3.2 Vision on Cloudflare: deformed, letters in the picture, scary, off-scene, score < `min_score`; best passing try wins; after `rounds`
+  a page is dropped and a spare steps in; spares used up = the writer adds scenes) → Book Builder (pure black and white 300 DPI inside the
+  safe area, interior PDF: title, copyright with the AI note, "This book belongs to", each picture on a right-hand page with a blank back,
+  thank-you) + Listing Writer (Groq; `HYPE`/`BRANDS` refused, categories only from `CATEGORIES`, price by rule `ebook_print.price`: band
+  6.99-9.99 and royalty >= 1.75 from KDP's print-cost estimate) + Cover Designer (colour FLUX art with no text, every word set in code,
+  spine from the page count, barcode box empty; waits for the listing's blurb) → approval `ebook_publish` (Shelf Manager raises it once per
+  version) → Mani uploads to KDP himself (no KDP API; a bot on KDP breaks its terms), then `ebooks published <book>`. Groq has no vision
+  model on Mani's key (llama-4-scout gone), hence Cloudflare's. Drop-ins `inbox/ebooks/<book>/page-07.png` / `cover.png` replace a page or
+  the cover art, rebuild and ask again (an older approval is answered "outdated"). Thresholds were calibrated on Mani's own Gemini book
+  (`~/Downloads/Animals_Thematic_Coloring_Book_A4.pdf`, his quality bar). Gemini's image API is not free; Pollinations' terms unclear; the
+  Gemini app is by hand only. Not built: edutainment/activity pages, story books, KDP sales CSV, dashboard Redraw button.
 - YouTube Manager (`masters/youtube.py`, took the Film Studio slot) has three levels: master → one Director per channel
   (`options.channels`) → that channel's crew. `Director` (agents.py) runs its crew like a master runs sub-agents; crew
   agent events carry `director`. Crew for Confessions Everywhere: Story Scout → Story Writer → Screenplay Writer →
@@ -600,6 +619,7 @@ The long lesson opens on the disclaimer card as ever, has a fixed opening line, 
 | World Watch (news, weather, flights, traffic) | live | TOMTOM_API_KEY for traffic; optional OPENSKY creds (a free account lifts flights from about 100 to 1,000 snapshots a day) |
 | Trading Desk | live | OANDA practice token + account |
 | YouTube Manager (+ Mani Market Tamil) | live (upload mocked only, never run against YouTube) | GROQ_API_KEY, PEXELS_API_KEY (the .env line has no usable value), REDDIT_CLIENT_ID/SECRET or .txt stories in inbox/confessions/confessions; GOOGLE_CLIENT_ID/SECRET with YouTube Data API v3 and Google Drive API enabled and redirect `http://127.0.0.1:8765/auth/youtube/callback`, then the YouTube sign-in. Mani Market Tamil: its own YouTube sign-in (`/auth/youtube/login?account=youtube-manimarket`), `vault/voice/ref-tight.wav` + `ref.txt` and the IndicF5 model for the cloned voice, headless Chrome (selenium) for the slides, LM Studio's `lms` tool |
+| E-books Manager | live (never run for real yet) | CLOUDFLARE_API_TOKEN with Workers AI + CLOUDFLARE_ACCOUNT_ID (set), GROQ_API_KEY; uploads each approved book to KDP by hand |
 | Visa Watch | live (never run signed in) | add the account on its desk, then sign in to the portal himself in the window it opens (again whenever the session runs out); the Keychain prompt allowed once |
 | Telegram | live | TELEGRAM_BOT_TOKEN, then /start → TELEGRAM_CHAT_ID |
 | Ask engine | live | LM Studio server + llm.local_model (optional ANTHROPIC_API_KEY + llm.cloud_model) |

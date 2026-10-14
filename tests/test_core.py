@@ -32,7 +32,7 @@ def store(tmp_path):
 
 
 def test_catalog_matches_dashboard():
-    assert len(CATALOG["order"]) == 9          # Traffic Desk merged into World Watch; the E-books Manager takes the 10th slot later
+    assert len(CATALOG["order"]) == 10         # Traffic Desk merged into World Watch; the E-books Manager took its slot
     for mid, spec in CATALOG["masters"].items():
         names = [a["name"] for a in spec["agents"]]
         staged = [n for s in spec["stages"] for n in s["agents"]]
@@ -131,7 +131,7 @@ def test_server_ws_and_api(tmp_path, monkeypatch):
         assert c.get("/").status_code == 200
         assert "x-dc" in c.get("/dashboard/Main.dc.html").text
         st = c.get("/api/state").json()
-        assert len(st["masters"]) == 9
+        assert len(st["masters"]) == 10
         with c.websocket_connect("/ws") as ws:
             snap = ws.receive_json()
             assert snap["type"] == "snapshot"

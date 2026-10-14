@@ -64,6 +64,11 @@ def main() -> int:
         from .masters import visa
         load_config()
         return visa.cli(args[1:])
+    if args[:1] == ["ebooks"]:   # python -m vision ebooks list|published <book>|redraw <book> <page>
+        from .masters import ebooks
+        load_config()
+        print(ebooks.cli(args[1:]))
+        return 0
     if args[:1] == ["fonts"]:    # python -m vision fonts: download the caption fonts to assets/fonts/
         from .services import fonts
         for n in asyncio.run(fonts.fetch()):

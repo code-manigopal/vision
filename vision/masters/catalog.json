@@ -7,6 +7,7 @@
   "web",
   "jobs",
   "world",
+  "ebooks",
   "youtube",
   "visa"
  ],
@@ -1074,6 +1075,122 @@
    ],
    "reporter": "Slot Watcher",
    "demo_report": "Nothing earlier than the booked date",
+   "loop": false
+  },
+  "ebooks": {
+   "id": "ebooks",
+   "name": "E-BOOKS MANAGER",
+   "agents": [
+    {
+     "name": "Theme Planner",
+     "status": "done",
+     "label": "PLANNED",
+     "tier": "QUICK",
+     "note": "next theme + age band"
+    },
+    {
+     "name": "Page Writer",
+     "status": "done",
+     "label": "WRITTEN",
+     "tier": "CLOUD",
+     "note": "30 scenes · Groq"
+    },
+    {
+     "name": "Illustrator",
+     "status": "work",
+     "label": "DRAWING",
+     "tier": "API",
+     "note": "FLUX.2 klein · Cloudflare free"
+    },
+    {
+     "name": "Page Inspector",
+     "status": "work",
+     "label": "CHECKING",
+     "tier": "API",
+     "note": "grey · fills · lines · vision check"
+    },
+    {
+     "name": "Book Builder",
+     "status": "idle",
+     "label": "QUEUED",
+     "tier": "QUICK",
+     "note": "300 DPI interior PDF"
+    },
+    {
+     "name": "Cover Designer",
+     "status": "idle",
+     "label": "QUEUED",
+     "tier": "API",
+     "note": "colour cover + spine"
+    },
+    {
+     "name": "Listing Writer",
+     "status": "idle",
+     "label": "QUEUED",
+     "tier": "CLOUD",
+     "note": "title · keywords · price"
+    },
+    {
+     "name": "Shelf Manager",
+     "status": "idle",
+     "label": "QUEUED",
+     "tier": "QUICK",
+     "note": "books → VISION"
+    }
+   ],
+   "stages": [
+    {
+     "title": "PLAN",
+     "agents": [
+      "Theme Planner"
+     ],
+     "parallel": false
+    },
+    {
+     "title": "SCRIPT",
+     "agents": [
+      "Page Writer"
+     ],
+     "parallel": false
+    },
+    {
+     "title": "DRAW",
+     "agents": [
+      "Illustrator"
+     ],
+     "parallel": false
+    },
+    {
+     "title": "CHECK",
+     "agents": [
+      "Page Inspector"
+     ],
+     "parallel": false
+    },
+    {
+     "title": "BUILD",
+     "agents": [
+      "Book Builder",
+      "Cover Designer",
+      "Listing Writer"
+     ],
+     "parallel": true
+    },
+    {
+     "title": "APPROVAL",
+     "agents": [],
+     "approval": true
+    },
+    {
+     "title": "REPORT",
+     "agents": [
+      "Shelf Manager"
+     ],
+     "parallel": false
+    }
+   ],
+   "reporter": "Shelf Manager",
+   "demo_report": "Ocean Animals: 18 of 30 pages drawn · 0 waiting for you",
    "loop": false
   }
  }

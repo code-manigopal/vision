@@ -21,7 +21,7 @@ llm:                       # Ask engine + every agent that writes or judges
 #   only_masters: [youtube]            just YouTube Manager
 #   only_masters: [youtube, news]      those two
 #   only_masters: []                   no override: each master's own `enabled:` below decides
-# ids: email, calendar, trading, invest, news, web, jobs, world, youtube, visa. Restart VISION after a change.
+# ids: email, calendar, trading, invest, news, web, jobs, world, ebooks, youtube, visa. Restart VISION after a change.
 only_masters: []
 
 # mode: stub = demo agents until that master is built · live = real agents
@@ -142,6 +142,23 @@ masters:
       followup_days: 10                   # no reply this long after applying: a reminder, at most `followups` of them
       followups: 2
       stale_days: 60                      # after the reminders and this long with no reply, the application is set aside as closed
+  ebooks:                 # E-books Manager: KDP paperback coloring books, Grow Kids Max Studio. Pictures on Cloudflare Workers AI (free 10,000 neurons a day), words on Groq
+    enabled: true
+    trust: SUGGEST         # makes the whole book; nothing reaches KDP without your yes, and you upload it yourself
+    mode: live
+    cycle_minutes: 60      # draws until the day's free allowance is used, then carries on after it resets (00:00 UTC = 8 pm Toronto in summer)
+    options:
+      author: Grow Kids Max Studio
+      queue: ["Ocean Animals | 4-8"]   # the next books, in order ("Theme | ages", ages 2-4, 4-8 or 8-12); after these, the theme bank in ebooks.THEMES
+      pictures: 30         # pictures per book, each on its own page with a blank back
+      spares: 8            # extra scenes written in case a page keeps failing its checks
+      tries: 2             # drawings per page per round; the best that passes every check is kept
+      rounds: 3            # rounds before a page is dropped and a spare scene takes its place
+      min_score: 6         # the vision check's score (0-10) a page must reach
+      neuron_budget: 9500  # of Cloudflare's free 10,000 a day; the rest is kept for the cover
+      model: openai/gpt-oss-20b   # Groq model for scenes and the listing (its own daily allowance, apart from the YouTube writers)
+      trim: [8.5, 11.0]
+      price_band: [6.99, 9.99]
   visa:
     enabled: true
     trust: OBSERVE         # only looks at the dates on offer and tells you; you book by hand

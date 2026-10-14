@@ -18,7 +18,8 @@ CATALOG = json.loads((Path(__file__).parent / "catalog.json").read_text())
 LIVE_MODULES = {"invest": "vision.masters.invest",
                 "email": "vision.masters.email", "calendar": "vision.masters.calendar", "jobs": "vision.masters.jobs",
                 "web": "vision.masters.web", "world": "vision.masters.world", "trading": "vision.masters.trading",
-                "youtube": "vision.masters.youtube", "visa": "vision.masters.visa"}
+                "youtube": "vision.masters.youtube", "visa": "vision.masters.visa",
+                "ebooks": "vision.masters.ebooks"}
 
 
 def approval_handlers() -> dict:

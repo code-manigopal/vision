@@ -1445,7 +1445,7 @@ class Component extends DCLogic {
   // Preview: rule-based intent parser. Real build: the local LLM router (LM Studio, tool calling)
   // returns the same {kind, ...entities} list, and the same plan UI runs on the real agent results.
   static REPORTERS = { email: 'Summarizer', calendar: 'Scheduler', trading: 'Portfolio Manager', invest: 'Daily P&L Reporter',
-    web: 'Proposal Drafter', jobs: 'Application Tracker', world: 'News Summarizer', youtube: 'Confessions Everywhere Director', visa: 'Slot Watcher' };
+    web: 'Proposal Drafter', jobs: 'Application Tracker', world: 'News Summarizer', ebooks: 'Shelf Manager', youtube: 'Confessions Everywhere Director', visa: 'Slot Watcher' };
   static HOLD = null;   // a master kept on hold (greyed out, skipped at boot); none right now
   titleCase(x) { return x.trim().replace(/\s+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()); }
   parseDay(q) {
@@ -1620,8 +1620,8 @@ class Component extends DCLogic {
     if (/\b(what needs (me|my)|(show|review|open) (me )?(the |my )?(approvals?|decisions?)|anything to (approve|decide)|what('?s| is) waiting)\b/.test(t0)) { this.openDecide(); return; }
     if (/^(how are (we|you|things)( all)?( doing| going)?|how'?s (it|everything) going|what'?s up|whats up|status( report| update)?|give me (a |the )?(status|update|rundown)|what did i miss)\b/.test(t0)) { this.startBrief(); return; }
     if (/\b(approved pitches|my pitches|show (me )?(the )?pitches)\b/.test(t0)) { this.openDesk('web', 'pitched'); return; }
-    { const dm = t0.match(/\b(?:show|open)\b.*?\b(email|calendar|trading|invest\w*|news|web|job\w*|world)?\b.*\bdesk\b/);
-      if (dm) { const k = (dm[1] || '').replace(/^invest.*/, 'invest').replace(/^job.*/, 'jobs'); this.openDesk(k || this.state.master); return; } }
+    { const dm = t0.match(/\b(?:show|open)\b.*?\b(email|calendar|trading|invest\w*|news|web|job\w*|world|ebook\w*|books?)?\b.*\bdesk\b/);
+      if (dm) { const k = (dm[1] || '').replace(/^invest.*/, 'invest').replace(/^job.*/, 'jobs').replace(/^(ebook.*|books?)$/, 'ebooks'); this.openDesk(k || this.state.master); return; } }
     if (this.state.liveUp && !this.useLocal && t0 && !this.isNavCommand(t0)) { this.askLive(raw); return; }
     this.runLocal(raw);
   }
@@ -1688,7 +1688,7 @@ class Component extends DCLogic {
       this.say('Mind closed.');
     } else if (this.pickMaster(t) || t.includes('agent') || t.includes('pipeline') || t.includes('slave')) {
       const mk = this.pickMaster(t);
-      const names = { youtube: 'YouTube Manager', trading: 'Trading Desk', jobs: 'Job Hunt', web: 'Web Designer', invest: 'Investments', world: 'World Watch', email: 'Email Manager', calendar: 'Calendar Manager', visa: 'Visa Watch' };
+      const names = { youtube: 'YouTube Manager', trading: 'Trading Desk', jobs: 'Job Hunt', web: 'Web Designer', invest: 'Investments', world: 'World Watch', ebooks: 'E-books Manager', email: 'Email Manager', calendar: 'Calendar Manager', visa: 'Visa Watch' };
       if (mk) this.setState({ master: mk });
       this.say('Showing ' + names[mk || this.state.master] + ' agents.');
       setTimeout(() => this.scrollToGraph(), 60);
@@ -1705,6 +1705,7 @@ class Component extends DCLogic {
     if (t.includes('web') || t.includes('site') || t.includes('design')) return 'web';
     if (t.includes('news') || t.includes('cricket') || t.includes('politic') || t.includes('headline')) return 'world';
     if (t.includes('traffic')) return 'world';
+    if (t.includes('ebook') || t.includes('e-book') || t.includes('coloring') || t.includes('colouring') || t.includes('book')) return 'ebooks';
     if (t.includes('visa')) return 'visa';
     if (t.includes('calendar') || t.includes('meeting')) return 'calendar';
     if (t.includes('email') || t.includes('mail') || t.includes('inbox')) return 'email';
@@ -2138,6 +2139,9 @@ class Component extends DCLogic {
       calendar: { name: 'CALENDAR MANAGER', dot: 'd-wait', agents: [
         ['Calendar Reader','done','SYNCED'],['Conflict Checker','done','NO CLASH'],['Scheduler','wait','CONFIRM'],
         ['Reminder Agent','work','ARMED'],['Email Liaison','work','LINKED']] },
+      ebooks: { name: 'E-BOOKS MANAGER', dot: 'd-work', agents: [
+        ['Theme Planner', 'done', 'PLANNED'], ['Page Writer', 'done', 'WRITTEN'], ['Illustrator', 'work', 'DRAWING'], ['Page Inspector', 'work', 'CHECKING'],
+        ['Book Builder', 'idle', 'QUEUED'], ['Cover Designer', 'idle', 'QUEUED'], ['Listing Writer', 'idle', 'QUEUED'], ['Shelf Manager', 'idle', 'QUEUED']] },
       visa: { name: 'VISA WATCH', dot: 'd-done', agents: [
         ['Canada Checker', 'done', 'CHECKED'], ['Slot Watcher', 'done', 'WATCHING']] }
     };
@@ -2172,12 +2176,12 @@ class Component extends DCLogic {
       Object.keys(data).forEach((m) => { if (m !== Component.HOLD && !((LM[m] || {}).agents || []).length) data[m].agents = data[m].agents.map((a) => [a[0], 'idle', 'WAITING', a[3]]); });
       ((LM[s.master] || {}).agents || []).forEach((a) => { liveSum[a.name] = a.summary || ''; });
     }
-    const masters = ['email','calendar','trading','invest','web','jobs','world','youtube','visa'].map((id) => ({
+    const masters = ['email','calendar','trading','invest','web','jobs','world','ebooks','youtube','visa'].map((id) => ({
       name: data[id].name.charAt(0) + data[id].name.slice(1).toLowerCase().replace(/ (\w)/, (m) => m.toUpperCase()).replace('Youtube', 'YouTube'),
       dot: data[id].dot,
       count: data[id].agents.length,
-      trust: ({ calendar: 'SUGGEST', email: 'SUGGEST', trading: 'OBSERVE', invest: 'OBSERVE', web: 'SUGGEST', jobs: 'ACT', world: 'OBSERVE', youtube: 'ACT', visa: 'OBSERVE' })[id],
-      trustColor: ({ calendar: '#FBCA03', email: '#FBCA03', trading: '#67C7EB', invest: '#67C7EB', web: '#FBCA03', jobs: '#67C7EB', world: '#67C7EB', youtube: '#67C7EB', visa: '#67C7EB' })[id],
+      trust: ({ calendar: 'SUGGEST', email: 'SUGGEST', trading: 'OBSERVE', invest: 'OBSERVE', web: 'SUGGEST', jobs: 'ACT', world: 'OBSERVE', ebooks: 'SUGGEST', youtube: 'ACT', visa: 'OBSERVE' })[id],
+      trustColor: ({ calendar: '#FBCA03', email: '#FBCA03', trading: '#67C7EB', invest: '#67C7EB', web: '#FBCA03', jobs: '#67C7EB', world: '#67C7EB', ebooks: '#FBCA03', youtube: '#67C7EB', visa: '#67C7EB' })[id],
       cls: s.master === id ? 'mst-on' : 'mst',
       id, agents: [],
       open: s.master === id && !!s.accOpen,   // its sub-agents and buttons show under it; a second click folds them away
@@ -2215,7 +2219,7 @@ class Component extends DCLogic {
       'All masters online. RAM is running high.'
     ];
     // ---- Orbit markers: one per master, hover = glass status card ----
-    const orbOrder = ['email','calendar','trading','invest','web','jobs','world','youtube','visa'];
+    const orbOrder = ['email','calendar','trading','invest','web','jobs','world','ebooks','youtube','visa'];
     const SC = 430 / 440;
     const orbMarks = orbOrder.map((m, k) => {
       const an = (-90 + k * 360 / orbOrder.length) * Math.PI / 180 + s.orbA;
@@ -2265,6 +2269,7 @@ class Component extends DCLogic {
       ['web', 'Web Designer', 18, [['Business Finder', 'Local leads'], ['Competitor Analyst', 'Competitor notes'], ['Website Builder', 'Demo sites'], ['Proposal Drafter', 'Proposals']]],
       ['invest', 'Investments', 54, [['Broker Syncs', 'Holdings'], ['Index Tracker', 'Index moves'], ['Bitcoin Tracker', 'BTC log'], ['P&L Reporter', 'Daily P&L']]],
       ['world', 'World Watch', 90, [['Markets News', 'India and global'], ['Cricket', 'Match updates'], ['Politics', 'Policy watch'], ['Weather', 'Leamington wx'], ['Flight Tracker', 'Live flights'], ['City Geocoder', 'City bbox'], ['Traffic Poller', 'Congestion log'], ['Incident Scout', 'Incidents']]],
+      ['ebooks', 'E-books Manager', 234, [['Theme Planner', 'Next theme'], ['Illustrator', 'Page art'], ['Book Builder', 'Interior PDF'], ['Shelf Manager', 'Books']]],
       ['visa', 'Visa Watch', 126, [['Slot Watcher', 'Earlier dates']]],
       ['email', 'Email Manager', 162, [['Reader', 'Inbox digest'], ['Categorizer', 'Categories'], ['Writer', 'Drafts'], ['Sender', 'Sent log']]],
       ['calendar', 'Calendar Manager', 198, [['Scheduler', 'Meetings'], ['Reminder Agent', 'Reminders'], ['Email Liaison', 'Invites']]]
@@ -2327,6 +2332,7 @@ class Component extends DCLogic {
         below: { stage: 5, name: 'Reflection', note: 'decision log · 5d later' } },
       jobs: { loop: true, stages: [['SCOUT',['Job Scout']],['TAILOR',['Resume Tailor','Cover Letter Writer']],['APPROVAL',['YOU']],['REACH OUT',['Outreach']],['TRACK',['Application Tracker']],['PREPARE',['Interview Prep']]] },
       invest: { loop: false, stages: [['SYNC',['Zerodha Sync','Fyers Sync','Wealthsimple Sync']],['CONSOLIDATE',['Portfolio Aggregator']],['ANALYZE',['Allocation Analyst','Risk Monitor','Market Watcher','Tax & Records Keeper']],['MARKET PULSE',['Index Tracker','Bitcoin Tracker']],['REPORT',['Daily P&L Reporter']]] },
+      ebooks: { loop: false, stages: [['PLAN',['Theme Planner']],['SCRIPT',['Page Writer']],['DRAW',['Illustrator']],['CHECK',['Page Inspector']],['BUILD',['Book Builder','Cover Designer','Listing Writer']],['APPROVAL',['YOU']],['REPORT',['Shelf Manager']]] },
       visa: { loop: false, stages: [['CHECK', ['Canada Checker']], ['COMPARE', ['Slot Watcher']]] },
       calendar: { loop: false, stages: [['SYNC',['Calendar Reader']],['CHECK',['Conflict Checker']],['PLAN',['Scheduler','Reminder Agent']],['COORDINATE',['Email Liaison']],['APPROVAL',['YOU']],['HANDOFF',['Email Manager']]], xnote: { stage: 5, text: 'invites go out via Email Sender' } },
       email: { xnote: { stage: 1, text: 'meeting requests → Calendar Manager' }, loop: false, stages: [['READ',['Reader']],['SORT',['Categorizer']],['SUMMARIZE',['Summarizer']],['DRAFT',['Writer']],['APPROVAL',['YOU']],['SEND',['Sender']]] },
@@ -2356,6 +2362,8 @@ class Component extends DCLogic {
       'Political News': ['QUICK','balanced sources'], 'News Summarizer': ['DEEP','top 4 → VISION'],
       'City Geocoder': ['API', 'Dynamic city input'], 'Traffic Poller': ['API', 'Live congestion'], 'Incident Scout': ['DEEP', 'Active roadworks & jams'],
       'Weather Agent': ['API','Open-Meteo · Leamington'], 'Flight Tracker': ['API','OpenSky · live ADS-B'], 'Globe View': ['UI','say "show flights"'], 'Reader': ['API','all inboxes · last 24h'], 'Categorizer': ['LOCAL','action · work · finance · promo'], 'Summarizer': ['LOCAL','digest + needs attention'], 'Writer': ['CLOUD','drafts in your tone'], 'Sender': ['API','sends after approval'], 'Calendar Reader': ['API','all calendars'], 'Conflict Checker': ['NONE','double-bookings, travel time'], 'Scheduler': ['LOCAL','finds slots, proposes times'], 'Reminder Agent': ['NONE','Telegram + voice reminders'], 'Email Liaison': ['LOCAL','works with Email Manager'], 'Email Manager': ['MASTER','collaborating master'],
+      'Theme Planner': ['QUICK','next theme + age band'], 'Page Writer': ['CLOUD','30 scenes · Groq'], 'Illustrator': ['API','FLUX.2 klein · Cloudflare free'], 'Page Inspector': ['API','grey · fills · lines · vision check'],
+      'Book Builder': ['QUICK','300 DPI interior PDF'], 'Cover Designer': ['API','colour cover + spine'], 'Listing Writer': ['CLOUD','title · keywords · price'], 'Shelf Manager': ['QUICK','books → VISION'],
       'Telegram Bot': ['API','6:00 AM · 6:00 PM']
     };
     const stat = {}; data[s.master].agents.forEach((a2) => { stat[a2[0]] = [a2[1], a2[2]]; }); stat['Globe View'] = ['done', 'READY']; stat['Telegram Bot'] = ['done', 'CONNECTED']; stat['Email Manager'] = ['work', 'LINKED'];
@@ -2476,7 +2484,7 @@ class Component extends DCLogic {
     if (RD.invest && RD.invest.mkts && RD.invest.mkts.length) bMkts = RD.invest.mkts.map((m) => m.pct == null ? noRow(m.name) : mk(m.name, m.pct));
     else if (bLive) bMkts = [noRow(RD.invest ? 'Markets unavailable' : 'Waiting for Investments')];
     // ---- Boot sequence: every agent reports in to VISION ----
-    const order = ['email','calendar','trading','invest','web','jobs','world','youtube','visa'];
+    const order = ['email','calendar','trading','invest','web','jobs','world','ebooks','youtube','visa'];
     const flat = [];
     order.forEach((m) => data[m].agents.forEach((a2) => flat.push([m, a2[0]])));
     const total = flat.length;
@@ -2615,6 +2623,7 @@ class Component extends DCLogic {
       ['world', 'WORLD', '4 topics updated · 28 flights tracked · Leamington 3 incidents'],
       ['calendar', 'CALENDAR', calTodayLine],
       ['youtube', 'YOUTUBE', '4 Shorts scheduled · 1 long video'],
+      ['ebooks', 'E-BOOKS', 'Ocean Animals: 18 of 30 pages drawn · 0 waiting for you'],
       ['visa', 'VISA WATCH', 'No earlier date on offer']
     ];
     const T = s.traffic, TMS = T && T.mostSevere;
@@ -2779,6 +2788,14 @@ class Component extends DCLogic {
           c.body = em.subject ? 'From their email: ' + em.subject + '\n\n' + (em.snippet || '') : ''; c.okLabel = 'Accept and book'; c.say = title + '.';
         } else if (p.kind === 'job_package') {
           c.rows = [R('Package', p.folder || 'not saved')]; c.link = p.url; c.linkLabel = 'Open posting'; c.body = 'The tailored résumé and cover letter are in the package folder. Approving marks it ready for you to submit; VISION never applies for you.';
+        } else if (p.kind === 'ebook_publish') {
+          // a finished colouring book: cover, contact sheet, listing and the two PDFs, waiting for a yes
+          const L = p.listing || {}, kw = Array.isArray(L.keywords) ? L.keywords : [], nts = Array.isArray(p.notes) ? p.notes : [], pop = (name, src, type) => ({ label: name, open: () => this.setState({ prev: pv ? null : { key: c.key, name, src, type, sandbox: '' } }) });
+          c.kick = 'DECISION · ' + mn + ' · COLOURING BOOK'; c.okLabel = 'Approve book';
+          c.rows = [R('Ages', p.ages || L.ages || '—'), R('Theme', p.theme || '—'), R('Pictures', p.pictures == null ? '—' : p.pictures), R('Pages', p.pages == null ? '—' : p.pages), R('Price', p.price == null ? '—' : p.price), R('Royalty', p.royalty == null ? '—' : p.royalty)];
+          c.body = (L.subtitle || p.subtitle ? (L.subtitle || p.subtitle) + '\n\n' : '') + (L.description || '') + (kw.length ? '\n\nKEYWORDS\n' + kw.join(' · ') : '') + (nts.length ? '\n\nNOTES\n' + nts.map((n) => '• ' + n).join('\n') : '');
+          c.atts = [p.cover_png ? pop('Cover', p.cover_png, 'img') : null, p.contact ? pop('Contact sheet', p.contact, 'img') : null, p.interior ? pop('Interior PDF', p.interior, 'pdf') : null, p.cover ? pop('Cover PDF', p.cover, 'pdf') : null].filter(Boolean);
+          c.say = (p.title || title) + '. A colouring book for ages ' + (p.ages || L.ages || 'unknown') + ', ' + (p.pictures || 0) + ' pictures. Priced at ' + (p.price == null ? 'no price' : p.price) + '.';
         } else if (p.kind === 'yt_publish') {
           // a private upload waiting for a yes: what backs each statement (reasons with their quote and source, headlines with their publication), a lesson's official pages and the new words to check by ear
           const KIND = { result: 'Quarterly results', analysis: 'Fundamental analysis', lesson: 'Finance lesson', lesson_short: 'Lesson Short', premarket: 'Pre-market Short', postmarket: 'Post-market Short' };
@@ -3043,7 +3060,7 @@ class Component extends DCLogic {
         ask: () => this.setState({ visaAsk: a.id }), no: () => this.setState({ visaAsk: null }),
         yes: () => this.visaCall('DELETE', '/' + encodeURIComponent(a.id)) };
     });
-    const gtabs = [['email','Email'],['calendar','Calendar'],['trading','Trading'],['invest','Invest'],['web','Web'],['jobs','Jobs'],['world','World'],['youtube','YouTube'],['visa','Visa']].map(([id, label]) => ({
+    const gtabs = [['email','Email'],['calendar','Calendar'],['trading','Trading'],['invest','Invest'],['web','Web'],['jobs','Jobs'],['world','World'],['ebooks','E-books'],['youtube','YouTube'],['visa','Visa']].map(([id, label]) => ({
       label, cls: s.master === id ? 'tab-on' : 'tab', pick: () => this.setState({ master: id })
     }));
 
