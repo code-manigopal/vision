@@ -219,7 +219,7 @@ masters:
           director: Mani Market Tamil Director
           crew: market                   # its own crew (vision/masters/market_crew.py): a quarterly result from NSE's filings, told in Tanglish over slides
           language: ta
-          privacy: scheduled             # Mani, 2026-10-14 (reviewed one of every kind): results and analysis are scheduled for the next 10:00 IST slot with no review | approval = private until you approve it. Lessons always wait for approval
+          privacy: scheduled             # Mani, 2026-10-14 (reviewed one of every kind): results and analysis are scheduled for the next 10:00 IST slot with no review | approval = private until you approve it. Lessons too: Mani approved everything on this channel (2026-10-14)
           report_privacy: scheduled       # Mani, 2026-10-14 (reviewed one of every kind): a report is only good for about 12 hours, so it publishes with no review, held back only when a data or voice check fails | the pre-market / post-market Shorts: approval = private until you approve (a pre-market one after 09:10 IST is stale and never published) | scheduled = published with NO review (pre-market 15 minutes after it is ready if before 09:10 IST, post-market at 21:00 IST), held back only when a data or voice check fails; not decided yet
           timezone: Asia/Kolkata         # release slots are this zone's wall time
           voice_engine: clone            # clone = Mani's own voice (about an hour a video) | edge = Edge's Tamil voice (fast, artificial)

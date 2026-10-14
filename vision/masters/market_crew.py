@@ -839,7 +839,7 @@ class MarketUploader(youtube.Uploader):
                     continue
                 if rec.get("kind") in youtube.SHORT_KINDS:     # a report Short: `report_privacy` scheduled goes public by itself; one too late for its news stays private, "stale"
                     stale = youtube.short_when(rec, youtube._now()) is None        # (a lesson Short is never published without approval, only held back when it is stale)
-                    if stale or (ch["report_privacy"] == "scheduled" and rec["kind"] in youtube.REPORT_KINDS):
+                    if stale or ch["report_privacy"] == "scheduled":        # report and lesson Shorts alike, since Mani approved the channel
                         rec.update(status="stale" if stale else "scheduled", stale=stale, video_id=out["id"], url=f"https://youtu.be/{out['id']}", uploaded=time.time(),
                                    publish_at=None if stale else out["publish_at"])
                         store.kv_put(youtube.LOG, key, rec)
@@ -851,9 +851,14 @@ class MarketUploader(youtube.Uploader):
                         continue
                 rec.update(status="awaiting", video_id=out["id"], url=f"https://youtu.be/{out['id']}", uploaded=time.time(), publish_at=None)
                 store.kv_put(youtube.LOG, key, rec)
-                if ch["privacy"] == "scheduled" and rec.get("format") == "long" and rec.get("kind") not in youtube.LESSON_KINDS:
-                    # Mani, 2026-10-14, after reviewing one of every kind: results and analysis go out with no review, at the next 10:00 IST slot
-                    said = await youtube.publish_approved(ctx, ch, key, rec, self.opts.get("client_factory"))
+                if ch["privacy"] == "scheduled" and rec.get("format") == "long":
+                    # Mani, 2026-10-14, after reviewing one of every kind: every long video goes out with no review, at the next 10:00 IST slot
+                    if out.get("publish_at"):                   # the upload already carried its release time
+                        rec.update(status="scheduled", publish_at=out["publish_at"])
+                        store.kv_put(youtube.LOG, key, rec)
+                        said = "Scheduled for " + datetime.fromtimestamp(out["publish_at"], IST).strftime("%a %d %b %H:%M") + " IST"
+                    else:
+                        said = await youtube.publish_approved(ctx, ch, key, rec, self.opts.get("client_factory"))
                     bus.say(f"{ch['name']} · “{rec['title']}”: {said}")
                     done.append(f"“{rec['title']}” uploaded, {said[0].lower() + said[1:]}")
                     continue

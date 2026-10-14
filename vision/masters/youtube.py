@@ -501,7 +501,7 @@ def report_release(kind: str, day: date, now: float) -> float | None:
     return soon if datetime.fromtimestamp(soon, ist).date() == day else None
 
 
-LESSON_KINDS = ("lesson", "lesson_short")      # Mani Market Tamil's model-written finance lessons: always private until Mani approves, whatever the channel's privacy settings say
+LESSON_KINDS = ("lesson", "lesson_short")      # Mani Market Tamil's model-written finance lessons: released like the rest since Mani approved the channel (2026-10-14); were always private until approved, whatever the channel's privacy settings say
 SHORT_KINDS = (*REPORT_KINDS, "lesson_short")  # Shorts released on the Indian clock, outside next_slot
 LESSON_SLOTS = {"premarket": (9, 0), "postmarket": (21, 0)}     # IST: when a lesson Short made in that window goes public (09:00 for the morning window, 21:00 for the evening one)
 
@@ -1441,9 +1441,9 @@ class Uploader(Crew):
         tags = list(dict.fromkeys(rec["hashtags"] + ([] if long else ["#Shorts"])))
         report, lesson = rec.get("kind") in SHORT_KINDS, rec.get("kind") in LESSON_KINDS
         if report:                                  # a report Short never takes a slot: `report_privacy` scheduled = public by itself at report_release, approval = private until approved
-            when = short_when(rec, _now()) if ch["report_privacy"] == "scheduled" and not lesson else None      # a lesson is never published without approval
+            when = short_when(rec, _now()) if ch["report_privacy"] == "scheduled" else None      # lessons too, since Mani approved the channel (2026-10-14)
         else:
-            when = next_slot(ctx["store"], ch, fmt="long" if long else "short") if ch["privacy"] == "scheduled" and not lesson else None     # private now, public by itself at its slot
+            when = next_slot(ctx["store"], ch, fmt="long" if long else "short") if ch["privacy"] == "scheduled" else None     # private now, public by itself at its slot
         if rec.get("review"):                       # a review upload (Mani Market Tamil): private, never a release time
             when = None
         marks = rec.get("chapters") or []           # YouTube shows chapters from three or more timestamps starting at 0:00
