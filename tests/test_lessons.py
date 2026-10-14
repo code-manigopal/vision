@@ -3,8 +3,10 @@
 
 import asyncio
 import json
+import re
 import shutil
 import time
+from pathlib import Path
 from datetime import date, datetime, timezone
 from zoneinfo import ZoneInfo
 
@@ -16,10 +18,11 @@ from test_market_crew import RAW, tone
 from vision.agents import Director, Master, Stage
 from vision.bus import EventBus, Store
 from vision.config import Config
-from vision.masters import lessons, market, market_crew, slides, youtube
+from vision.masters import lessons, market, market_crew, slides, tamil_say, youtube
 from vision.services import filings_text, oauth, yt_channels, yt_transcripts
 from vision.voice import clone
 
+ROOT = Path(__file__).resolve().parent.parent
 FFMPEG = pytest.mark.skipif(not shutil.which("ffmpeg"), reason="ffmpeg not installed")
 IST = ZoneInfo("Asia/Kolkata")
 OFFICIAL = (
@@ -50,83 +53,128 @@ def line(say, en, *quotes, show=1):
     return {"show": show, "say": say, "en": en, "quotes": list(quotes)}
 
 
-GOOD = {
-    "def": line("டெர்ம் டெபாசிட்னா, பேங்குக்கும் கஸ்டமருக்கும் இடையில ஒரு குறிப்பிட்ட காலத்துக்கான ஒப்பந்தம்.", "A term deposit is a contract between the bank and the customer for a definite term.", Q_DEF),
-    "rd": line("ரெக்கரிங் டெபாசிட்னா, ஒவ்வொரு மாசமும் ஒரு குறிப்பிட்ட தொகைய ஒப்புக்கிட்ட காலத்துக்கு டெபாசிட் பண்ணுறது.", "A recurring deposit lets the customer deposit a fixed amount every month for an agreed period.", Q_RD, show=2),
-    "month": line("பேங்க் காலாண்டு இன்ட்ரெஸ்ட்ட டிஸ்கவுண்ட் பண்ணி, மாசா மாசமும் குடுக்க முடியும்.", "Banks can pay interest monthly by discounting the quarterly interest accrued.", Q_MON),
-    "ins": line("ஒரு பேங்க்ல ஒரு டெபாசிட்டருக்கு பிரின்சிபல், இன்ட்ரெஸ்ட் ரெண்டுக்கும் சேர்த்து அதிகபட்சம் 5 லட்சம் ரூபாய் வரைக்கும் இன்ஷூரன்ஸ் உண்டு.",
+GOOD = {          # say = the spoken Tanglish for the English line `en`
+    "def": line("Term deposit-னா, bank-க்கும் customer-க்கும் இடையில ஒரு குறிப்பிட்ட காலத்துக்கான contract.", "A term deposit is a contract between the bank and the customer for a definite term.", Q_DEF),
+    "rd": line("Recurring deposit-ல ஒவ்வொரு மாசமும் ஒரு fixed amount-ஐ ஒப்புக்கிட்ட period வரைக்கும் போடணும்.", "A recurring deposit lets the customer deposit a fixed amount every month for an agreed period.", Q_RD, show=2),
+    "month": line("Bank quarterly interest-ஐ discount பண்ணி, மாசா மாசமும் குடுக்க முடியும்.", "Banks can pay interest monthly by discounting the quarterly interest accrued.", Q_MON),
+    "ins": line("ஒரு bank-ல ஒரு depositor-க்கு principal, interest ரெண்டுக்கும் சேர்த்து அதிகபட்சம் 5 lakh ரூபாய் வரைக்கும் insurance உண்டு.",
                 "Each depositor in a bank is insured up to a maximum of Rs.5 lakh for both principal and interest.", Q_INS),
-    "pre": line("கஸ்டமர் கேட்டா, ஒப்பந்தத்தோட விதிகள்படி, பெனால்டி உட்பட, டெர்ம் டெபாசிட்ட சீக்கிரமே குடுக்கலாம்.", "A term deposit can be paid prematurely at the request of the customer, subject to the terms of the contract, including penalty.", Q_PRE, show=2),
-    "rest": line("டெர்ம் டெபாசிட்டோட இன்ட்ரெஸ்ட் காலாண்டுக்கு ஒரு தடவையோ, இல்ல அதுக்கு மேலயோதான் குடுப்பாங்க.", "Interest on term deposits is payable at quarterly or longer rests.", "Interest on term deposits is payable at quarterly or longer rests"),
-    "hindu": line("தனிநபர்களோட டெர்ம் டெபாசிட்ட சீக்கிரம் எடுக்க பேங்க் பொதுவா மறுக்காது.", "Banks do not normally refuse premature withdrawal of term deposits of individuals.", "Banks may not normally refuse premature withdrawal of term deposits of individuals and Hindu Undivided Families", show=3),
-    "dicgc": line("சேவிங்ஸ், ஃபிக்ஸ்ட், ரெக்கரிங் எல்லா வகை டெபாசிட்டுக்கும் கார்ப்பரேஷன் இன்ஷூரன்ஸ் குடுக்கும்.", "The Corporation insures all types of deposits, such as savings, fixed and recurring.", "The Deposit Insurance and Credit Guarantee Corporation insures all types of deposits, such as savings, fixed and recurring", show=2),
-    "comm": line("டெபாசிட் சேர்த்துக் குடுக்க கமிஷன் குடுக்கிறத பேங்க்குகளுக்கு தடை பண்ணிருக்காங்க, வீடு வீடா சேகரிக்கிற ஏஜென்ட்ஸ தவிர.",
+    "pre": line("Customer கேட்டா, ஒப்பந்தத்தோட விதிகள்படி, penalty உட்பட, term deposit-ஐ சீக்கிரமே குடுக்கலாம்.", "A term deposit can be paid prematurely at the request of the customer, subject to the terms of the contract, including penalty.", Q_PRE, show=2),
+    "rest": line("Term deposit-ல interest quarterly-ஆ இல்ல அதுக்கு மேல இடைவெளியிலதான் குடுப்பாங்க.", "Interest on term deposits is payable at quarterly or longer rests.", "Interest on term deposits is payable at quarterly or longer rests"),
+    "hindu": line("தனிநபர்களோட term deposit-ஐ சீக்கிரம் எடுக்க bank பொதுவா மறுக்காது.", "Banks do not normally refuse premature withdrawal of term deposits of individuals.", "Banks may not normally refuse premature withdrawal of term deposits of individuals and Hindu Undivided Families", show=3),
+    "dicgc": line("Savings, fixed, recurring எல்லா வகை deposit-க்கும் corporation insurance குடுக்கும்.", "The Corporation insures all types of deposits, such as savings, fixed and recurring.", "The Deposit Insurance and Credit Guarantee Corporation insures all types of deposits, such as savings, fixed and recurring", show=2),
+    "comm": line("Deposit சேர்த்துக் குடுக்க commission குடுக்கிறத bank-களுக்கு தடை பண்ணிருக்காங்க, வீடு வீடா collect பண்ற agents-ஐ தவிர.",
                  "Banks are prohibited from paying commission for mobilising deposits except to agents collecting door-to-door deposits.", Q_COM),
-    "big": line("15 லட்சம் ரூபாய்க்கும் மேல ஒரே டெர்ம் டெபாசிட்டுக்கு வித்தியாசமான இன்ட்ரெஸ்ட் ரேட் குடுக்கலாம்.", "Differential rates of interest can be paid on single term deposits of Rs.15 lakh and above.", Q_BIG),
+    "big": line("15 lakh ரூபாய்க்கு மேல ஒரே term deposit-க்கு differential interest rate குடுக்கலாம்.", "Differential rates of interest can be paid on single term deposits of Rs.15 lakh and above.", Q_BIG),
 }
 PLAN = {"title": "How does a bank FD work?", "slides": [
     {"kind": "points", "heading": "What it is", "icon": "bank", "items": ["Term deposit is a contract with the bank", "Interest payable at quarterly or longer rests", "Banks pay interest monthly by discounting"]},
     {"kind": "points", "heading": "Safety and limits", "icon": "shield", "items": ["Depositor insured up to 5 lakh", "Premature withdrawal of term deposits"]},
     {"kind": "facts", "heading": "Figures", "rows": [{"label": "Insurance cover", "value": "Rs.5 lakh", "note": "per depositor"}, {"label": "Single term deposit", "value": "Rs.15 lakh", "note": "and above"}]}]}
 SLIDE_LINES = [["def", "rd", "month", "rest"], ["ins", "pre", "hindu", "dicgc"], ["big", "comm"]]
+SOUNDING = {"contract": "கான்ட்ராக்ட்", "recurring": "ரெக்கரிங்", "fixed": "ஃபிக்ஸ்ட்", "period": "பீரியட்", "quarterly": "குவார்ட்டர்லி", "discount": "டிஸ்கவுண்ட்", "depositor": "டெபாசிட்டர்",
+            "corporation": "கார்ப்பரேஷன்", "commission": "கமிஷன்", "collect": "கலெக்ட்", "agents": "ஏஜென்ட்ஸ்", "differential": "டிஃபரென்ஷியல்"}       # how the fake model says the words the lessons do not know
+
+
+def english(g: dict, slide: int) -> dict:
+    """The line as step A writes it: no spoken part."""
+    return {"slide": slide, "show": g["show"], "en": g["en"], "quotes": g["quotes"]}
+
+
+def lessons_of(keys_by_slide) -> list[dict]:
+    return [english(GOOD[k], n) for n, ks in enumerate(keys_by_slide, 1) for k in ks]
 
 
 class Model:
-    """A stand-in for the writer: answers the angle, plan and per-slide requests it is configured for, and counts them."""
-    def __init__(self, plan=PLAN, per_slide=None, angle=None):
-        self.plan, self.per_slide, self.angle, self.calls, self.slide = plan, per_slide or [[GOOD[k] for k in ks] for ks in SLIDE_LINES], angle, [], 0
+    """A stand-in for the writer: answers the angle, the lesson (slides and English lines), the Tanglish and the pronunciation requests it is configured for, and counts them."""
+    def __init__(self, plan=PLAN, lines=None, angle=None, says=None, words=None):
+        self.plan, self.lines, self.angle, self.calls, self.says, self.words = plan, lines or lessons_of(SLIDE_LINES), angle, [], says or {g["en"]: g["say"] for g in GOOD.values()}, words or SOUNDING
+        self.used, self.models = 0, []
 
     def writer_available(self):
         return True
 
     async def json(self, prompt, **kw):
+        self.models.append(kw.get("model"))
         if "Do NOT copy any wording" in prompt:
             self.calls.append("angle")
             return self.angle or {"angle": "Explain what an FD really is", "questions": ["Is my FD safe?", "Can I break it early?"], "misconceptions": ["An FD can never lose value"]}
-        if "You plan a short lesson" in prompt:
-            self.calls.append("plan")
+        if "You write a short finance lesson" in prompt:
+            self.calls.append("repair" if "the checks threw some out" in prompt else "write")
             self.prompt = prompt
-            return self.plan
-        self.calls.append("lines")
-        self.slide_prompt = prompt
-        got = self.per_slide[min(self.slide, len(self.per_slide) - 1)]
-        self.slide += 1
-        return {"lines": got}
+            return {"lines": self.lines} if "the checks threw some out" in prompt else {**self.plan, "lines": self.lines}
+        if "Say each English line below" in prompt:
+            self.calls.append("again" if "the checks refused them" in prompt else "tanglish")
+            self.ta_prompt = prompt
+            asked = re.findall(r"^(\d+)\. (.*)$", prompt.split("The lines:")[1].split("Answer as")[0], re.M)
+            if "the checks refused them" in prompt:
+                asked = [a for a in asked if a[1] in prompt.split("the checks refused them")[1]]
+            return {"lines": [{"i": int(n), "say": self.says.get(en, "")} for n, en in asked]}
+        if "How does a Tamil speaker say" in prompt:
+            self.calls.append("words")
+            self.asked = prompt.split("Words:")[1].strip().split(", ")
+            return {"words": {w: self.words.get(w, "still english") for w in self.asked}}
+        raise AssertionError(prompt[:80])
 
 
 BAD = lessons.bad_pattern(["Sample Limited", "Hindustan Unilever Limited"], ["SAMPLE", "INFY"])
 NO_TX: set = set()
 
 
-# ---- the checks on one spoken line -------------------------------------------------------------------------------------------------------------
+@pytest.fixture(autouse=True)
+def learned_words(tmp_path, monkeypatch):
+    """The words a lesson teaches the voice go to a file of the test's own, never data/voice_words.json."""
+    monkeypatch.setattr(tamil_say, "LEARNED", tmp_path / "voice_words.json")
+    monkeypatch.setattr(lessons, "WANT", 1)                                  # no second request for more lines unless a test asks for it
+    monkeypatch.setattr(lessons, "WANT_SHORT", 1)
+
+
+# ---- the checks on one English line and its Tanglish ----------------------------------------------------------------------------------------
 
 def why(item, tx=NO_TX):
-    return lessons.check_line(item, DOC, BAD, tx)
+    return lessons.check_en(english(item, 1) if "say" in item else item, DOC, BAD, tx)
+
+
+def why_ta(say, key="def"):
+    return lessons.check_ta(say, GOOD[key]["en"], BAD)
 
 
 def test_a_good_line_is_kept_and_each_rule_throws_out_its_own_kind_of_line():
-    d, ta = GOOD["def"], GOOD["def"]["say"]
+    d = GOOD["def"]
     assert all(why(g) == "" for g in GOOD.values())
-    assert why(line("எஃப்டி பத்தி இது ஒரு நல்ல தகவல்.", "An FD is a fine thing to know about.", "this sentence is nowhere in the official page at all")) == "quote is not in the source"
-    assert why(line("எஃப்டி பத்தி இது ஒரு நல்ல தகவல்.", "An FD is a fine thing to know about.", "A term deposit is a contract")) == "quote is not in the source"                 # under 30 characters
-    assert why({**GOOD["ins"], "say": GOOD["ins"]["say"].replace("5", "6"), "en": GOOD["ins"]["en"].replace("5", "6")}) == "a number is not in the quotes"
+    assert why(line("x", "An FD is a fine thing to know about for everybody.", "this sentence is nowhere in the official page at all")) == "quote is not in the source"
+    assert why(line("x", "An FD is a fine thing to know about for everybody.", "A term deposit is a contract")) == "quote is not in the source"                 # under 30 characters
+    assert why({**GOOD["ins"], "en": GOOD["ins"]["en"].replace("5", "6")}) == "a number is not in the quotes"
     assert why({**GOOD["ins"], "en": GOOD["ins"]["en"] + " Rs.99 lakh."}) == "a number is not in the quotes"
-    assert why({**GOOD["ins"], "en": GOOD["ins"]["en"].replace("Rs.5 lakh ", "")}) == "the Tamil and the English caption give different numbers"
-    assert why({**d, "say": "எஃப்டினா bank-ல பணம் போட்டு வைக்கிற ஒப்பந்தம் தான்."}) == "spoken line is not all Tamil script"
-    assert why({**d, "say": ta + " ₹"}) == "spoken line is not all Tamil script"
-    assert why({**d, "say": ta + " இது இருக்கும் ஒப்பந்தம்."}) == "forecast wording"
     assert why({**d, "en": "You should buy a term deposit, a contract between the bank and the customer for a definite term."}) == "advice or rude wording"
     assert why({**GOOD["month"], "en": "Banks will pay interest monthly by discounting the quarterly interest accrued."}) == "forecast wording"
     assert why({**d, "en": "A term deposit is a contract between Sample Limited and the customer for a definite term."}) == "names a company or the market"
     assert why({**d, "en": "A term deposit is a contract between Axis Bank and the customer for a definite term."}) == "names a company or the market"          # a well-known bank is a name too
     assert why({**d, "en": d["en"][:-1] + ", whatever the Nifty does."}) == "names a company or the market"
-    assert why({**d, "say": ta + " மோசடி."}) == "advice or rude wording"
-    assert why({**d, "say": "டெர்ம் டெபாசிட் என்பது பேங்குக்கும் கஸ்டமருக்கும் இடையில ஒரு குறிப்பிட்ட காலத்துக்கான ஒப்பந்தம்."}) == "book Tamil, not the way the host speaks"
     assert why({**d, "en": "A term deposit is a contract where you keep money with the bank for a fixed term."}) == "the caption says more than its quotes do"
     assert why({**d, "en": "An FD is a contract between the bank and the customer for a definite term."}) == "the caption says more than its quotes do"         # FD is in no quote
-    assert why({**d, "say": "ஒப்பந்தம் வித் வித் வித் டெர்ம் டெபாசிட் பேங்க்."}) == "a garbled line (a word repeated)"
-    assert why({"say": "x", "en": "y"}) == "not a complete line" and why("nope") == "not a complete line"
-    assert why({**d, "quotes": []}) == "no line, caption or quote" and why({**d, "say": "எஃப்டி"}) == "a line of the wrong length"
+    assert why({"en": "y"}) == "not a complete line" and why("nope") == "not a complete line"
+    assert why({**d, "quotes": []}) == "no line, caption or quote" and why({**d, "en": "An FD."}) == "a line of the wrong length"
+
+
+def test_a_spoken_line_must_keep_the_digits_have_tamil_in_it_and_not_be_book_tamil():
+    ins = "ஒரு bank-ல ஒரு depositor-க்கு principal, interest ரெண்டுக்கும் சேர்த்து அதிகபட்சம் 5 lakh ரூபாய் வரைக்கும் insurance உண்டு."
+    assert all(why_ta(g["say"], k) == "" for k, g in GOOD.items() if k != "x")
+    assert why_ta(ins.replace("5 lakh", "5,00,000"), "ins").startswith("the numbers must be exactly the English line's, in digits: 5")
+    assert why_ta(ins.replace("5 lakh", "ஐந்து lakh"), "ins").startswith("the numbers must")                    # spelt out: the voice turns digits into words, never the writer
+    assert why_ta(ins.replace("5 lakh", "5 lakh 6"), "ins").startswith("the numbers must")
+    assert why_ta(GOOD["def"]["say"] + " ₹", "def") == "no currency sign: say rupees"
+    assert why_ta("A term deposit is a contract between the bank and the customer.") == "not Tanglish: speak it in Tamil with the English finance words"
+    assert why_ta("") == "no line" and why_ta(None) == "no line" and why_ta("x y") == "a line of the wrong length"
+    assert why_ta("Term deposit-ஐ ஒப்பந்தம் வித் வித் வித் term deposit bank.") == "a garbled line (a word repeated)"
+    assert why_ta(GOOD["def"]["say"] + " இது இருக்கும்.") == "forecast wording: இருக்கும்" and why_ta(GOOD["def"]["say"] + " மோசடி.") == "advice or rude wording: மோசடி"
+    assert why_ta(GOOD["def"]["say"] + " Sample Limited-ல.") == "names a company or the market"
+    for book in ("உள்ளது", "உள்ளன", "செய்யலாம்", "செய்ய வேண்டும்", "ஆகையால்", "எனவே", "மேலும்", "ஆனால்", "மாதம்", "செலுத்த", "அநுசாரி", "அனுசாரி", "ஆகும்", "போன்ற", "என்பது"):
+        assert why_ta(f"Term deposit-ல bank-க்கு {book} contract இடையில.") == f"book Tamil: {book}", book
+    for spoken in ("மாசம்", "மாசமும்", "மாதிரி", "ஆனா", "இருக்கு", "ஆகுது", "மேலே", "மேல"):                     # whole words only: the spoken forms and words that merely contain a marker pass
+        assert why_ta(f"Term deposit-ல bank-க்கு {spoken} contract இடையில.") == "", spoken
+    golden = json.loads((ROOT / "tests" / "golden_voice.json").read_text(encoding="utf-8"))
+    assert [g["say"] for g in golden if lessons.BOOKISH.search(g["say"])] == []                              # the approved register contains no marker
 
 
 def test_two_quotes_cannot_be_stitched_into_a_claim_neither_makes():
@@ -175,8 +223,8 @@ def pages():
 def test_a_lesson_keeps_only_lines_that_pass_and_the_deck_and_lines_obey_the_channels_rules():
     model = Model()
     out = asyncio.run(lessons.write(model, TP, pages(), [{"title": "t", "channel": "c", "url": "u", "text": "An unrelated transcript about saving money regularly in a bank."}], BAD))
-    assert not out["too_thin"] and out["kept"] == 10 and out["proposed"] == 10 and out["dropped"] == []
-    assert model.calls[:2] == ["angle", "plan"] and model.calls.count("lines") == 3
+    assert not out["too_thin"] and out["kept"] == 10 and out["proposed"] == 10 and out["kept_en"] == 10 and out["dropped"] == []
+    assert model.calls == ["angle", "write", "tanglish", "words"] and out["steps"] == {"english": 10, "tanglish_first": 10, "tanglish_second": 10, "voice_ok": 10}
     deck, said = out["deck"], out["lines"]
     assert deck[0] == market.NOTICE and deck[1]["kind"] == "cover" and [s["kind"] for s in deck[2:]] == ["points", "points", "facts"]
     assert said[0]["say"] == market.NOTICE_SAY and said[0]["hold"] == market.NOTICE_HOLD and said[1]["say"].startswith("வணக்கம்")
@@ -187,22 +235,24 @@ def test_a_lesson_keeps_only_lines_that_pass_and_the_deck_and_lines_obey_the_cha
         assert 0 <= ln["slide"] < len(deck) and 1 <= ln["show"] <= len(deck[ln["slide"]]["items"]) + 1 + (1 if deck[ln["slide"]]["kind"] == "notice" else 0) or deck[ln["slide"]]["kind"] in ("notice", "cover")
         if not ln.get("fixed"):
             assert not market.ADVICE.search(ln["en"] + ln["say"]) and not market.FORECAST.search(ln["en"] + ln["say"]) and not market.RUDE.search(ln["en"] + ln["say"])
-            assert market.numbers(ln["say"]) == market.numbers(ln["en"])
+            assert market.numbers(ln["say"]) == market.numbers(ln["en"]) and ln["en"] in [g["en"] for g in GOOD.values()]           # the caption is the English that was verified
     for s in range(2, len(deck)):                                                              # on every slide the last line shows everything, and the shows never go down
         shows = [ln["show"] for ln in said if ln["slide"] == s]
         assert shows == sorted(shows) and shows[-1] == len(deck[s]["items"]) + 1
     assert "Source: RBI FAQ on deposits" in slides.page(deck, channel="Mani Market Tamil", source="Finance basics")
     assert out["title"] == "How does a bank FD work?" and out["angle"]["questions"] == ["Is my FD safe?", "Can I break it early?"]
+    assert "contract" in model.asked and set(out["new_words"]) >= {"contract", "recurring", "term", "deposit", "lakh"} and out["new_words"]["term"] == "டெர்ம்"                  # seeds cost nothing, the rest were asked for
+    assert tamil_say.learned()["recurring"] == "ரெக்கரிங்" and "term" not in model.asked and "deposit" not in model.asked
 
 
 def test_a_lesson_Short_has_no_notice_no_spoken_disclaimer_and_ends_on_the_short_sign_off():
     plan = {"title": "What is an RD?", "concept": "recurring deposit", "slides": [{"kind": "points", "heading": "RD", "icon": "calendar", "items": ["Fixed amount monthly", "Agreed period", "Interest on it"]}]}
-    model = Model(plan=plan, per_slide=[[GOOD["rd"], GOOD["month"], GOOD["def"], GOOD["pre"]]])
+    model = Model(plan=plan, lines=lessons_of([["rd", "month", "def", "pre"]]))
     out = asyncio.run(lessons.write(model, TP, pages(), [], BAD, short=True, covered=["fixed deposit"]))
     deck, said = out["deck"], out["lines"]
     assert not out["too_thin"] and deck[0]["kind"] == "points" and market.NOTICE not in deck and out["concept"] == "recurring deposit"
     assert said[-1]["say"] == market.SUBSCRIBE_SHORT and said[-1]["en"] == market.SUBSCRIBE_SHORT_EN and not any("educational" in ln["say"].lower() for ln in said)
-    assert "fixed deposit" in model.prompt and "Do not use a facts slide" in model.prompt
+    assert "fixed deposit" in model.prompt and "Do not use a facts slide" in model.prompt and "6 to 8 lines" in model.prompt
     tall = slides.page(deck, channel="Mani Market Tamil", tall=True, top=market.SHORT_NOTE)
     assert 'class="top"' in tall and "Source: RBI FAQ on deposits" in tall and "1080px" in tall
     for ln in said:
@@ -210,11 +260,11 @@ def test_a_lesson_Short_has_no_notice_no_spoken_disclaimer_and_ends_on_the_short
 
 
 def test_too_few_kept_lines_is_too_thin_and_a_bad_plan_or_a_failing_model_makes_no_lesson():
-    bad_lines = [[{**GOOD["def"], "quotes": ["nothing like the page, said in a long enough sentence"]}] * 3] * 3
-    thin = asyncio.run(lessons.write(Model(per_slide=bad_lines), TP, pages(), [], BAD))
-    assert thin["too_thin"] and thin["kept"] == 0 and thin["proposed"] == 18 and thin["dropped"][0]["why"] == "quote is not in the source" and "deck" not in thin
-    nine = [[GOOD["def"], GOOD["rd"], GOOD["month"], GOOD["rest"]], [GOOD["ins"], GOOD["pre"], GOOD["hindu"], GOOD["dicgc"]], [GOOD["big"], {**GOOD["comm"], "en": "nope"}]]
-    assert asyncio.run(lessons.write(Model(per_slide=nine), TP, pages(), [], BAD))["too_thin"] is True                                 # 8 kept: 9 kept: under MIN_KEPT
+    bad_lines = [{**english(GOOD["def"], 1), "quotes": ["nothing like the page, said in a long enough sentence"]}] * 18
+    thin = asyncio.run(lessons.write(Model(lines=bad_lines), TP, pages(), [], BAD))
+    assert thin["too_thin"] and thin["kept"] == 0 and thin["proposed"] == 36 and thin["dropped"][0]["why"] == "quote is not in the source" and "deck" not in thin     # asked again once, with the reasons
+    nine = lessons_of(SLIDE_LINES)[:8] + [{**english(GOOD["comm"], 3), "en": "nope"}, english(GOOD["big"], 3)]
+    assert asyncio.run(lessons.write(Model(lines=nine), TP, pages(), [], BAD))["too_thin"] is True                                 # 9 kept: under MIN_KEPT
     assert asyncio.run(lessons.write(Model(plan={"title": "x"}), TP, pages(), [], BAD))["too_thin"] is True
 
     class Down(Model):
@@ -222,6 +272,104 @@ def test_too_few_kept_lines_is_too_thin_and_a_bad_plan_or_a_failing_model_makes_
             raise RuntimeError("down")
     out = asyncio.run(lessons.write(Down(), TP, pages(), [], BAD))
     assert out["too_thin"] and out["title"].startswith("Fixed deposit basics")
+
+
+def test_lines_the_checks_throw_out_are_asked_for_again_with_the_reason_for_each(monkeypatch):
+    monkeypatch.setattr(lessons, "WANT_SHORT", 5)
+    plan = {"title": "FD basics", "slides": [PLAN["slides"][0]]}
+    future = {**english(GOOD["def"], 1), "en": GOOD["def"]["en"][:-1] + ", so the bank will keep the money."}
+    orphan = english(GOOD["pre"], 4)                                                       # a slide the plan does not have
+    model = Model(plan=plan, lines=[future, orphan, english(GOOD["def"], 1)])
+    model.repair = [english(GOOD[k], 1) for k in ("rd", "month", "rest")]
+    first = model.json
+
+    async def json(prompt, **kw):
+        return {"lines": model.repair} if "the checks threw some out" in prompt and not model.calls.append("repair") else await first(prompt, **kw)
+    model.json = json
+    out = asyncio.run(lessons.write(model, TP, pages(), [], BAD, short=True))
+    assert [m["en"] for m in out["lines"][:-1]] == [GOOD[k]["en"] for k in ("def", "rd", "month", "rest")] and out["kept"] == 4 and out["proposed"] == 6
+    assert [d["why"] for d in out["dropped"]] == ["forecast wording", "a line for a slide that was not kept"]
+    assert model.calls.count("repair") == 1 and model.calls.count("write") == 1
+
+
+def test_a_lesson_with_too_few_lines_gets_one_request_for_more(monkeypatch):
+    monkeypatch.setattr(lessons, "WANT_SHORT", 5)
+    plan = {"title": "FD basics", "slides": [PLAN["slides"][0]]}
+    model = Model(plan=plan, lines=[english(GOOD["def"], 1), english(GOOD["rd"], 1)])
+    first = model.json
+
+    async def json(prompt, **kw):
+        if "the checks threw some out" in prompt:
+            assert "you wrote too few lines" in prompt and GOOD["def"]["en"] in prompt
+            model.calls.append("repair")
+            return {"lines": [english(GOOD[k], 1) for k in ("month", "rest", "pre")]}
+        return await first(prompt, **kw)
+    model.json = json
+    out = asyncio.run(lessons.write(model, TP, pages(), [], BAD, short=True))
+    assert out["kept"] == 5 and model.calls.count("repair") == 1
+
+
+def test_the_spoken_lines_are_checked_again_asked_for_once_more_and_a_line_that_fails_twice_is_dropped_with_its_caption():
+    says = {g["en"]: g["say"] for g in GOOD.values()}
+    says[GOOD["ins"]["en"]] = GOOD["ins"]["say"].replace("5 lakh", "5,00,000")                       # the digits are not the English's: refused, then fixed on the second go
+    says[GOOD["pre"]["en"]] = GOOD["pre"]["say"] + " இது செய்யலாம்."                                    # book Tamil, on both goes
+    says[GOOD["rest"]["en"]] = ""                                                                   # no answer at all
+    model = Model(says=says)
+    again = model.json
+
+    async def json(prompt, **kw):
+        if "the checks refused them" in prompt:
+            assert "refused: the numbers must be exactly" in prompt and "refused: book Tamil: செய்யலாம்" in prompt and "refused: no line" in prompt
+            model.says[GOOD["ins"]["en"]] = GOOD["ins"]["say"]
+        return await again(prompt, **kw)
+    model.json = json
+    out = asyncio.run(lessons.write(model, TP, pages(), [], BAD))
+    assert out["too_thin"] is True and out["kept_en"] == 10 and out["kept"] == 8 and out["steps"] == {"english": 10, "tanglish_first": 7, "tanglish_second": 8, "voice_ok": 8}
+    assert model.calls == ["write", "tanglish", "again", "words"]
+    assert sorted(d["why"].split(":")[0] for d in out["dropped"]) == ["book Tamil", "book Tamil", "no line", "no line", "the numbers must be exactly the English line's, in digits"]
+    lessons.MIN_KEPT, keep = 8, lessons.MIN_KEPT
+    try:
+        out = asyncio.run(lessons.write(Model(says=says), TP, pages(), [], BAD))
+    finally:
+        lessons.MIN_KEPT = keep
+    captions = [ln["en"] for ln in out["lines"]]
+    assert not out["too_thin"] and GOOD["pre"]["en"] not in captions and GOOD["rest"]["en"] not in captions and GOOD["def"]["en"] in captions                      # a dropped spoken line takes its caption with it
+    assert len([ln for ln in out["lines"] if not ln.get("fixed")]) == 8 and all(ln["say"] != "" for ln in out["lines"])
+
+
+def test_the_tanglish_model_is_the_one_asked_and_another_stands_in_when_it_is_not_there():
+    model = Model()
+    asyncio.run(lessons.write(model, TP, pages(), [], BAD, model="writer-x", ta_model="tamil-y"))
+    assert model.models == ["writer-x", "tamil-y", "tamil-y"]                                       # the lesson, the Tanglish, the words
+
+    class Gone(Model):
+        async def json(self, prompt, **kw):
+            if kw.get("model") == "tamil-y":
+                self.models.append("tamil-y")
+                raise httpx.HTTPStatusError("404", request=httpx.Request("POST", "https://api.groq.com/x"), response=httpx.Response(404))
+            return await super().json(prompt, **kw)
+    model = Gone()
+    tamil_say.LEARNED.unlink()                                                                       # nothing learned yet: the words are asked for too, and stand in the same way
+    out = asyncio.run(lessons.write(model, TP, pages(), [], BAD, model="writer-x", ta_model="tamil-y"))
+    assert not out["too_thin"] and out["kept"] == 10 and model.models.count("tamil-y") == 4 and model.calls.count("tanglish") == 1
+
+
+def test_the_spoken_step_running_out_of_allowance_is_a_wait_too():
+    class Spent(Model):
+        async def json(self, prompt, **kw):
+            if "Say each English line below" in prompt:
+                raise httpx.HTTPStatusError("429 Too Many Requests", request=httpx.Request("POST", "https://api.groq.com/x"), response=httpx.Response(429))
+            return await super().json(prompt, **kw)
+    with pytest.raises(lessons.Busy):
+        asyncio.run(lessons.write(Spent(), TP, pages(), [], BAD, ta_model="tamil-y"))
+
+
+def test_an_english_word_the_voice_cannot_say_after_the_learning_drops_its_line_and_a_bad_answer_is_not_learned():
+    model = Model(words={**SOUNDING, "contract": "contract", "commission": "கமிஷன் 5"})          # a Latin value, a digit: neither is Tamil letters
+    out = asyncio.run(lessons.write(model, TP, pages(), [], BAD))
+    assert out["too_thin"] is True and out["kept"] == 8
+    assert [d["why"] for d in out["dropped"]] == ["the voice cannot say: contract", "the voice cannot say: commission"]
+    assert "contract" not in tamil_say.learned() and "commission" not in tamil_say.learned()
 
 
 def test_the_plan_keeps_nothing_it_cannot_stand_behind():
@@ -565,12 +713,8 @@ def test_too_thin_skips_the_topic_and_the_next_one_is_tried_but_never_more_than_
     class First(Model):
         """Everything the first topic's requests return is thin; the second topic's lessons are good."""
         async def json(self, prompt, **kw):
-            if "You plan a short lesson" in prompt:
-                self.which = "second" if "Recurring deposit basics" in prompt else "first"
-                self.slide = 0
-                return self.plan
-            if "ONE slide" in prompt and getattr(self, "which", "") == "first":
-                return {"lines": [GOOD["def"]]}
+            if "You write a short finance lesson" in prompt and "Subject: Fixed deposit basics" in prompt:
+                return {**self.plan, "lines": lessons_of([["def"]])}
             return await super().json(prompt, **kw)
     m, state, bus, store, fetched, ch = crew_env(tmp_path, monkeypatch, datetime(2026, 10, 17, 12, 0, tzinfo=IST), model=First())
     asyncio.run(m.cycle(bus, store))
@@ -583,7 +727,7 @@ def test_too_thin_skips_the_topic_and_the_next_one_is_tried_but_never_more_than_
 def test_a_saturday_morning_makes_a_lesson_short_that_waits_for_approval_and_goes_out_at_9(tmp_path, monkeypatch):
     now = datetime(2026, 10, 17, 7, 20, tzinfo=IST)                                    # a Saturday inside the morning window
     plan = {"title": "What is an RD?", "concept": "recurring deposit", "slides": [{"kind": "points", "heading": "RD", "icon": "calendar", "items": ["Fixed amount monthly", "Agreed period"]}]}
-    model = Model(plan=plan, per_slide=[[GOOD["rd"], GOOD["month"], GOOD["def"], GOOD["pre"]]])
+    model = Model(plan=plan, lines=lessons_of([["rd", "month", "def", "pre"]]))
     m, state, bus, store, fetched, ch = crew_env(tmp_path, monkeypatch, now, model=model, report_privacy="scheduled")
     asyncio.run(m.cycle(bus, store))
     crew = agents(bus)
@@ -633,17 +777,6 @@ def test_no_usable_page_hands_the_night_back_to_the_scouts_fallback_result(tmp_p
     assert (res.status, res.label) == ("wait", "NO SOURCE") and "job" not in ctx
 
 
-def test_lines_the_checks_throw_out_are_asked_for_again_with_the_reason_for_each():
-    plan = {"title": "FD basics", "slides": [PLAN["slides"][0]]}
-    english = line("டெர்ம் டெபாசிட் ஒரு lump sum ஒப்பந்தம் ஒரு குறிப்பிட்ட காலத்துக்கு தான்.", GOOD["def"]["en"], Q_DEF)
-    future = line(GOOD["def"]["say"] + " அது இருக்கும்.", GOOD["def"]["en"][:-1] + ", so the bank will keep the money.", Q_DEF)
-    model = Model(plan=plan, per_slide=[[english, future, GOOD["def"]], [GOOD["rd"], GOOD["month"], GOOD["rest"]]])
-    out = asyncio.run(lessons.write(model, TP, pages(), [], BAD, short=True))
-    assert [l["say"] for l in out["lines"][:-1]] == [GOOD[k]["say"] for k in ("def", "rd", "month", "rest")] and out["kept"] == 4 and out["proposed"] == 6
-    assert [d["why"] for d in out["dropped"]] == ["spoken line is not all Tamil script", "forecast wording"]
-    assert model.calls.count("lines") == 2 and "these are not in Tamil letters: lump, sum" in model.slide_prompt and 'the word "இருக்கும்" is not allowed' in model.slide_prompt
-
-
 def test_a_spent_writer_allowance_is_a_wait_not_a_reason_to_skip_the_topic(tmp_path, monkeypatch):
     class Spent(Model):
         async def json(self, prompt, **kw):
@@ -670,31 +803,55 @@ def test_indian_amounts_are_compared_as_figures():
     assert why({**GOOD["ins"], "en": GOOD["ins"]["en"].replace("Rs.5 lakh", "Rs.5,00,000")}) == ""
 
 
-def test_english_words_left_in_latin_letters_are_written_as_a_tamil_speaker_says_them_and_unknown_ones_stay():
-    assert lessons.tamilise("NAV-ல FD-யில் lock-in unit loan SIP, SEBI") == "என்ஏவி-ல எஃப்டி-யில் லாக்-இன் யூனிட் லோன் எஸ்ஐபி, செபி"
-    assert clone.unspelt(lessons.tamilise("NAV-ல FD-யில் lock-in unit loan SIP")) == []
-    assert lessons.tamilise("exit load a quokka") == "எக்ஸிட் லோட் a quokka"                       # a word it does not know stays, and check_line then refuses the line
-    line_in_latin = {**GOOD["def"], "say": GOOD["def"]["say"].replace("டெர்ம் டெபாசிட்னா", "FD டெபாசிட்னா")}
-    assert why(line_in_latin) == "spoken line is not all Tamil script" and why({**line_in_latin, "say": lessons.tamilise(line_in_latin["say"])}) == ""
-
-
 def test_a_quote_is_found_even_when_the_writer_left_out_a_parenthetical_or_wrote_the_rupee_another_way():
     page = lessons.squash("Each depositor in a bank is insured upto a maximum of ₹ 5,00,000 (Rupees Five Lakhs) for both principal and interest amount held by him.")
     q = "Each depositor in a bank is insured upto a maximum of Rs. 5,00,000 for both principal and interest amount held by him."
     assert lessons.squash(q) in page and lessons.squash("Each depositor in a bank is insured upto a maximum of `5,00,000 for both principal and interest") in page
     assert lessons.squash("Each depositor is insured upto a maximum of Rs. 6,00,000 for both principal and interest") not in page
+    assert lessons.squash("Fixed Deposit (FD) Account \uf0b7 Involves placing funds with the bank") == lessons.squash("Fixed Deposit (FD) Account Involves placing funds with the bank")        # a PDF's bullet glyph
     assert lessons.figs("up to ₹ five lakhs") == {"500000"} and lessons.figs("two crore") == {"20000000"}
 
 
-def test_every_reason_a_line_can_be_thrown_out_for_has_an_explanation_for_the_writer():
-    seen = set()
-    for item in ({"say": "ஒரு ஒப்பந்தம் வித் வித் வித் டெர்ம் டெபாசிட் பேங்க்.", "en": "x"}, {"say": "டெர்ம் டெபாசிட் என்பது இடையில ஒரு ஒப்பந்தம் பேங்க் கஸ்டமர்.", "en": "x"}, {"say": "bank டெபாசிட் ஒப்பந்தம் இது ஒரு", "en": "x"}):
-        seen.add(lessons.explain(item, why(item) or "a garbled line (a word repeated)"))
-    for reason in ("spoken line is not all Tamil script", "the voice would garble an English word", "forecast wording", "advice or rude wording", "quote is not in the source", "a number is not in the quotes",
-                   "the Tamil and the English caption give different numbers", "names a company or the market", "the caption says more than its quotes do", "book Tamil, not the way the host speaks",
-                   "a garbled line (a word repeated)", "a line of the wrong length", "a near copy of a transcript"):
-        item = {"say": "டெர்ம் டெபாசிட் என்பது bank ₹ ஒப்பந்தம் இது ஒரு இருக்கும்", "en": "You should buy it, it will help"}
+def test_every_reason_an_english_line_can_be_thrown_out_for_has_an_explanation_for_the_writer():
+    for reason in ("forecast wording", "advice or rude wording", "quote is not in the source", "a number is not in the quotes", "names a company or the market",
+                   "the caption says more than its quotes do", "a line of the wrong length", "a near copy of a transcript"):
+        item = {"en": "You should buy it, it will help", "quotes": []}
         assert lessons.explain(item, reason), reason
+    assert 'the word "should"' not in lessons.explain({"en": "A fine line"}, "advice or rude wording") and 'the word "buy"' in lessons.explain({"en": "Do buy it"}, "advice or rude wording")
+
+
+def test_the_voice_learns_words_it_does_not_know_only_in_tamil_letters_never_overwriting_and_never_shadowing_sounds():
+    assert tamil_say.learned() == {} and tamil_say.learn({"against": "அகெய்ன்ஸ்ட்", "amount": "amount", "period": "பீரியட் 5", "bank": "பாங்கு", "x-y": "எக்ஸ்", "Rate": "ரேட் ", "": "அ", "blank": " "}) == {"against": "அகெய்ன்ஸ்ட்", "rate": "ரேட்"}
+    assert tamil_say.learn({"against": "வேறு", "rate": "ரெய்ட்", "period": "பீரியட்"}) == {"period": "பீரியட்"} and tamil_say.learned()["against"] == "அகெய்ன்ஸ்ட்"           # what is learned stays
+    assert tamil_say.voiced("FD against period, rate-க்கு") == "FD அகெய்ன்ஸ்ட் பீரியட், ரேட்க்கு"
+    assert tamil_say.voiced("against the rate") == "அகெய்ன்ஸ்ட் the ரேட்" and tamil_say.learned_in("The rate, against it") == {"rate": "ரேட்", "against": "அகெய்ன்ஸ்ட்"}
+    raw = json.loads(tamil_say.LEARNED.read_text(encoding="utf-8"))
+    raw["bank"] = "வங்கி"                                                                                   # a file edited by hand with a SOUNDS word, or Latin letters: both are ignored
+    raw["latin"] = "latin"
+    tamil_say.LEARNED.write_text(json.dumps(raw, ensure_ascii=False), encoding="utf-8")
+    assert "bank" not in tamil_say.learned() and "latin" not in tamil_say.learned() and tamil_say.voiced("bank") == "பேங்க்"
+    tamil_say.LEARNED.write_text("not json", encoding="utf-8")
+    assert tamil_say.learned() == {} and tamil_say.voiced("against") == "against"
+
+
+def test_a_learned_word_that_starts_with_the_ch_sound_is_spelt_with_a_double_ச():
+    got = tamil_say.learn({"charge": "சார்ஜ்", "check": "ச்செக்", "change": "சேஞ்ச்", "chart": "ச்சார்ட்", "chrome": "க்ரோம்", "chemistry": "கெமிஸ்ட்ரி", "chorus": "சோரஸ்", "sip": "சிப்"})
+    assert got == {"charge": "ச்சார்ஜ்", "check": "ச்செக்", "change": "ச்சேஞ்ச்", "chart": "ச்சார்ட்", "chrome": "க்ரோம்", "chemistry": "கெமிஸ்ட்ரி", "chorus": "சோரஸ்", "sip": "சிப்"}
+    assert tamil_say.voiced("charge") == "ச்சார்ஜ்" and tamil_say.voiced("channel") == "ச்சேனல்"
+    assert "ச்ச" in lessons.SOUND and "channel" in lessons.SOUND
+
+
+def test_a_learned_table_never_changes_how_a_line_mani_approved_is_voiced():
+    golden = json.loads((ROOT / "tests" / "golden_voice.json").read_text(encoding="utf-8"))
+    before = [tamil_say.voiced(g["say"]) for g in golden]
+    assert before == [g["voiced"] for g in golden]
+    every = {w.lower() for g in golden for w in re.findall(r"[A-Za-z]+", g["say"])} | set(tamil_say.SOUNDS)
+    tamil_say.LEARNED.write_text(json.dumps({**{w: "தவறு" for w in every if re.fullmatch(r"[A-Za-z]+", w)}, "quarter": "க்வார்ட்டர்", "percent": "பெர்சென்ட்", "extra": "எக்ஸ்ட்ரா"}, ensure_ascii=False), encoding="utf-8")
+    got = tamil_say.learned()
+    assert "extra" in got and not {"quarter", "percent", "bank", "net", "interest", "income"} & set(got)               # an entry for a word SOUNDS has is ignored at load; one for a word that only
+    # occurs inside a SOUNDS phrase (educational purpose) is kept, but the phrase is voiced first, so it never gets the chance
+    assert [tamil_say.voiced(g["say"]) for g in golden] == before and clone.unspelt(golden[3]["say"]) == []
+    assert tamil_say.voiced("extra percent") == "எக்ஸ்ட்ரா பர்சன்ட்"
 
 
 def test_a_slide_shows_only_items_a_sentence_of_the_pages_holds():

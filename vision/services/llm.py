@@ -92,6 +92,8 @@ class LLM:
         if which == "writer":
             # a reasoning model left to itself can spend the whole answer on hidden thinking and return nothing: cap the effort
             extra = {"reasoning_effort": self.cfg.llm.writer_reasoning} if self.cfg.llm.writer_reasoning else {}
+            if "qwen" in (model or ""):                  # Qwen3 takes "none" or "default", not "low": left on, its hidden thinking uses the whole answer
+                extra = {"reasoning_effort": "none"}
             return await self._openai(messages, system, tools, max_tokens, temperature, base=self.cfg.llm.writer_base_url,
                                       model=model or self.cfg.llm.writer_model, key=secret("GROQ_API_KEY"), extra=extra)
         return await self._anthropic(messages, system, tools, max_tokens, temperature)

@@ -220,7 +220,7 @@ masters:
           crew: market                   # its own crew (vision/masters/market_crew.py): a quarterly result from NSE's filings, told in Tanglish over slides
           language: ta
           privacy: approval              # uploaded private, then you approve it in VISION (dashboard or Telegram): approved = scheduled for the next release slot
-          report_privacy: approval        # the pre-market / post-market Shorts: approval = private until you approve (a pre-market one after 09:10 IST is stale and never published) | scheduled = published with NO review (pre-market 15 minutes after it is ready if before 09:10 IST, post-market at 21:00 IST), held back only when a data or voice check fails; not decided yet
+          report_privacy: scheduled       # Mani, 2026-10-14: a report is only good for about 12 hours, so it publishes with no review (held back only when a data or voice check fails) | the pre-market / post-market Shorts: approval = private until you approve (a pre-market one after 09:10 IST is stale and never published) | scheduled = published with NO review (pre-market 15 minutes after it is ready if before 09:10 IST, post-market at 21:00 IST), held back only when a data or voice check fails; not decided yet
           timezone: Asia/Kolkata         # release slots are this zone's wall time
           voice_engine: clone            # clone = Mani's own voice (about an hour a video) | edge = Edge's Tamil voice (fast, artificial)
           free_memory: true              # clone only: LM Studio's model is unloaded while the voice is made, then loaded again
@@ -242,7 +242,9 @@ masters:
             - Finance With Sharan
             - Akshat Shrivastava
             - Money Pechu                # Tamil; could not be checked (needs the YouTube lookup, 100 quota units a name, once): remove it if it resolves to the wrong channel
-          lesson_model: ""               # blank = the usual writer model; a lesson costs roughly 30,000 writer tokens (a Short about 8,000) and Groq's free day is 200,000 PER MODEL, shared with every other writer in VISION: name another Groq model here (e.g. openai/gpt-oss-20b) to give lessons an allowance of their own
+          lesson_model: "qwen/qwen3.8-27b"               # blank = the usual writer model; writes the lesson in English (the slides and lines, each backed by quoted sentences): about 7,000 tokens for a lesson, 3,000 for a Short. Groq's free day is 200,000 PER MODEL, shared with every other writer in VISION: name another Groq model here (e.g. openai/gpt-oss-20b) to give lessons an allowance of their own
+          lesson_min_lines: 8            # a lesson needs this many checked spoken lines or the topic waits (official pages are thin for some topics)
+          lesson_tamil_model: "qwen/qwen3.8-27b"   # turns the verified English lines into spoken Tanglish (about 5,000 tokens a lesson, on its own daily allowance); if it is unavailable the writer model is asked instead
           transcripts_per_day: 10        # public transcripts of the videos that matched tonight's topic, read as raw material for the angle and viewers' questions, never for wording or facts (Mani's call, against YouTube's terms: no sign-in, no cookies, no proxy, 5 s apart, any block stops it for the day)
           price_lag_days: 31             # analysis videos use a share price at least this old: SEBI bars an education-only creator from a named stock's price of the last 30 days
           index_csv: https://nsearchives.nseindia.com/content/indices/ind_niftylargemidcap250list.csv   # the companies it covers (NSE's index list; read once a week)

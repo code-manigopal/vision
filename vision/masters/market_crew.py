@@ -409,7 +409,7 @@ class TanglishWriter(MCrew):
     name, tier, note = "Tanglish Writer", "CLOUD", "slides and spoken lines from the figures"
 
     async def lesson(self, ctx: dict) -> AgentResult:
-        """Writes the lesson (lessons.write: plan, then each slide's lines, every line checked against the official pages). A topic that keeps fewer than lessons.MIN_KEPT lines
+        """Writes the lesson (lessons.write: the slides and English lines checked against the official pages, then the same lines in spoken Tanglish). A topic that keeps fewer than lessons.MIN_KEPT lines
         (a Short: MIN_KEPT_SHORT) is skipped for a few days and the next lined-up one is tried."""
         job, store, llm = ctx["job"], ctx["store"], ctx.get("llm")
         if not job.get("cands"):
@@ -424,7 +424,8 @@ class TanglishWriter(MCrew):
             tp = cand["topic"]
             covered = (store.kv_get(DONE, f"lessonshort:{tp['id']}") or {}).get("concepts") or []
             try:
-                out = await lessons.write(llm, tp, cand["pages"], cand["transcripts"], bad, short, covered, self.ch.get("lesson_model") or None)
+                out = await lessons.write(llm, tp, cand["pages"], cand["transcripts"], bad, short, covered, self.ch.get("lesson_model") or None,
+                                    self.ch.get("lesson_tamil_model") or None, int(self.ch.get("lesson_min_lines") or 0) or None)
             except lessons.Busy as e:                                    # the daily allowance is spent: nothing is wrong with the topic, so it is not skipped; the next run tries again
                 ctx.pop("job", None)
                 return AgentResult("wait", "WRITER BUSY", f"The writer's allowance is used up for now ({e}); no lesson on this run")
@@ -436,7 +437,8 @@ class TanglishWriter(MCrew):
                 continue
             title = out["title"] + (" #Shorts" if short and "#shorts" not in out["title"].lower() else "")
             job.update(topic=tp["id"], tp=tp, pages=cand["pages"], inspired=[{k: t.get(k) for k in ("title", "channel", "url")} for t in cand["transcripts"]], title=title[:100],
-                       deck=out["deck"], lines=out["lines"], kept=out["kept"], proposed=out["proposed"], dropped=out["dropped"], concept=out["concept"], angle=out["angle"])
+                       deck=out["deck"], lines=out["lines"], kept=out["kept"], proposed=out["proposed"], dropped=out["dropped"], concept=out["concept"], angle=out["angle"],
+                       new_words=out["new_words"], steps=out["steps"])
             if not short:
                 job["dir"] = str(youtube.ROOT / "data" / "shorts" / self.ch["id"] / f"lesson-{tp['id']}-{job['day']}")
             if self.ch.get("voice_engine", "clone") == "clone":              # the same safety net as every video: a fixed line the voice would garble is a bug to see in the test, not here
@@ -637,7 +639,7 @@ class SlideEditor(MCrew):
             "source": {"url": job["pages"][0]["url"], "title": job["pages"][0]["label"]}, "seconds": round(seconds, 1), "file": str(final), "keywords": [], "credits": [], "music": "",
             "original": False, "classic": None, "voice": ch.get("voice_engine", "clone"), "voice_qa": job.get("voice_qa"), "model_lines": job["kept"], "topic": tp["id"],
             "topic_title": tp["title"], "concept": job.get("concept") or None, "sources": [{"label": p["label"], "url": p["url"]} for p in job["pages"]], "inspired": job["inspired"],
-            "lines_proposed": job["proposed"], "lines_dropped": len(job["dropped"]), "dropped_why": why, "angle": job.get("angle") or None,
+            "lines_proposed": job["proposed"], "lines_dropped": len(job["dropped"]), "dropped_why": why, "angle": job.get("angle") or None, "new_words": job.get("new_words") or {},
             **({"date": job["date"], "window": job["window"]} if short else {})})
         if short:
             ctx["store"].kv_put(DONE, job["key"], {"at": time.time(), "file": str(final)})
@@ -742,7 +744,8 @@ class MarketUploader(youtube.Uploader):
                     "kind": "yt_publish", "key": f"yt_publish:{out['id']}", "channel": ch["id"], "record": key, "video_id": out["id"],
                     "url": f"https://studio.youtube.com/video/{out['id']}/edit", "title": rec["title"], "summary": rec["summary"], "seconds": rec["seconds"], "source": rec["source"]["url"],
                     "backed": [f"{r['metric']}: {r['point']} (\u201c{r['quote']}\u201d, {r['doc']['subject']})" for r in rec.get("reasons") or []] + [f"news: {n['title']} ({n['source']})" for n in rec.get("news") or []]
-                    + [f"source: {x['label']} {x['url']}" for x in rec.get("sources") or []] + [f"inspired by: {i['title']} ({i['channel']})" for i in rec.get("inspired") or []]})
+                    + [f"source: {x['label']} {x['url']}" for x in rec.get("sources") or []] + [f"inspired by: {i['title']} ({i['channel']})" for i in rec.get("inspired") or []]
+                    + ([f"new words for the voice (check by ear): {', '.join(f'{k} = {v}' for k, v in rec['new_words'].items())}"] if rec.get("new_words") else [])})
                 bus.say(f"{ch['name']} · “{rec['title']}” is uploaded as private: your approval schedules it")
                 done.append(f"“{rec['title']}” uploaded private, awaiting your approval")
         return AgentResult("done", "UPLOADED", "; ".join(done))

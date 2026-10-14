@@ -12,7 +12,12 @@ says it (FY27 -> ட்வென்டி சிக்ஸ் ட்வென்�
 
 from __future__ import annotations
 
+import json
+import os
 import re
+from pathlib import Path
+
+LEARNED = Path(__file__).resolve().parent.parent.parent / "data" / "voice_words.json"      # words a model has said how a Tamil speaker pronounces (see learn()); Mani checks them by ear
 
 SOUNDS = {
     "net interest income": "நெட் இன்ட்ரெஸ்ட் இன்கம்", "operating margin": "ஆப்பரேட்டிங் மார்ஜின்", "operating profit": "ஆப்பரேட்டிங் ப்ராஃபிட்",
@@ -30,7 +35,7 @@ SOUNDS = {
     "asset turnover": "அசெட் டர்ன்ஓவர்", "lease liabilities": "லீஸ் லயபிலிட்டீஸ்", "52 week": "ஐம்பத்து இரண்டு வீக்",
     "asset": "அசெட்", "assets": "அசெட்ஸ்", "book": "புக்", "cash": "கேஷ்", "debt": "டெட்", "dividend": "டிவிடெண்ட்", "free": "ஃப்ரீ", "lease": "லீஸ்",
     "market": "மார்க்கெட்", "operating": "ஆப்பரேட்டிங்", "price": "ப்ரைஸ்", "promoter": "ப்ரமோட்டர்", "reserves": "ரிசர்வ்ஸ்", "analysis": "அனாலிசிஸ்",
-    "business": "பிசினஸ்", "cap": "கேப்", "channel": "சேனல்", "close": "க்ளோஸ்", "educational": "எஜுகேஷனல்", "equity": "ஈக்விட்டி", "file": "ஃபைல்",
+    "business": "பிசினஸ்", "cap": "கேப்", "channel": "ச்சேனல்", "close": "க்ளோஸ்", "educational": "எஜுகேஷனல்", "equity": "ஈக்விட்டி", "file": "ஃபைல்",
     "filing": "ஃபைலிங்", "financial": "ஃபைனான்ஷியல்", "flow": "ஃப்ளோ", "fundamental": "ஃபண்டமென்டல்", "group": "குரூப்", "high": "ஹை", "holders": "ஹோல்டர்ஸ்",
     "holding": "ஹோல்டிங்", "liabilities": "லயபிலிட்டீஸ்", "low": "லோ", "machine": "மெஷின்", "statements": "ஸ்டேட்மென்ட்ஸ்", "to": "டு",
     "turnover": "டர்ன்ஓவர்", "value": "வேல்யூ", "week": "வீக்", "yield": "யீல்ட்", "net": "நெட்",
@@ -149,10 +154,75 @@ def numbers_as_words(text: str) -> str:
     return re.sub(r"\d[\d,]*(?:\.\d+)?", lambda m: number_said(m.group(0)), text)
 
 
+_cache: dict = {"stamp": None, "words": {}}
+
+
+def learned() -> dict[str, str]:
+    """The learned words (lower case English -> Tamil letters) from data/voice_words.json. Only an entry whose value is Tamil letters (and spaces) counts, and never one that SOUNDS has:
+    the table Mani corrected by ear always wins, so a learned word cannot change how a line he approved is voiced."""
+    try:
+        st = LEARNED.stat()
+    except OSError:
+        return {}
+    if _cache["stamp"] == (str(LEARNED), st.st_mtime_ns):
+        return _cache["words"]
+    try:
+        raw = json.loads(LEARNED.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        raw = {}
+    words = {k.lower(): v.strip() for k, v in raw.items() if isinstance(raw, dict) and isinstance(k, str) and isinstance(v, str) and re.fullmatch(r"[A-Za-z]+", k)
+             and k.lower() not in SOUNDS and valid_tamil(v)} if isinstance(raw, dict) else {}
+    _cache.update(stamp=(str(LEARNED), st.st_mtime_ns), words=words)
+    return words
+
+
+def valid_tamil(text: object) -> bool:
+    """Tamil letters and single spaces only, not empty, short: all a learned pronunciation may be."""
+    return isinstance(text, str) and 0 < len(text.strip()) <= 40 and bool(re.fullmatch(r"[\u0B80-\u0BFF]+(?: [\u0B80-\u0BFF]+)*", text.strip()))
+
+
+K_CH = ("chr", "chem", "chor", "chas", "chaos", "character", "chri", "chir", "chiro", "chlor", "chol", "chasm")      # "ch" said as k, not as the ch of channel
+
+
+def ch_sound(word: str, tamil: str) -> str:
+    """A word-initial ச is read as "s" (the voice said "senal" for சேனல்): an English word that starts with the "ch" sound is spelt ச்ச... (ச்சேனல், ச்சார்ஜ், ச்செக்)."""
+    tamil = tamil.strip()
+    if word.lower().startswith("ch") and not word.lower().startswith(K_CH) and tamil.startswith("ச") and not tamil.startswith("ச்"):
+        return "ச்" + tamil
+    return tamil
+
+
+def learn(new: dict) -> dict[str, str]:
+    """Adds {english word: Tamil letters} to data/voice_words.json and returns what was added. A word already learned is never overwritten, a word SOUNDS has is never shadowed, a value that is
+    not Tamil letters (or a key that is not a plain word) is refused."""
+    have = learned()
+    add = {k.lower(): ch_sound(k, v) for k, v in new.items() if isinstance(k, str) and re.fullmatch(r"[A-Za-z]+", k) and k.lower() not in SOUNDS and k.lower() not in have and valid_tamil(v)}
+    if add:
+        try:
+            raw = json.loads(LEARNED.read_text(encoding="utf-8")) if LEARNED.exists() else {}
+        except (OSError, ValueError):
+            raw = {}
+        raw = {**add, **(raw if isinstance(raw, dict) else {})}                    # what is on disk wins, even an entry learned() would not use
+        LEARNED.parent.mkdir(parents=True, exist_ok=True)
+        tmp = LEARNED.with_suffix(".tmp")
+        tmp.write_text(json.dumps(dict(sorted(raw.items())), ensure_ascii=False, indent=1), encoding="utf-8")
+        os.replace(tmp, LEARNED)
+    return add
+
+
+def learned_in(text: str) -> dict[str, str]:
+    """The learned words a line uses, for Mani to check by ear."""
+    have = learned()
+    return {w.lower(): have[w.lower()] for w in re.findall(r"[A-Za-z]+", text) if w.lower() in have}
+
+
 def voiced(text: str) -> str:
-    """The line as the voice should be given it. What is not in SOUNDS stays as written."""
+    """The line as the voice should be given it. What is not in SOUNDS or the learned words stays as written."""
     text = re.sub(r"\bFY\s?(\d{2})\b", lambda m: f"{_year(int(m.group(1)) - 1)} {_year(int(m.group(1)))} financial year", text)
     text = _WORDS.sub(lambda m: SOUNDS[m.group(1).lower()], text)
+    extra = learned()
+    if extra:                                                                       # a second table, used only for the words SOUNDS left as they were
+        text = re.sub(r"(?<![A-Za-z])[A-Za-z]+(?![A-Za-z])", lambda m: extra.get(m.group(0).lower(), m.group(0)), text)
     text = re.sub(r"\d[\d,]*(?:\.\d+)?", lambda m: number_said(m.group(0)), text)
     text = re.sub(r"([\u0B80-\u0BFF]+)-([\u0B80-\u0BFF])", _join, text)
     return re.sub(r"\s+", " ", text.replace("%", " பர்சன்ட்")).strip()

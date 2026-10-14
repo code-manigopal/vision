@@ -53,7 +53,7 @@ CHANNEL = {"id": "confessions", "name": "Confessions Everywhere", "director": "C
            "classics": [], "classics_per_day": 1, "playlists": {}, "viewer_comments": False, "cta": "", "long": {},
            "motion": True, "caption_styles": True, "sfx": True, "sfx_volume": 0.35, "quick": {},
            "double_down": True, "double_down_after": 12, "explore": 0.15, "trends": True, "trend_region": "US",
-           "lessons": False, "lesson_shorts": False, "lesson_channels": [], "transcripts_per_day": 10, "lesson_model": ""}
+           "lessons": False, "lesson_shorts": False, "lesson_channels": [], "transcripts_per_day": 10, "lesson_model": "", "lesson_tamil_model": "qwen/qwen3.8-27b"}
 # Original stories: a premise is built from one of each, so no two start from the same place (20 x 12 x 10 x 10 combinations).
 THEMES = ["a family secret", "a betrayal by a close friend", "a lie that grew too big", "a second chance that felt undeserved", "a debt never repaid",
           "an inheritance dispute", "a workplace mistake hidden for years", "a kindness kept secret", "a marriage on autopilot", "jealousy of a sibling",

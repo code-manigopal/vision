@@ -228,6 +228,7 @@ def backed(v: dict) -> list[tuple]:
     rows = [(f"Backed by · {r.get('metric')}", f"{r.get('point')} — \u201c{r.get('quote')}\u201d ({(r.get('doc') or {}).get('subject')}, {(r.get('doc') or {}).get('url')})")
             for r in v.get("reasons") or []]
     rows += [("Backed by · news", f"{n.get('title')} ({n.get('source')}, {n.get('at')}) {n.get('link')}") for n in v.get("news") or []]
+    rows += [("New words for the voice", ", ".join(f"{k} = {t}" for k, t in v["new_words"].items()))] if v.get("new_words") else []      # words a model said how to pronounce: Mani checks them by ear
     rows += [("Source", f"{x.get('label')} {x.get('url')}") for x in v.get("sources") or []]                                            # a finance lesson: the official pages every fact is checked against
     return rows + [("Inspired by", f"{i.get('title')} · {i.get('channel')} {i.get('url')}") for i in v.get("inspired") or []]         # and the videos whose transcripts framed it (never shown on screen)
 

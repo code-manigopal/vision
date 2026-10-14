@@ -5,13 +5,17 @@
                                 least recently made; never one made within REPEAT_DAYS, never one that had no source or too little to say within SKIP_DAYS
     fetch_sources(c, topic)     the pages (HTML or PDF), a few seconds apart; a page that is dead or holds nothing on the topic is left out
     scrub(text, bad)            a channel's transcript with every sentence that names a company or stock, or talks of price, targets or the market's direction, removed
-    write(llm, topic, pages)    the lesson: one request for the angle (from transcripts), one for the plan (slides), one per slide for its spoken lines
-    check_line(item, ...)       why a spoken line is thrown away, or "" (the rules below); the lesson keeps only lines that pass
+    write(llm, topic, pages)    the lesson in two steps: (A) the writer model plans the slides and writes the lesson as plain ENGLISH lines, each backed by quoted sentences of the pages,
+                                checked by code in English; (B) a second request turns the verified English lines into spoken Tanglish, checked again (same numbers, no book Tamil)
+    check_en(item, ...)         why an English line is thrown away, or "" (the rules below); check_ta(say, en, ...) the same for its Tanglish
 
 Mani's rules (2026-10-14), kept in code:
-- Every fact and number comes from an official page fetched that night. A spoken line is kept only if each quote it gives (30+ characters) is in one of the pages,
-  every number in the line (Tamil and English) is in its quotes, and it passes the same checks as the rest of the channel: all Tamil letters (the voice's own check, clone.unspelt),
-  no ADVICE, FORECAST or RUDE wording, no company in the channel's index, no market direction.
+- Every fact and number comes from an official page fetched that night. An English line is kept only if each quote it gives (30+ characters) is in one of the pages, every number in it is in
+  its quotes, it is backed by them word for word (backed_by), and it passes the same checks as the rest of the channel: no ADVICE, FORECAST or RUDE wording, no company in the channel's
+  index, no market direction. Its English is the caption, exactly as verified.
+- The spoken line is the English line said the way the host talks (Chennai Tanglish, English finance words in English letters, as in the lines he approved by ear): kept only if it has the
+  same digits as the English line, no advice/forecast/rude wording, no book Tamil (BOOKISH), and every English word left in it can be said by the cloned voice (tamil_say.learn:
+  the words learned from a model are in data/voice_words.json, listed on the desk and in the approval so Mani checks them by ear). A line that fails twice is dropped, caption and all.
 - Other channels' transcripts (a call he made, against YouTube's terms) are raw material for the topic, the angle, viewers' questions and common misunderstandings: never for wording
   (a line sharing 8 or more words in a row with any transcript is thrown away) and never for facts (the plan and the lines are written from the official pages only).
 - A lesson never discusses an individual stock or where the market is going.
@@ -43,8 +47,10 @@ MAX_TOPICS = 2                    # topics tried in one night
 MIN_KEPT, MIN_KEPT_SHORT = 10, 4  # spoken lines that must survive the checks, or the topic is skipped (TOO THIN)
 PAGE_MIN = 800                    # a page with less text than this answered nothing
 PDF_MAX = 12 << 20
-PASSAGES = 11000                  # characters of official text in a plan request (about 3,000 tokens)
-SLIDE_PASSAGES = 4500             # and in a request for one slide's lines
+PASSAGES = 9000                   # characters of official text in the lesson request (about 2,300 tokens: with the answer it stays under Groq's 8,000 tokens a minute)
+WANT, WANT_SHORT = 14, 5          # English lines that should survive the checks, or one more request replaces the ones thrown out
+MAX_LINES, MAX_LINES_SHORT = 24, 8
+TA_MODEL = "qwen/qwen3.8-27b"     # the model that turns the English lines into spoken Tanglish (channel option lesson_tamil_model); Groq keeps a separate daily allowance per model
 TRANSCRIPT_TOKENS = 2500          # what Groq may see of the transcripts, all together
 SHINGLE = 8                       # a line sharing this many words in a row with a transcript is a copy
 ICONS = ["bank", "paper", "lens", "shield", "coin", "piggy", "calendar", "goldbar", "rupee", "umbrella", "chart", "company"]
@@ -53,18 +59,20 @@ LATIN = market.LATIN
 # a lesson says nothing of a share or of where the market goes (beyond ADVICE / FORECAST)
 MARKET_DIR = re.compile(r"\b(nifty|sensex|bank ?nifty|bull(?:ish)?|bear(?:ish)?|rall(?:y|ies)|crash\w*|correction|share prices?|stock prices?|price targets?|hold)\b"
                         r"|நிஃப்டி|சென்செக்ஸ்|ஷேர் விலை|ஸ்டாக் விலை|புல்லிஷ்|பேரிஷ்", re.I)
-BOOKISH = re.compile(r"என்பது|என்றால்|நீங்கள்|உங்கள்|செய்கிற|செய்யப்பட|இருக்கிறது|ஆகிறது|உள்ளது|வழங்குகிற|கொள்கிற|மேலாண்மை")       # book Tamil: the host talks like a friend (X னா, உங்க, பண்ணுது)
+BOOKISH = re.compile(r"என்பது|என்றால்|நீங்கள்|உங்கள்|செய்கிற|செய்யப்பட|இருக்கிறது|ஆகிறது|உள்ளது|உள்ளன|வழங்குகிற|கொள்கிற|மேலாண்மை|செய்யலாம்|செய்ய வேண்டும்|ஆகையால்|செலுத்த|அநுசாரி|அனுசாரி"
+                     r"|(?<![\u0B80-\u0BFF])(?:எனவே|மேலும்|ஆனால்|மாதம்|ஆகும்|போன்ற|மற்றும்)(?![\u0B80-\u0BFF])")     # book Tamil: the host talks like a friend (X னா, உங்க, பண்ணுது, இருக்கு, மாசம், ஆனா); the short words only as whole words
 BRANDS = ("HDFC", "ICICI", "SBI", "Axis Bank", "Kotak", "Reliance", "Tata", "Adani", "Infosys", "TCS", "Wipro", "Zerodha", "Groww", "Paytm", "Upstox")   # banks and brokers are names too
 SUFFIX = re.compile(r"\s*\b(limited|ltd\.?|corporation|corp\.?|company|co\.?)\b\.?$", re.I)           # a legal tail only: "Bank of India" stays whole
 GENERIC = {"bank", "india", "indian", "industries", "power", "energy", "finance", "insurance", "life", "global", "international", "united", "national", "general", "capital"}     # never a name on their own
 
-# lines Mani approved by ear (tests/golden_voice.json, the HDFC video): all Tamil letters, the way he says each word; the writer is shown them for the manner only
+# lines Mani approved by ear (tests/golden_voice.json, the HDFC video): the spoken register the translator is shown, English finance words in English letters
 STYLE = [
-    "நம்பர்ஸ் என்ன சொல்லுது? நல்லா இருக்கா, கவனிக்க வேண்டியது ஏதாவது இருக்கா? வாங்க பாக்கலாம்.",
-    "நெட் இன்ட்ரெஸ்ட் இன்கம்னா, பேங்க் வாங்குற வட்டிக்கும் குடுக்குற வட்டிக்கும் உள்ள வித்தியாசம். பேங்கோட முக்கிய வருமானம் இதுதான்.",
-    "ஆப்பரேட்டிங் ப்ராஃபிட்னா, கடன் இழப்புக்கு பணம் ஒதுக்குறதுக்கு முன்னாடி பேங்க் சம்பாதிச்சது.",
-    "க்ராஸ் என்பிஏனா, மொத்த கடன்ல திரும்பி வராம நிக்கிற கடனோட சதவீதம். இது குறைஞ்சா நல்லது.",
-    "ஆனா ப்ராஃபிட், நெட் இன்ட்ரெஸ்ட் இன்கம் வளர்ந்த அளவுக்கு வளரல.",
+    "Numbers என்ன சொல்லுது? நல்லா இருக்கா, கவனிக்க வேண்டியது ஏதாவது இருக்கா? வாங்க பாக்கலாம்.",
+    "Net interest income-னா, bank வாங்குற வட்டிக்கும் குடுக்குற வட்டிக்கும் உள்ள வித்தியாசம். Bank-ஓட முக்கிய வருமானம் இதுதான்.",
+    "Operating profit-னா, கடன் இழப்புக்கு பணம் ஒதுக்குறதுக்கு முன்னாடி bank சம்பாதிச்சது.",
+    "Gross NPA-னா, மொத்த கடன்ல திரும்பி வராம நிக்கிற கடனோட சதவீதம். இது குறைஞ்சா நல்லது.",
+    "Net NPA போன வருஷம் இதே quarter-ல 0.47 percent. இப்போ 0.41 percent-க்கு இறங்கிருக்கு.",
+    "ஆனா profit, Net interest income வளர்ந்த அளவுக்கு வளரல.",
     "வராக்கடன் சதவீதம் குறைஞ்சிருக்கு, அதாவது கடன் தரம் மேம்பட்டிருக்கு.",
 ]
 
@@ -76,7 +84,6 @@ CLOSE_SAY = ("இது ஒரு educational lesson மட்டும்தா
 CLOSE_EN = ("This is only an educational lesson. It is not investment advice. I am not a SEBI-registered advisor. "
             "Before you decide what suits you, check the official source once yourself. See you in the next video!")
 
-WORDS_BAD_TA = "இருக்கும், ஆகும், போகும், ஏறும், இறங்கும், வாய்ப்பு, எதிர்பார், நாளை, அடுத்த"
 WORDS_BAD_EN = "will, would, may, might, could, should, likely, expect, outlook, support, tomorrow, watch, buy, sell, target, cheap, expensive"
 
 
@@ -486,75 +493,85 @@ def hints(a: dict) -> str:
             + "".join(f"- common misunderstanding: {m}\n" for m in a.get("misconceptions", [])))
 
 
-# ---------- the plan ----------
-PLAN = """You plan a short lesson for a Tamil YouTube channel that teaches personal finance to beginners in India. Subject: {title}.
+# ---------- the lesson, in English (step A) ----------
+WRITE = """You write a short finance lesson for a Tamil YouTube channel that teaches personal finance to beginners in India. Subject: {title}.
 Official passages (the ONLY source of facts; each is tagged [S1], [S2]...):
 {passages}
 
-{hints}Plan {count}. Answer as
-{{"title": "...", "slides": [{{"kind": "points", "heading": "...", "icon": "...", "items": ["...", "..."]}}]}}
+{hints}Write {count}. Answer as
+{{"title": "...", {more}"slides": [{{"kind": "points", "heading": "...", "icon": "...", "items": ["...", "..."]}}],
+ "lines": [{{"slide": 1, "show": 1, "en": "...", "quotes": ["..."]}}]}}
 - title: a Tanglish hook in this channel's style, English finance terms with a few Tamil words, under 80 characters, a question or a plain statement about the subject, for example
   "FD vs RD தமிழில் | என்ன வித்தியாசம்?" or "SIP னா என்ன? எளிமையா புரிஞ்சிக்கலாம்". Never a promise of returns, speed or income, and no "best" or "must".
 - {shape}
-- heading: at most 4 words. Each item: a short phrase of at most 6 words stating a fact the passages give. Digits only if the passages have them.
+- heading and items are in plain ENGLISH (only the title is Tanglish). heading: at most 4 words. Each item: a short phrase of at most 6 words stating a fact the passages give. Digits only if the passages have them.
 - icon: one of {icons}.
 - {facts}
 - Order: what it is, how it works, what to check (costs, limits, risks). Describe; never recommend.
-- No company, fund or product names, nothing about where any market or price is going, no advice words (buy, sell, should)."""
-PLAN_LONG = ("slides: 4 or 5 slides, each with 2 to 4 items.", "4 or 5 slides, each with 2 to 4 items",
-             "If the passages give figures (rates, limits, years, amounts), make one slide {\"kind\": \"facts\", \"heading\": \"...\", \"rows\": [{\"label\": \"...\", \"value\": \"...\", \"note\": \"...\"}]} "
-             "with up to 4 rows; every value is copied from the passages.")
-PLAN_SHORT = ("slides: 1 or 2 slides, each with 2 or 3 items, about ONE concept of the subject.", "1 or 2 slides for ONE concept of the subject, each with 2 or 3 items; also \"concept\": \"3 to 6 words naming it\"",
-              "Do not use a facts slide. The concept must not be one of: {covered}.")
-LINES = """You write the spoken lines for ONE slide of a finance lesson on a Tamil YouTube channel. The host talks like a friend explaining, in colloquial Chennai Tamil
-mixed with English finance words (Tanglish). Subject: {title}.
-Official passages (the ONLY source of facts; each tagged [S1]...):
-{passages}
-
-The slide: "{heading}". Its items, shown one by one: {items}
-Write {count} spoken lines for this slide, each a different point. Answer as
-{{"lines": [{{"show": 1, "say": "...", "en": "...", "quotes": ["..."]}}]}}
-- show: how many of the slide's items are on screen while the line is said (1 to {n}, never going down).
-- say: one or two full sentences (at least 8 words), as a friend would say them, written ENTIRELY in Tamil letters: English words are written in Tamil letters the way a Tamil speaker says them (பேங்க், டெபாசிட், இன்ட்ரெஸ்ட், ரேட்),
-  abbreviations letter by letter (FD = எஃப்டி, RD = ஆர்டி, RBI = ஆர்பிஐ, SEBI = செபி), numbers in digits, no ₹ or % sign (say ரூபாய் and பர்சன்ட்). Not one Latin letter may remain in say.
-  Talk the way the examples below do: casual Chennai speech, short sentences, a term defined as "X னா, ..." and a point made plainly. Never bookish Tamil (என்பது, செய்யப்படுகிறது, கிறது, ப்படும்).
-  Do not translate English finance words into formal Tamil (say டெபாசிட், இன்ட்ரெஸ்ட், பேங்க்); do not invent words. Never use these Tamil words: {bad_ta}.
-- en: the same line in plain English for captions, one full sentence of at least 8 words, without these words: {bad_en}.
-- Work from one quote at a time: your English sentence is that quote's own sentence made plain, keeping its key words, naming the thing it is about (FD, RD, NPS) and saying only what
-  the quote says about it. Never join facts from different quotes into one claim, never compare two products in one line, never add a fact (no "no withdrawals", no "higher than").
-- quotes: 1 or 2 sentences copied EXACTLY, character for character, from the passages above (each at least 30 characters), that support everything the line says.
-- Every number in say and en must be in a quote, written as the quote writes it (5,00,000 or 5 lakh, 75 percent). Add no fact, number or name the quotes lack. No advice, no opinion, no prediction, no company or product names.
-Examples of the host's manner (do not reuse their content):
-{style}"""
-
-
+- lines: the script, in order, {lines} in all, each about one point of the slide it belongs to. slide = the slide's number (1 is the first); show = how many of that slide's items are on screen while
+  the line is said (1 to its number of items, never going down within a slide).
+- en: what the host says, in plain spoken English: one sentence of 8 to 30 words, without these words: {bad_en}. It is one quote's own sentence made plain, keeping its key words and naming the
+  thing it is about (FD, RD, NPS) and saying only what the quote says about it. Never join facts from different quotes into one claim, never compare two products in one line, never add a
+  fact (no "no withdrawals", no "higher than"). Every number in en is written in digits, as the quote's figure (Rs.5,00,000 or 5 lakh, 75 percent), never in words and never with the ₹ sign.
+- quotes: 1 or 2 sentences copied EXACTLY, character for character, from the passages above (each at least 30 characters), that support everything the line says. Choose the quote first, then write en
+  from it. A quote is never your own sentence or a shortened or tidied version of one: if you cannot copy a sentence exactly, choose another point. en reuses the quote's own nouns and key words and
+  uses an acronym (FD, RD, DICGC, NPS) only if the quote has it or its full name; otherwise it writes the full name.
+- No company, fund or product names, nothing about where any market or price is going, no advice, no opinion, no prediction."""
+WRITE_LONG = ("slides: 4 or 5 slides, each with 2 to 4 items.", "4 or 5 slides, each with 2 to 4 items, and the script",
+              "If the passages give figures (rates, limits, years, amounts), make one slide {\"kind\": \"facts\", \"heading\": \"...\", \"rows\": [{\"label\": \"...\", \"value\": \"...\", \"note\": \"...\"}]} "
+              "with up to 4 rows; every value is copied from the passages.", "22 to 26 lines", "")
+WRITE_SHORT = ("slides: 1 or 2 slides, each with 2 or 3 items, about ONE concept of the subject.", "1 or 2 slides for ONE concept of the subject, each with 2 or 3 items, and the script",
+               "Do not use a facts slide. The concept must not be one of: {covered}.", "6 to 8 lines", "\"concept\": \"3 to 6 words naming it\", ")
 REPAIR = """
 
-Earlier you wrote lines for this slide and the checks threw some out, for the reasons below. Write NEW lines to replace them (same JSON, same rules, a different wording that fixes the
-problem; if you cannot support a point with an exact quote, make a different point from the passages):
+Earlier you wrote lines for this lesson and the checks threw some out, for the reasons below. The slides are decided (the numbers are the slides'):
+{slides}
+Write NEW lines to replace them: answer only {{"lines": [{{"slide": 1, "show": 1, "en": "...", "quotes": ["..."]}}]}} with {count} lines, same rules, a different point or a different wording that fixes
+the problem; if you cannot support a point with an exact quote, make a different point from the passages. These points are already in the script, do not repeat them:
+{kept}
+The lines to replace:
 {rejected}"""
+
+# ---------- the lesson, spoken (step B) ----------
+TANGLISH = """You are the host of a Tamil finance channel for beginners. Say each English line below the way you would say it to the camera: colloquial spoken Chennai Tamil (pechu Tamil), NOT written
+or book Tamil, with the English finance words left in English letters, the way Tanglish is spoken.
+Copy the register of these lines, which the channel's owner approved by ear:
+{style}
+Spoken, not written (use the left one, never the right one):
+- இருக்கு, not உள்ளது / உள்ளன; பண்ணலாம், not செய்யலாம்; போட்டா / போடணும், not செலுத்தினால் / செலுத்த வேண்டும்; loan எடுக்கலாம், never loan வாங்கலாம் (வாங்கு reads as "buy"); ஆனா, not ஆனால்; அதனால, not ஆகையால் / எனவே; மாசம், not மாதம்; உங்க, not நீங்கள் / உங்கள்;
+  X-னா, not X என்பது; break பண்ணா, not உடைத்தால்; அதுக்கு மேல, not அதற்கு மேல்.
+- English finance words stay in English letters (loan, deposit, penalty, interest, FD, RD, amount, period, premium, scheme, account, bank, rate), with Tamil endings joined by a hyphen (FD-க்கு, RD-ல, bank-ஓட).
+  Never write English words in Tamil letters and never translate them into formal Tamil.
+- Keep every number exactly as in the English line, in digits (5,00,000 stays 5,00,000; never "5 லட்சம்", never spelt out, no ₹ sign: say Rs), add nothing, drop nothing, change nothing. No advice, no opinion, no prediction.
+- One or two short sentences per line, at least 5 words, the same meaning only. Do not copy the English line.
+The lines:
+{lines}
+
+Answer as {{"lines": [{{"i": 1, "say": "..."}}]}}, one entry per line, in the same order."""
+AGAIN = """
+
+Earlier you spoke some of these lines and the checks refused them, for the reasons below. Say ONLY these lines again, fixing exactly that:
+{again}
+Answer as {{"lines": [{{"i": 1, "say": "..."}}]}} with the same numbers i."""
+SOUND = """How does a Tamil speaker say each English word or abbreviation below in everyday Chennai Tamil? Write each in Tamil letters only, the way it sounds (an abbreviation letter by letter, run
+together: FD -> எஃப்டி, RBI -> ஆர்பிஐ; a word as it is pronounced: period -> பீரியட், amount -> அமவுண்ட், against -> அகெய்ன்ஸ்ட்). A word that starts with the \"ch\" sound (channel, charge, chart, check, change, cheque) starts with ச்ச, because a bare ச is read as \"s\": ச்சேனல், ச்சார்ஜ், ச்செக். Answer as {{"words": {{"word": "தமிழ்"}}}}
+Words: {words}"""
 
 
 def explain(item: object, why: str) -> str:
-    """What to tell the writer about a line the checks threw out: the words that did it."""
-    say, en = (" ".join(str(item.get(k, "")).split()) if isinstance(item, dict) else "" for k in ("say", "en"))
+    """What to tell the writer about an English line the checks threw out: the words that did it."""
+    en = " ".join(str(item.get("en", "")).split()) if isinstance(item, dict) else ""
     if why == "the caption says more than its quotes do":
-        return "the English caption has words (or an acronym such as FD or RD) that its quote does not hold; say only what the quote says, in its own words, about the thing it names"
-    if why == "book Tamil, not the way the host speaks":
-        m = BOOKISH.search(say)
-        return f"\"{m.group(0)}\" is book Tamil; say it the way a friend does: X னா, உங்க, பண்ணுது, இருக்கு, ஆகுது"
-    if why in ("a garbled line (a word repeated)", "a line of the wrong length"):
-        return "write a full, natural sentence or two of at least 8 words, never a list of fragments or a repeated word"
-    if why in ("spoken line is not all Tamil script", "the voice would garble an English word"):
-        words = re.findall(r"[A-Za-z][A-Za-z.\-]*", say) or clone.unspelt(say) or re.findall(r"[$\u20b9\u20ac\u00a3]", say)
-        return f"these are not in Tamil letters: {', '.join(words)}; write every English word as it sounds in Tamil letters (லம்ப்சம், பிரின்சிபல், இன்ஸ்டால்மென்ட், டெர்ம்), and FD as எஃப்டி"
+        return "the line has words (or an acronym such as FD or RD) that its quote does not hold; say only what the quote says, in its own words, about the thing it names"
+    if why == "a line of the wrong length":
+        return "write one natural sentence of 8 to 30 words"
     if why in ("forecast wording", "advice or rude wording"):
-        m = market.FORECAST.search(say) or market.FORECAST.search(en) or market.ADVICE.search(say) or market.ADVICE.search(en)
-        return f"the word \"{m.group(0)}\" is not allowed; say it in the plain present tense (இருக்கு, ஆகுது, உண்டு), as a fact the passage states"
+        m = market.FORECAST.search(en) or market.ADVICE.search(en) or market.RUDE.search(en)
+        return f"the word \"{m.group(0) if m else ''}\" is not allowed; say it in the plain present tense, as a fact the passage states"
     if why == "quote is not in the source":
         return "a quote is not an exact copy of a sentence in the passages (30+ characters); copy a whole sentence exactly, character for character"
-    if why in ("a number is not in the quotes", "the Tamil and the English caption give different numbers"):
-        return "every number in say and en must be in a quote, the same numbers in both"
+    if why == "a number is not in the quotes":
+        return "every number in the line must be in a quote, written the way the quote writes it"
     if why == "names a company or the market":
         return "no company, bank or product names and nothing about markets or prices"
     return why
@@ -662,31 +679,44 @@ def stems_of(text: str) -> set[str]:
 
 LETTERS = {"A": "ஏ", "B": "பி", "C": "சி", "D": "டி", "E": "ஈ", "F": "எஃப்", "G": "ஜி", "H": "ஹெச்", "I": "ஐ", "J": "ஜே", "K": "கே", "L": "எல்", "M": "எம்", "N": "என்", "O": "ஓ",
            "P": "பி", "Q": "க்யூ", "R": "ஆர்", "S": "எஸ்", "T": "டி", "U": "யூ", "V": "வி", "W": "டபிள்யூ", "X": "எக்ஸ்", "Y": "வை", "Z": "இசெட்"}       # an acronym read letter by letter, run together
-WORDS_TA = {"unit": "யூனிட்", "units": "யூனிட்ஸ்", "fund": "ஃபண்ட்", "funds": "ஃபண்ட்ஸ்", "mutual": "மியூச்சுவல்", "scheme": "ஸ்கீம்", "loan": "லோன்", "interest": "இன்ட்ரெஸ்ட்",
-            "deposit": "டெபாசிட்", "deposits": "டெபாசிட்ஸ்", "principal": "பிரின்சிபல்", "investor": "இன்வெஸ்டர்", "investors": "இன்வெஸ்டர்ஸ்", "load": "லோட்", "exit": "எக்ஸிட்",
-            "lock": "லாக்", "in": "இன்", "term": "டெர்ம்", "plan": "ப்ளான்", "tax": "டாக்ஸ்", "gold": "கோல்ட்", "bond": "பாண்ட்", "bonds": "பாண்ட்ஸ்", "risk": "ரிஸ்க்",
-            "return": "ரிட்டர்ன்", "returns": "ரிட்டர்ன்ஸ்", "inflation": "இன்ஃப்ளேஷன்", "budget": "பட்ஜெட்", "saving": "சேவிங்", "savings": "சேவிங்ஸ்", "account": "அக்கவுன்ட்",
-            "penalty": "பெனால்டி", "maturity": "மெச்சூரிட்டி", "customer": "கஸ்டமர்", "amount": "அமவுண்ட்", "rate": "ரேட்", "monthly": "மன்த்லி", "lakh": "லட்சம்", "crore": "கோடி",
-            "demat": "டிமேட்", "broker": "ப்ரோக்கர்", "mutual fund": "மியூச்சுவல் ஃபண்ட்", "sip": "எஸ்ஐபி", "nav": "என்ஏவி", "fd": "எஃப்டி", "rd": "ஆர்டி"}         # a fallback for a word the writer left in Latin letters
+WORDS_TA = {"unit": "யூனிட்", "units": "யூனிட்ஸ்", "fund": "ஃபண்ட்", "funds": "ஃபண்ட்ஸ்", "mutual": "மியூச்சுவல்", "scheme": "ஸ்கீம்", "loan": "லோன்", "deposit": "டெபாசிட்",
+            "deposits": "டெபாசிட்ஸ்", "principal": "பிரின்சிபல்", "investor": "இன்வெஸ்டர்", "investors": "இன்வெஸ்டர்ஸ்", "load": "லோட்", "exit": "எக்ஸிட்", "lock": "லாக்", "in": "இன்",
+            "term": "டெர்ம்", "plan": "ப்ளான்", "tax": "டாக்ஸ்", "gold": "கோல்ட்", "bond": "பாண்ட்", "bonds": "பாண்ட்ஸ்", "risk": "ரிஸ்க்", "return": "ரிட்டர்ன்", "returns": "ரிட்டர்ன்ஸ்",
+            "inflation": "இன்ஃப்ளேஷன்", "budget": "பட்ஜெட்", "saving": "சேவிங்", "savings": "சேவிங்ஸ்", "account": "அக்கவுன்ட்", "penalty": "பெனால்டி", "maturity": "மெச்சூரிட்டி",
+            "customer": "கஸ்டமர்", "amount": "அமவுண்ட்", "rate": "ரேட்", "monthly": "மன்த்லி", "lakh": "லட்சம்", "crore": "கோடி", "demat": "டிமேட்", "broker": "ப்ரோக்கர்", "rs": "ரூபாய்"}
+# how a Tamil speaker says some words every lesson uses: a starting point for tamil_say.learn, so these cost no request (Mani hears them like the others, in the lesson's list of new words)
 
 
-def tamilise(say: str) -> str:
-    """The line with English words the writer left in Latin letters written as a Tamil speaker says them: acronyms letter by letter (NAV -> என்ஏவி), common finance words from tamil_say.SOUNDS
-    or WORDS_TA. A word it does not know stays, and check_line then throws the line out."""
-    from .tamil_say import SOUNDS
+def pronounce(says: list[str]) -> set[str]:
+    """The English words in these spoken lines that the voice cannot say yet (not in tamil_say.SOUNDS or the learned words), in lower case."""
+    return {w.lower() for say in says for w in clone.unspelt(say)}
 
-    def one(m: re.Match) -> str:
-        w = m.group(0)
-        if w.lower() in SOUNDS or w.lower() in WORDS_TA:
-            return SOUNDS.get(w.lower()) or WORDS_TA[w.lower()]
-        return "".join(LETTERS[c] for c in w) if w.isupper() and 2 <= len(w) <= 6 else w
-    return re.sub(r"[A-Za-z]+", one, say)
+
+def seeds(says: list[str], want: set[str]) -> dict[str, str]:
+    """A pronunciation for the wanted words that need no model: WORDS_TA, or an acronym (the word written in capitals somewhere in the lines) read letter by letter."""
+    caps = {w.lower(): w for say in says for w in re.findall(r"[A-Z]{2,6}", say)}
+    return {w: WORDS_TA[w] if w in WORDS_TA else "".join(LETTERS[c] for c in caps[w]) for w in want if w in WORDS_TA or w in caps}
+
+
+async def learn_words(llm, says: list[str], model: str | None, ta_model: str | None) -> None:
+    """Makes the voice able to say every English word left in the lines: seeds first, then ONE small request (any model) for the rest, asking how a Tamil speaker says each; a value is accepted
+    only if it is Tamil letters (tamil_say.learn). A word still unknown stays unknown, and the lines that use it are dropped."""
+    from . import tamil_say
+    want = pronounce(says)
+    if not want:
+        return
+    tamil_say.learn(seeds(says, want))
+    want = pronounce(says)
+    if want and llm:
+        got = await ask_ta(llm, SOUND.format(words=", ".join(sorted(want))), 600, model, ta_model)
+        if isinstance(got, dict) and isinstance(got.get("words"), dict):
+            tamil_say.learn({k: v for k, v in got["words"].items() if isinstance(k, str) and k.lower() in want})
 
 
 def squash(text: str) -> str:
-    """Text as a quote is compared with a page: filings_text.norm, a parenthetical aside and the quotation marks left out, and the rupee written one way (a model often leaves out
+    """Text as a quote is compared with a page: filings_text.norm, a parenthetical aside, bullet glyphs and the quotation marks left out, and the rupee written one way (a model often leaves out
     "(Rupees Five Lakhs)" or changes ` / Rs. / ₹ when it copies a sentence; a sentence is still found if only those differ)."""
-    text = re.sub(r"\([^)]*\)", " ", text)
+    text = re.sub(r"\([^)]*\)", " ", re.sub(r"[\ue000-\uf8ff\u2022\u25aa\u25cf\u25a0]", " ", text))              # a PDF's bullet glyph is not part of the sentence
     text = re.sub(r"[\u20b9`]|\brs\.?|\brupees?\b", " rs ", norm(text).replace("\u20b9", "`"), flags=re.I)
     return re.sub(r"\s+", " ", re.sub(r"[\"'\u2018\u2019\u201c\u201d()]", "", text)).strip()
 
@@ -704,43 +734,59 @@ def figs(text: str) -> set[str]:
     return market.numbers(re.sub(r"(\d[\d,]*(?:\.\d+)?)\s*(lakhs?|crores?|thousand|லட்சம்|கோடி)", one, text, flags=re.I))
 
 
-def check_line(item: object, docs: list[str], bad, tx: set) -> str:
-    """Why a line from the model is thrown away, or "" when it is kept. `docs` are the pages' texts as squash() gives them, `bad` from bad_pattern, `tx` the transcripts' shingles."""
-    if not isinstance(item, dict) or not isinstance(item.get("say"), str) or not isinstance(item.get("en"), str) or not isinstance(item.get("quotes"), list):
+def check_en(item: object, docs: list[str], bad, tx: set) -> str:
+    """Why an English line from the model is thrown away, or "" when it is kept. `docs` are the pages' texts as squash() gives them, `bad` from bad_pattern, `tx` the transcripts' shingles."""
+    if not isinstance(item, dict) or not isinstance(item.get("en"), str) or not isinstance(item.get("quotes"), list):
         return "not a complete line"
-    say, en = " ".join(item["say"].split()), " ".join(item["en"].split())
+    en = " ".join(item["en"].split())
     quotes = [q.strip() for q in item["quotes"] if isinstance(q, str) and q.strip()]
-    if not say or not en or not quotes:
+    if not en or not quotes:
         return "no line, caption or quote"
-    if not 6 <= len(say.split()) <= 60 or len(en.split()) < 5:
+    if not 6 <= len(en.split()) <= 45:
         return "a line of the wrong length"
-    if any(say.split().count(w) >= 3 for w in set(say.split())):
-        return "a garbled line (a word repeated)"
-    if BOOKISH.search(say):
-        return "book Tamil, not the way the host speaks"
     for q in quotes:
         if len(q) < 30 or not any(squash(q).rstrip(" .,;:") in d for d in docs):
             return "quote is not in the source"
-    have = set().union(*(figs(q) for q in quotes))
-    if not figs(say) <= have or not figs(en) <= have:
+    if not figs(en) <= set().union(*(figs(q) for q in quotes)):
         return "a number is not in the quotes"
-    if figs(say) != figs(en):
-        return "the Tamil and the English caption give different numbers"
-    if LATIN.search(say) or re.search(r"[$\u20b9\u20ac\u00a3]", say):
-        return "spoken line is not all Tamil script"
-    if clone.unspelt(say):
-        return "the voice would garble an English word"
-    for t in (say, en):
-        if market.ADVICE.search(t) or market.RUDE.search(t):
-            return "advice or rude wording"
-        if market.FORECAST.search(t):
-            return "forecast wording"
-    if bad.search(say) or bad.search(en):
+    plain = re.sub(r"Credit Guarantee", "Credit", en)                      # DICGC's own name holds "Guarantee", which ADVICE reads as a promise
+    if market.ADVICE.search(plain) or market.RUDE.search(plain):
+        return "advice or rude wording"
+    if market.FORECAST.search(en):
+        return "forecast wording"
+    if bad.search(en):
         return "names a company or the market"
     if not backed_by(en, quotes):
         return "the caption says more than its quotes do"
-    if tx and (shingles(en) & tx or shingles(say) & tx):
+    if tx and shingles(en) & tx:
         return "a near copy of a transcript"
+    return ""
+
+
+def check_ta(say: object, en: str, bad) -> str:
+    """Why a spoken Tanglish line for the verified English line `en` is refused, or "": the same digits as the English (written as digits: the voice turns digits into words), Tamil in it, no
+    advice, forecast or rude wording, no company or market, no book Tamil. Which English words are left in it is for the voice (learn_words)."""
+    if not isinstance(say, str) or not say.strip():
+        return "no line"
+    say = " ".join(say.split())
+    if not 5 <= len(say.split()) <= 70:
+        return "a line of the wrong length"
+    if len(re.findall(r"[஀-௿]+", say)) < 3:
+        return "not Tanglish: speak it in Tamil with the English finance words"
+    if any(say.split().count(w) >= 3 for w in set(say.split())):
+        return "a garbled line (a word repeated)"
+    if market.numbers(say) != market.numbers(en):
+        return f"the numbers must be exactly the English line's, in digits: {', '.join(sorted(market.numbers(en))) or 'none'}"
+    if re.search(r"[$₹€£]", say):
+        return "no currency sign: say rupees"
+    if m := BOOKISH.search(say):
+        return f"book Tamil: {m.group(0)}"
+    if m := market.ADVICE.search(say) or market.RUDE.search(say):
+        return f"advice or rude wording: {m.group(0)}"
+    if m := market.FORECAST.search(say):
+        return f"forecast wording: {m.group(0)}"
+    if bad.search(say):
+        return "names a company or the market"
     return ""
 
 
@@ -779,68 +825,146 @@ def source_tag(quote: str, docs: list[str]) -> int:
     return next((i for i, d in enumerate(docs, 1) if q in d), 1)
 
 
-async def write(llm, tp: dict, pages: list[dict], transcripts: list[dict], bad, short: bool = False, covered: list[str] = (), model: str | None = None) -> dict:
-    """The lesson: {title, deck, lines, concept, proposed, kept, dropped: [{say, en, why}], angle, tokens (the writer's, for Groq's daily allowance), too_thin}.
-    `model` names another writer model (channel option `lesson_model`: Groq keeps a separate daily allowance per model, and the usual one is shared with every other writer in VISION).
+def keep_slides(raw: object, source_text: str, short: bool, sets: list[tuple[str, set[str]]]) -> dict[int, dict]:
+    """{the slide's number in the model's list (from 1): the slide} for the slides plan_slides would keep, each judged alone so the lines can say which slide they belong to."""
+    out = {}
+    for n, s in enumerate(raw.get("slides") if isinstance(raw, dict) and isinstance(raw.get("slides"), list) else [], 1):
+        if len(out) < (2 if short else 5) and (one := plan_slides({"slides": [s]}, source_text, short, sets)[1]):
+            out[n] = one[0]
+    return out
+
+
+def slide_text(s: dict) -> str:
+    return " | ".join(i["text"] if "text" in i else f"{i['label']}: {i['value']}" for i in s["items"])
+
+
+def parse_says(got: object, count: int) -> dict[int, str]:
+    """{line number from 1: spoken line} from the translator's answer: entries {"i", "say"}, or plain strings when there is exactly one per line."""
+    items = got.get("lines") if isinstance(got, dict) and isinstance(got.get("lines"), list) else []
+    if len(items) == count and all(isinstance(x, str) for x in items):
+        return {n: x for n, x in enumerate(items, 1)}
+    return {x["i"]: x["say"] for x in items if isinstance(x, dict) and isinstance(x.get("i"), int) and 1 <= x["i"] <= count and isinstance(x.get("say"), str)}
+
+
+async def ask_ta(llm, prompt: str, tokens: int, model: str | None, ta_model: str | None):
+    """A request to the Tanglish model; if that model is not there to answer (not a 429: that is Busy), the usual writer model is asked."""
+    got = await ask(llm, prompt, tokens, ta_model or model)
+    return got if got is not None or not ta_model or ta_model == model else await ask(llm, prompt, tokens, model)
+
+
+async def write(llm, tp: dict, pages: list[dict], transcripts: list[dict], bad, short: bool = False, covered: list[str] = (), model: str | None = None, ta_model: str | None = None,
+                min_kept: int | None = None) -> dict:
+    """The lesson: {title, deck, lines, concept, proposed, kept_en, kept, dropped: [{say, en, why}], angle, tokens (the writer's, for Groq's daily allowance), steps, new_words, too_thin}.
+    Step A (`model`, else the usual writer; channel option `lesson_model`): the slides and the lesson as English lines with quotes, checked by check_en. Step B (`ta_model`, channel option
+    `lesson_tamil_model`, else `model`): all verified lines at once into spoken Tanglish, checked by check_ta; refused lines go back once with the reason for each, then the line is dropped
+    with its caption. Every English word left in a kept line must be speakable by the cloned voice (learn_words), or the line is dropped.
     deck/lines are the long video's (notice, cover, point/facts slides, then the fixed closing and sign-off) or the Short's (point slides, sign-off), and exist only when it is not too_thin."""
     docs, tokens0 = [squash(p["text"]) for p in pages], getattr(llm, "used", 0)
     all_text = "\n".join(p["text"] for p in pages)
     tx = set().union(*(shingles(t["text"]) for t in transcripts)) if transcripts else set()
     a = await angle(llm, tp, transcript_text(transcripts, bad), model)
-    shape = PLAN_SHORT if short else PLAN_LONG
-    kws = keywords(tp["title"], *tp["words"])
-    ask_plan = PLAN.format(title=tp["title"], passages=passages(pages, kws), hints=hints(a) + ("\n" if a else ""), count=shape[1], shape=shape[0], icons=", ".join(ICONS),
-                           facts=shape[2].format(covered=", ".join(covered) or "none yet") if short else shape[2])
-    raw = await ask(llm, ask_plan, 1800, model)
-    title, plan = plan_slides(raw, all_text, short, sentence_sets(pages))
+    shape = WRITE_SHORT if short else WRITE_LONG
+    prompt = WRITE.format(title=tp["title"], passages=passages(pages, keywords(tp["title"], *tp["words"])), hints=hints(a) + ("\n" if a else ""), count=shape[1], shape=shape[0], icons=", ".join(ICONS),
+                          facts=shape[2].format(covered=", ".join(covered) or "none yet") if short else shape[2], lines=shape[3], more=shape[4], bad_en=WORDS_BAD_EN)
+    raw = await ask(llm, prompt, 2800 if short else 4000, model)
+    sets = sentence_sets(pages)
+    title, _ = plan_slides(raw, all_text, short, sets)
+    plan = keep_slides(raw, all_text, short, sets)
     concept = " ".join(str(raw.get("concept") or "").split())[:60] if isinstance(raw, dict) and short else ""
-    out = {"title": title or f"{tp['title']} தமிழில் | Finance Basics"[:100], "concept": concept, "angle": a, "proposed": 0, "kept": 0, "dropped": [], "too_thin": True, "tokens": 0}
+    out = {"title": title or f"{tp['title']} தமிழில் | Finance Basics"[:100], "concept": concept, "angle": a, "proposed": 0, "kept_en": 0, "kept": 0, "dropped": [], "too_thin": True, "tokens": 0,
+           "steps": {}, "new_words": {}}
     if not plan:
         return out
-    lines, kept_slides = [], []
-    for s in plan:
-        n = len(s["items"])
-        shown = " | ".join(i["text"] if "text" in i else f"{i['label']}: {i['value']}" for i in s["items"])
-        ask_lines = LINES.format(title=tp["title"], passages=passages(pages, keywords(s["title"], shown, tp["title"]), SLIDE_PASSAGES), heading=s["title"], items=shown,
-                                 count="4 or 5" if not short else "3 or 4", n=n, bad_ta=WORDS_BAD_TA, bad_en=WORDS_BAD_EN, style="\n".join(f"- {x}" for x in STYLE))
-        mine, rejected = [], []
-        told = {m["say"] for ls in lines for m in ls}
+    mine: dict[int, list[dict]] = {n: [] for n in plan}
+    rejected: list[dict] = []
+    limit = MAX_LINES_SHORT if short else MAX_LINES
 
-        def take(got) -> None:
-            show = max([m["show"] for m in mine] or [1])
-            for it in (got.get("lines") if isinstance(got, dict) and isinstance(got.get("lines"), list) else [])[:7]:
-                out["proposed"] += 1
-                if isinstance(it, dict) and isinstance(it.get("say"), str):
-                    it = {**it, "say": tamilise(it["say"])}
-                why = check_line(it, docs, bad, tx)
-                if not why and (" ".join(it["say"].split()) in told | {m["say"] for m in mine}
-                                or any(len(stems_of(it["en"]) & stems_of(m["en"])) >= 0.7 * max(len(stems_of(it["en"])), 1) for m in mine) ):
-                    why = "repeats a line"
-                if why:
-                    d = {"say": str(it.get("say", ""))[:200] if isinstance(it, dict) else "", "en": str(it.get("en", ""))[:200] if isinstance(it, dict) else "", "why": why}
-                    out["dropped"].append(d)
-                    rejected.append({**d, "fix": explain(it, why)})
+    def take(got) -> None:
+        for it in (got.get("lines") if isinstance(got, dict) and isinstance(got.get("lines"), list) else [])[:limit + 6]:
+            out["proposed"] += 1
+            n = it.get("slide") if isinstance(it, dict) else None
+            why = check_en(it, docs, bad, tx) if n in plan else "a line for a slide that was not kept"
+            if not why:
+                all_mine = [m for ms in mine.values() for m in ms]
+                if sum(map(len, mine.values())) >= limit:
                     continue
-                try:
-                    show = max(show, min(max(int(it.get("show", 1)), 1), n))
-                except (TypeError, ValueError):
-                    pass
-                mine.append({"say": " ".join(it["say"].split()), "en": " ".join(it["en"].split()), "show": show, "src": source_tag(it["quotes"][0], docs),
-                             "quotes": [q.strip() for q in it["quotes"] if isinstance(q, str)]})
-        take(await ask(llm, ask_lines, 2000, model))
-        if rejected and len(mine) < (4 if not short else 3):           # one more go at the lines the checks threw out, told what was wrong with each
-            again = "\n".join(f'- "{r["say"]}" / "{r["en"]}": {r["fix"]}' for r in rejected[:6])
-            rejected.clear()
-            take(await ask(llm, ask_lines + REPAIR.format(rejected=again), 2000, model))
-        if mine:
-            mine[-1]["show"] = n + 1                                          # the last line shows everything and the source chip
-            lines.append(mine)
-            kept_slides.append({**s, "note": chip(pages, [m["src"] for m in mine]), "note_always": True})
-    out["kept"], out["tokens"] = sum(map(len, lines)), getattr(llm, "used", 0) - tokens0
-    if out["kept"] < (MIN_KEPT_SHORT if short else MIN_KEPT):
+                if any(len(stems_of(it["en"]) & stems_of(m["en"])) >= 0.7 * max(len(stems_of(it["en"])), 1) for m in all_mine):
+                    why = "repeats a line"
+            if why:
+                d = {"say": "", "en": str(it.get("en", ""))[:200] if isinstance(it, dict) else "", "why": why}
+                out["dropped"].append(d)
+                rejected.append({**d, "fix": explain(it, why)})
+                continue
+            top = max([m["show"] for m in mine[n]] or [1])
+            try:
+                top = max(top, min(max(int(it.get("show", 1)), 1), len(plan[n]["items"])))
+            except (TypeError, ValueError):
+                pass
+            mine[n].append({"en": " ".join(it["en"].split()), "show": top, "src": source_tag(it["quotes"][0], docs), "quotes": [q.strip() for q in it["quotes"] if isinstance(q, str)]})
+    take(raw)
+    if sum(map(len, mine.values())) < (WANT_SHORT if short else WANT):            # one more go: the lines the checks threw out, told what was wrong with each, or simply more of them
+        again = "\n".join(f'- "{r["en"]}": {r["fix"]}' for r in rejected[:8]) or "(none: you wrote too few lines; add more points from the passages)"
+        rejected.clear()
+        take(await ask(llm, prompt + REPAIR.format(slides="\n".join(f"{n}. {s['title']}: {slide_text(s)}" for n, s in plan.items()), rejected=again,
+                                                  kept="\n".join(f"- {m['en']}" for ms in mine.values() for m in ms), count="3 to 6" if short else "6 to 10"), 1800 if short else 2500, model))
+    flat = [(n, m) for n in sorted(plan) for m in mine[n]]
+    out["kept_en"], out["steps"] = len(flat), {"english": len(flat)}
+    if flat:
+        flat = await tanglish(llm, flat, bad, out, model, ta_model)
+    out["kept"], out["tokens"] = len(flat), getattr(llm, "used", 0) - tokens0
+    if out["kept"] < (MIN_KEPT_SHORT if short else (min_kept or MIN_KEPT)):       # channel option lesson_min_lines: thin official pages give fewer lines
         return out
+    lines, kept_slides = [], []
+    for n in plan:
+        ms = [m for k, m in flat if k == n]
+        if ms:
+            ms[-1]["show"] = len(plan[n]["items"]) + 1                        # the last line shows everything and the source chip
+            lines.append(ms)
+            kept_slides.append({**plan[n], "note": chip(pages, [m["src"] for m in ms]), "note_always": True})
+    from . import tamil_say
+    out["new_words"] = {k: v for m in (m for ms in lines for m in ms) for k, v in tamil_say.learned_in(m["say"]).items()}
     deck, said = assemble(tp, kept_slides, lines, short)
     return {**out, "deck": deck, "lines": said, "too_thin": False}
+
+
+async def tanglish(llm, flat: list[tuple[int, dict]], bad, out: dict, model: str | None, ta_model: str | None) -> list[tuple[int, dict]]:
+    """Step B: `flat` [(slide number, line with its verified English)] comes back with a spoken line (`say`) in each line that passed check_ta and whose English words the voice can say; the
+    others are dropped (into out["dropped"]), their captions with them. out["steps"] says how many lines each pass kept."""
+    from . import tamil_say
+    said: dict[int, str] = {}
+    refused: dict[int, str] = {}
+    style = "\n".join(f"- {x}" for x in STYLE)
+    shown = lambda ns: "\n".join(f"{n}. {flat[n - 1][1]['en']}" for n in ns)      # noqa: E731
+
+    def judge(got, ns) -> None:
+        for n, say in parse_says(got, len(flat)).items():
+            if n in ns:
+                why = check_ta(say, flat[n - 1][1]["en"], bad)
+                if why:
+                    refused[n] = why
+                    out["dropped"].append({"say": " ".join(str(say).split())[:200], "en": flat[n - 1][1]["en"][:200], "why": why})
+                else:
+                    said[n] = " ".join(say.split())
+                    refused.pop(n, None)
+    todo = list(range(1, len(flat) + 1))
+    prompt = TANGLISH.format(style=style, lines=shown(todo))
+    judge(await ask_ta(llm, prompt, 700 + 180 * len(flat), model, ta_model), set(todo))
+    out["steps"]["tanglish_first"] = len(said)
+    left = [n for n in todo if n not in said]
+    if left:                                                                             # one more request for the refused (or missing) lines, each told why
+        again = "\n".join(f"{n}. {flat[n - 1][1]['en']}\n   refused: {refused.get(n, 'no answer for this line')}" for n in left)
+        judge(await ask_ta(llm, prompt + AGAIN.format(again=again), 500 + 180 * len(left), model, ta_model), set(left))
+    out["steps"]["tanglish_second"] = len(said)
+    await learn_words(llm, list(said.values()), model, ta_model)
+    kept = []
+    for n in sorted(said):
+        left_over = clone.unspelt(said[n])
+        if left_over:
+            out["dropped"].append({"say": said[n][:200], "en": flat[n - 1][1]["en"][:200], "why": f"the voice cannot say: {', '.join(left_over)}"})
+            continue
+        kept.append((flat[n - 1][0], {**flat[n - 1][1], "say": said[n]}))
+    out["steps"]["voice_ok"] = len(kept)
+    return kept
 
 
 def fit(text: str, size: int) -> str:

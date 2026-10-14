@@ -533,20 +533,28 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   kept for ever in kv `mm_state`; then one cheap read a day: uploads page, `videos.list` statistics; whole-word match of a title to the topic's search words; score = recent views per day;
   auth = `YOUTUBE_API_KEY` if set, else the channel's own sign-in, none = no signals), the rest least recently made first; a topic is not repeated within 180 days (kv `mm_done`
   `lesson:<id>`; a Short topic: at most 3 concepts, 30 days apart, `lessonshort:<id>`); a topic with no usable page (`NO SOURCE`) or too few good lines (`TOO THIN`) is left alone 3 days
-  (`lessonskip:<id>`) and the next is tried, two topics a night at most. **Facts come only from the official pages fetched that night, checked by code** (`lessons.check_line`): every
-  quote (30+ characters) is found in a page, every number in the Tamil line and in its English caption is in the quotes (and the two agree), `say` is all Tamil letters and passes
-  `clone.unspelt`, neither line matches ADVICE, FORECAST (so "will, may, should" and the Tamil "இருக்கும், ஆகும்" are out) or RUDE, no company in the index (name or symbol), no brand, no
-  Nifty/Sensex/rally/bull/bear/share-price wording, and no run of 8 words shared with any transcript read. The English caption must also be *backed* by its quotes (`backed_by`: 60 % of its
-  longer words, by stem, in one quote; a line that names FD/RD/NPS... by its acronym is held clause by clause, and the quote must hold that acronym or its usual expansion, so two quotes
-  cannot be stitched into a claim neither makes); book Tamil (`BOOKISH`: என்பது, நீங்கள், செய்கிற...) is refused; English words the writer left in Latin letters are first written in Tamil
-  letters (`tamilise`); a quote is matched ignoring a parenthetical and the rupee's spelling (`squash`), Indian amounts compare as figures (`figs`: 5 lakh = 5,00,000); and every item on a
-  slide must be held by a sentence of the pages (`item_backed`). One retry per slide asks the writer again for the thrown-out lines with the reason for each (`explain`). Dropped lines are logged with the reason and counted on the record; fewer than 10
-  kept (a Short: 4) = TOO THIN. The slides (cover, points, a facts slide when the pages give figures) show only items without invented numbers, each with its "Source: <page> ·
-  <domain>" chip, taken from where the line's quote was found. Requests to Groq stay small for its 8,000-tokens-a-minute allowance: one for the angle, one for the plan, one per slide (a lesson costs about 30,000 tokens, a Short about 8,000). **Groq's free
-  day is 200,000 tokens PER MODEL, shared with every other writer in VISION** (seen on 2026-10-14: `openai/gpt-oss-120b` stood at 198,000 used and refused every request while testing): a 429 is
-  `WRITER BUSY` (the topic is NOT skipped, the next run tries again); channel option `lesson_model` names another Groq model for lessons so they have an allowance of their own
-  (`openai/gpt-oss-20b` answered but could not meet the checks: most lines were refused, so the lesson was TOO THIN; the 120b model is the one the checks were written for).
-  The long lesson opens on the disclaimer card as ever, has a fixed opening line, a fixed closing ("This is only an educational lesson...") and SUBSCRIBE_LONG; the Short has the small
+  (`lessonskip:<id>`) and the next is tried, two topics a night at most. **Written in two steps (2026-10-14; the first version asked the model for Tamil letters directly and nearly every line was refused or came out as book Tamil).** Step A, English (`lesson_model`
+or the usual writer): one request returns the title, the slides (English) and 18-22 English lines `{slide, show, en, quotes}`; a second request replaces lines the checks threw out (only if under 14 survive; a Short 5).
+**Facts come only from the official pages fetched that night, checked by code in English** (`lessons.check_en`): every quote (30+ characters) is found in a page, every number in `en` is in the
+quotes, `en` is *backed* by them (`backed_by`: 60 % of its longer words, by stem, in one quote; a line that names FD/RD/NPS... by its acronym is held clause by clause, so two quotes cannot be
+stitched into a claim neither makes), no ADVICE, FORECAST or RUDE wording, no company in the index (name, symbol, well-known bank), no Nifty/Sensex/rally/bull/bear/share-price wording, no run of 8 words
+shared with a transcript, no near-repeat; a quote is matched ignoring a parenthetical and the rupee's spelling (`squash`), Indian amounts compare as figures (`figs`), and every slide item must be held
+by a sentence of the pages (`item_backed`). The verified `en` is the burned-in caption, exactly. Step B, Tanglish (`lesson_tamil_model`, default `qwen/qwen3.8-27b`, which has its own Groq daily
+allowance; if it cannot answer, the writer model is asked): ONE request with all verified English lines (`TANGLISH`: host of a Tamil finance channel, colloquial Chennai speech, the golden lines of
+`tests/golden_voice.json` as the register, a spoken-vs-written list, English finance words left in English letters). Code keeps a spoken line only if (`check_ta`) it has exactly the English line's
+digits (`market.numbers`; "5 லட்சம்" or "5,00,000" for "5 lakh" is refused, the voice turns digits into words), has Tamil in it, no ADVICE/FORECAST/RUDE, no company or market, and no **book-Tamil marker**
+(`BOOKISH`: உள்ளது, உள்ளன, செய்யலாம், செய்ய வேண்டும், ஆகையால், எனவே, மேலும், ஆனால், மாதம், செலுத்த, அநுசாரி/அனுசாரி, ஆகும், போன்ற, மற்றும், என்பது, நீங்கள்...; the short ones only as whole words, so மாசம் and ஆனா
+pass; `tests/test_lessons.py` checks that no golden line matches). Refused lines go back ONCE in a second request with the reason for each; still refused = the line is dropped, caption and all.
+**Words for the voice:** English words left in a kept line must be speakable by the cloned voice. Those not in `tamil_say.SOUNDS` are learned: a few lesson words and acronyms (letter by letter) from
+code (`WORDS_TA`, `seeds`), the rest from one small request asking how a Tamil speaker says each; a value is accepted only if it is Tamil letters, never overwrites an entry, never shadows `SOUNDS`
+(`tamil_say.learn`; a word starting with the "ch" sound is spelt ச்ச..., because a bare ச is read as "s" (the voice said "senal"): the prompt says so and `ch_sound` enforces it, `SOUNDS["channel"]` is ச்சேனல்; file `data/voice_words.json`, git-ignored, read by `voiced` as a second table after SOUNDS). A line with a word still unsayable is dropped. **Mani checks the learned words by ear**:
+they are listed on the desk card ("New words for the voice"), in the approval payload and in the record (`new_words`); correct one by editing the file (or move it into SOUNDS). The golden lines are
+unaffected by design (tested). Fewer than 10 spoken lines kept (a Short: 4) = TOO THIN. The slides show only items without invented numbers, each with its "Source: <page> ·
+<domain>" chip. Dropped lines are logged with the reason and counted on the record. Requests stay small for Groq's per-minute allowances (a lesson: about 7,000 tokens for step A, 5,000 for step B; see the
+2026-10-14 samples below). **Groq's free day is 200,000 tokens PER MODEL, shared with every other writer in VISION** (on 2026-10-14 `openai/gpt-oss-120b` stood at 198,000 used and refused every request):
+a 429 in either step is `WRITER BUSY` (the topic is NOT skipped, the next run tries again); `lesson_model` names another Groq model for step A. Qwen3 on Groq needs `reasoning_effort: none` (`llm.py`
+sets it; "low" leaves it thinking with an empty answer), and its output-tokens-a-minute limit can answer 429 to a big request: `llm.py` waits and retries.
+The long lesson opens on the disclaimer card as ever, has a fixed opening line, a fixed closing ("This is only an educational lesson...") and SUBSCRIBE_LONG; the Short has the small
   top line, no spoken disclaimer, and ends on SUBSCRIBE_SHORT. The description is "what it covers", hashtags, "Sources:" (each page's name and address) and the two disclaimer paragraphs.
   **Transcripts (Mani's own call, 2026-10-14, against YouTube's terms of service, on the same footing as the LinkedIn call):** the public transcripts of the most-viewed videos that matched
   the chosen topic are read as raw material for the topic, the angle, viewers' questions and common misunderstandings, **never for wording and never as a source of facts**. Limits in code,
