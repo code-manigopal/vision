@@ -223,9 +223,24 @@ def trading(store):
     return stages, _each(apps, call) + _each(trades, done)
 
 
+def backed(v: dict) -> list[tuple]:
+    """"Backed by" rows for a results video: each reason with the company's own sentence and where it was filed, each headline with its publication."""
+    rows = [(f"Backed by · {r.get('metric')}", f"{r.get('point')} — \u201c{r.get('quote')}\u201d ({(r.get('doc') or {}).get('subject')}, {(r.get('doc') or {}).get('url')})")
+            for r in v.get("reasons") or []]
+    return rows + [("Backed by · news", f"{n.get('title')} ({n.get('source')}, {n.get('at')}) {n.get('link')}") for n in v.get("news") or []]
+
+
+def figures(v: dict) -> list[tuple]:
+    """A pre-market or post-market Short: when each region's figures are from, the indices used with their moves, and what was left out as stale."""
+    r = v.get("report") or {}
+    return [("As of", "; ".join(f"{x['label']} {x['when']}" for x in r.get("regions") or []) or None),
+            ("Indices", ", ".join(f"{i['name']} {i['pct']:+.2f}%" for x in r.get("regions") or [] for i in x["items"]) or None),
+            ("Left out", ", ".join(f"{d['name']} ({d['why']})" for d in r.get("dropped") or []) or None)]
+
+
 def youtube(store):
-    stages = [("ready", "Waiting for upload"), ("review", "Unlisted · your review"), ("scheduled", "Scheduled"), ("public", "Public"), ("gone", "Deleted / private")]
-    of = {"ready": "ready", "unlisted": "review", "scheduled": "scheduled", "public": "public", "deleted": "gone", "private": "gone"}
+    stages = [("ready", "Waiting for upload"), ("awaiting", "Awaiting your approval"), ("review", "Unlisted · your review"), ("scheduled", "Scheduled"), ("public", "Public"), ("gone", "Deleted / private"), ("stale", "Stale · not published")]
+    of = {"ready": "ready", "awaiting": "awaiting", "unlisted": "review", "scheduled": "scheduled", "public": "public", "deleted": "gone", "private": "gone", "stale": "stale"}
 
     def one(v):
         st, stats, src = of.get(v.get("status")), v.get("stats") or {}, v.get("source") or {}
@@ -233,11 +248,11 @@ def youtube(store):
             return None
         vid = v.get("video_id")
         return _item("short:" + _s(v.get("_key")), st, v.get("title"), f"{round(v.get('seconds') or 0)} s · {v.get('status')}", v.get("uploaded") or v.get("made") or v.get("_ts"),
-                     _rows(("Channel", v.get("channel")), ("Format", "long video" if v.get("format") == "long" else "Short"), ("Kind", v.get("kind")), ("Pattern", (v.get("structure") or "").replace("_", " ")), ("Opening", (v.get("hook") or "").replace("_", " ")),
+                     _rows(("Channel", v.get("channel")), ("Format", "long video" if v.get("format") == "long" else "Short"), ("Kind", v.get("kind")), ("Company", v.get("symbol")), ("Quarter", v.get("quarter")), ("Voice check", (v.get("voice_qa") or {}).get("text")), ("Pattern", (v.get("structure") or "").replace("_", " ")), ("Opening", (v.get("hook") or "").replace("_", " ")),
                            ("Goes public", time.strftime("%a %d %b %H:%M", time.localtime(v["publish_at"])) if v.get("publish_at") and v.get("status") == "scheduled" else None), ("Views", stats.get("view") if vid else None), ("Likes", stats.get("like") if vid else None),
                            ("Comments", stats.get("comment") if vid else None), ("Mood", v.get("mood")), ("Voice", v.get("voice")), ("Music", v.get("music")), ("Captions", v.get("caption")), ("Sound effects", v.get("sfx") if "sfx" in v else None), ("Quick", "yes" if v.get("quick") else None), ("Search tags", ", ".join((v.get("seo") or {}).get("tags") or [])),
                            ("Writer's title", (v.get("seo") or {}).get("title_before") if (v.get("seo") or {}).get("title_before") != v.get("title") else None),
-                           ("Hashtags", " ".join(v.get("hashtags") or [])),
+                           ("Hashtags", " ".join(v.get("hashtags") or [])), *backed(v), *figures(v),
                            ("Story from", "original (fiction)" if v.get("original") else f"{v['classic']['title']} by {v['classic']['author']}" if v.get("classic") else src.get("from")), ("Footage", "; ".join(v.get("credits") or []))),
                      _s(v.get("script")), _links(("Watch", v.get("url")), ("YouTube Studio", f"https://studio.youtube.com/video/{vid}/edit" if vid else None), ("Source", src.get("url"))))
     return stages, _each(_kv(store, "yt_videos", 500), one)

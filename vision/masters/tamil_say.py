@@ -1,0 +1,150 @@
+"""Text for the voice: English words in Tamil letters and numbers as Tamil words.
+
+A Tamil voice guesses at "revenue" written in English letters, and reads digit strings badly. The slides keep the
+English spelling and the digits; only what is sent to the voice goes through voiced(). SOUNDS is the table of how
+Mani says each word: correct it by ear, add to it freely (longest match first, whole words only, case ignored).
+
+The spelling Mani picked by ear (2026-10-13, cloned voice): every English word in Tamil letters (left in English
+letters the voice skips or garbles them), abbreviations run together with no dots or spaces (a dot is heard as a
+full stop), endings joined to their word with no hyphen (பேங்க்-ஓட -> பேங்கோட), and a financial year said the way he
+says it (FY27 -> ட்வென்டி சிக்ஸ் ட்வென்டி செவன் ஃபைனான்ஷியல் இயர்).
+"""
+
+from __future__ import annotations
+
+import re
+
+SOUNDS = {
+    "net interest income": "நெட் இன்ட்ரெஸ்ட் இன்கம்", "operating margin": "ஆப்பரேட்டிங் மார்ஜின்", "operating profit": "ஆப்பரேட்டிங் ப்ராஃபிட்",
+    "net profit": "நெட் ப்ராஃபிட்", "gross npa": "க்ராஸ் என்பிஏ", "net npa": "நெட் என்பிஏ", "loan quality": "லோன் குவாலிட்டி",
+    "sebi registered advisor": "செபி ரெஜிஸ்டர்ட் அட்வைசர்", "revenue": "ரெவென்யூ", "educational purpose": "எஜுகேஷனல் பர்பஸ்", "investment recommendation": "இன்வெஸ்ட்மென்ட் ரெகமெண்டேஷன்", "provisions": "ப்ரொவிஷன்ஸ்", "eps": "ஈபிஎஸ்", "npa": "என்பிஏ",
+    "quarter": "குவார்ட்டர்", "percent": "பர்சன்ட்", "result": "ரிசல்ட்", "results": "ரிசல்ட்ஸ்", "numbers": "நம்பர்ஸ்", "number": "நம்பர்",
+    "company": "கம்பெனி", "share": "ஷேர்", "bank": "பேங்க்", "report": "ரிப்போர்ட்", "income": "இன்கம்", "profit": "ப்ராஃபிட்", "margin": "மார்ஜின்",
+    "growth": "க்ரோத்", "pressure": "ப்ரெஷர்", "invest": "இன்வெஸ்ட்", "level": "லெவல்", "hero": "ஹீரோ", "compare": "கம்பேர்", "video": "வீடியோ",
+    "financial year": "ஃபைனான்ஷியல் இயர்", "q1": "க்யூ ஒன்", "q2": "க்யூ டூ", "q3": "க்யூ த்ரீ", "q4": "க்யூ ஃபோர்",
+    "hdfc": "ஹெச்டிஎஃப்சி", "tcs": "டிசிஎஸ்", "icici": "ஐசிஐசிஐ", "sbi": "எஸ்பிஐ", "infosys": "இன்ஃபோசிஸ்", "limited": "லிமிடெட்", "itc": "ஐடிசி",
+    # the company analysis videos: abbreviations run together, phrases before their words (longest match wins)
+    "roe": "ஆர்ஓஈ", "roce": "ஆர்ஓசிஈ", "roa": "ஆர்ஓஏ", "pe": "பிஈ", "ebitda": "எபிட்டா", "ev to ebitda": "ஈவி டு எபிட்டா", "sebi": "செபி",
+    "market cap": "மார்க்கெட் கேப்", "book value": "புக் வேல்யூ", "dividend yield": "டிவிடெண்ட் யீல்ட்", "promoter holding": "ப்ரமோட்டர் ஹோல்டிங்",
+    "debt to equity": "டெட் டு ஈக்விட்டி", "price to book": "ப்ரைஸ் டு புக்", "free cash flow": "ஃப்ரீ கேஷ் ஃப்ளோ", "operating cash flow": "ஆப்பரேட்டிங் கேஷ் ஃப்ளோ",
+    "asset turnover": "அசெட் டர்ன்ஓவர்", "lease liabilities": "லீஸ் லயபிலிட்டீஸ்", "52 week": "ஐம்பத்து இரண்டு வீக்",
+    "asset": "அசெட்", "assets": "அசெட்ஸ்", "book": "புக்", "cash": "கேஷ்", "debt": "டெட்", "dividend": "டிவிடெண்ட்", "free": "ஃப்ரீ", "lease": "லீஸ்",
+    "market": "மார்க்கெட்", "operating": "ஆப்பரேட்டிங்", "price": "ப்ரைஸ்", "promoter": "ப்ரமோட்டர்", "reserves": "ரிசர்வ்ஸ்", "analysis": "அனாலிசிஸ்",
+    "business": "பிசினஸ்", "cap": "கேப்", "channel": "சேனல்", "close": "க்ளோஸ்", "educational": "எஜுகேஷனல்", "equity": "ஈக்விட்டி", "file": "ஃபைல்",
+    "filing": "ஃபைலிங்", "financial": "ஃபைனான்ஷியல்", "flow": "ஃப்ளோ", "fundamental": "ஃபண்டமென்டல்", "group": "குரூப்", "high": "ஹை", "holders": "ஹோல்டர்ஸ்",
+    "holding": "ஹோல்டிங்", "liabilities": "லயபிலிட்டீஸ்", "low": "லோ", "machine": "மெஷின்", "statements": "ஸ்டேட்மென்ட்ஸ்", "to": "டு",
+    "turnover": "டர்ன்ஓவர்", "value": "வேல்யூ", "week": "வீக்", "yield": "யீல்ட்", "net": "நெட்",
+    # the reasons, key ratios and news of a results video
+    "guidance": "கைடன்ஸ்", "headline": "ஹெட்லைன்", "headlines": "ஹெட்லைன்ஸ்", "news": "நியூஸ்", "sources": "சோர்ஸஸ்", "screen": "ஸ்க்ரீன்", "ratios": "ரேஷியோஸ்",
+    "ratio": "ரேஷியோ",
+    # the pre-market and post-market Shorts: index names as a Tamil speaker says them, abbreviations run together; "S&P 500" is a phrase so its & and 500 are not read as a number
+    "bank nifty": "பேங்க் நிஃப்டி", "gift nifty": "கிஃப்ட் நிஃப்டி", "sgx nifty": "எஸ்ஜிஎக்ஸ் நிஃப்டி", "nifty": "நிஃப்டி", "sensex": "சென்செக்ஸ்", "s&p 500": "எஸ் அண்ட் பி ஃபைவ் ஹண்ட்ரட்",
+    "dow jones": "டவ் ஜோன்ஸ்", "nasdaq": "நாஸ்டாக்", "nikkei": "நிக்கே", "kospi": "காஸ்பி", "hang seng": "ஹாங் செங்", "ftse": "ஃபுட்ஸி", "dax": "டாக்ஸ்", "cac": "காக்",
+    "points": "பாயிண்ட்ஸ்", "us": "யூஎஸ்", "europe": "யூரோப்", "asia": "ஏஷியா", "pre-market": "ப்ரீ மார்க்கெட்", "post-market": "போஸ்ட் மார்க்கெட்",
+    "open": "ஓபன்", "subscribe": "சப்ஸ்க்ரைப்", "update": "அப்டேட்",
+    # the sign-off lines: how a Tamil speaker says them
+    "bell icon": "பெல் ஐகான்", "click": "க்ளிக்", "videos": "வீடியோஸ்", "notification": "நோட்டிஃபிகேஷன்", "time": "டைம்", "time-க்கு": "டைமுக்கு", "miss": "மிஸ்",
+    "market and finance": "மார்க்கெட் அண்ட் ஃபைனான்ஸ்", "finance": "ஃபைனான்ஸ்", "related": "ரிலேட்டட்", "contents": "கன்டென்ட்ஸ்", "daily": "டெய்லி",
+}
+
+ONES = ["", "ஒன்று", "இரண்டு", "மூன்று", "நான்கு", "ஐந்து", "ஆறு", "ஏழு", "எட்டு", "ஒன்பது", "பத்து", "பதினொன்று", "பன்னிரண்டு", "பதிமூன்று",
+        "பதினான்கு", "பதினைந்து", "பதினாறு", "பதினேழு", "பதினெட்டு", "பத்தொன்பது"]
+TENS = ["", "", "இருபது", "முப்பது", "நாற்பது", "ஐம்பது", "அறுபது", "எழுபது", "எண்பது", "தொண்ணூறு"]
+TENS_AND = ["", "", "இருபத்து", "முப்பத்து", "நாற்பத்து", "ஐம்பத்து", "அறுபத்து", "எழுபத்து", "எண்பத்து", "தொண்ணூற்று"]
+HUNDREDS = ["", "நூறு", "இருநூறு", "முன்னூறு", "நானூறு", "ஐநூறு", "அறுநூறு", "எழுநூறு", "எண்ணூறு", "தொள்ளாயிரம்"]
+HUNDREDS_AND = ["", "நூற்று", "இருநூற்று", "முன்னூற்று", "நானூற்று", "ஐநூற்று", "அறுநூற்று", "எழுநூற்று", "எண்ணூற்று", "தொள்ளாயிரத்து"]
+THOUSANDS = ["", "ஆயிரம்", "இரண்டாயிரம்", "மூவாயிரம்", "நான்காயிரம்", "ஐந்தாயிரம்", "ஆறாயிரம்", "ஏழாயிரம்", "எட்டாயிரம்", "ஒன்பதாயிரம்"]
+DIGITS = ["பூஜ்ஜியம்"] + ONES[1:10]
+
+
+def _under_thousand(n: int) -> str:
+    h, r = divmod(n, 100)
+    two = ONES[r] if r < 20 else (TENS[r // 10] if r % 10 == 0 else f"{TENS_AND[r // 10]} {ONES[r % 10]}")
+    return two if not h else HUNDREDS[h] if not r else f"{HUNDREDS_AND[h]} {two}"
+
+
+def number_words(n: int) -> str:
+    """A whole number in Tamil words, the Indian way (thousand, lakh, crore): 73188 -> எழுபத்து மூவாயிரத்து நூற்று எண்பத்து எட்டு."""
+    if n == 0:
+        return DIGITS[0]
+    if n < 0:
+        return "மைனஸ் " + number_words(-n)
+    crore, n = divmod(n, 10_000_000)
+    lakh, n = divmod(n, 100_000)
+    thou, rest = divmod(n, 1000)
+    parts = []
+    if crore:
+        parts.append(("ஒரு" if crore == 1 else number_words(crore)) + " கோடி" + ("யே" if lakh or thou or rest else ""))
+    if lakh:
+        parts.append(("ஒரு" if lakh == 1 else _under_thousand(lakh)) + (" லட்சத்து" if thou or rest else " லட்சம்"))
+    if thou:                                            # under a hundred here: the lakhs took the rest
+        fused = thou > 19 and thou % 10 > 1             # எழுபத்து மூவாயிரம், not எழுபத்து மூன்று ஆயிரம்
+        t = THOUSANDS[thou] if thou < 10 else f"{TENS_AND[thou // 10]} {THOUSANDS[thou % 10]}" if fused else _under_thousand(thou) + " ஆயிரம்"
+        parts.append(t[:-2] + "த்து" if rest else t)    # ஆயிரம் -> ஆயிரத்து before what follows
+    if rest:
+        parts.append(_under_thousand(rest))
+    return " ".join(parts)
+
+
+def number_said(text: str) -> str:
+    """A number as the voice should say it. A whole number in Tamil words, the Indian way: "73,188" -> எழுபத்து மூவாயிரத்து
+    நூற்று எண்பத்து எட்டு. A number with a decimal point the way Tanglish speakers say it, in English: "0.07" -> ஜீரோ பாயிண்ட்
+    ஜீரோ செவன், "25.7" -> ட்வென்டி ஃபைவ் பாயிண்ட் செவன் (Mani, 2026-10-14: "பூஜ்ஜியம் புள்ளி பூஜ்ஜியம் ஏழு" came out
+    with odd gaps; percentages and ratios are said in English in speech anyway)."""
+    whole, _, frac = text.replace(",", "").partition(".")
+    if not frac:
+        return number_words(int(whole or 0))
+    return f"{english_words(int(whole or 0))} பாயிண்ட் " + " ".join(EN_DIGITS[int(d)] for d in frac)
+
+
+_WORDS = re.compile(r"(?<![A-Za-z])(" + "|".join(re.escape(k) for k in sorted(SOUNDS, key=len, reverse=True)) + r")(?![A-Za-z])", re.I)
+
+
+EN_ONES = ["", "ஒன்", "டூ", "த்ரீ", "ஃபோர்", "ஃபைவ்", "சிக்ஸ்", "செவன்", "எய்ட்", "நைன்", "டென்", "இலெவன்", "ட்வெல்வ்", "தர்டீன்", "ஃபோர்டீன்",
+           "ஃபிஃப்டீன்", "சிக்ஸ்டீன்", "செவன்டீன்", "எய்டீன்", "நைன்டீன்"]
+EN_TENS = {2: "ட்வென்டி", 3: "தர்ட்டி", 4: "ஃபார்ட்டி", 5: "ஃபிஃப்டி", 6: "சிக்ஸ்டி", 7: "செவன்டி", 8: "எய்ட்டி", 9: "நைன்டி"}
+EN_DIGITS = ["ஜீரோ"] + EN_ONES[1:10]
+
+
+def english_words(n: int) -> str:
+    """A whole number in English words, in Tamil letters: 25 -> ட்வென்டி ஃபைவ், 138 -> ஒன் ஹண்ட்ரட் தர்ட்டி எய்ட்."""
+    if n < 0:
+        return "மைனஸ் " + english_words(-n)
+    if n < 20:
+        return EN_ONES[n] or EN_DIGITS[0]
+    if n < 100:
+        return f"{EN_TENS[n // 10]} {EN_ONES[n % 10]}".strip()
+    if n < 1000:
+        return f"{EN_ONES[n // 100]} ஹண்ட்ரட்" + (f" {english_words(n % 100)}" if n % 100 else "")
+    return f"{english_words(n // 1000)} தவுசன்ட்" + (f" {english_words(n % 1000)}" if n % 1000 else "")
+FRONT = "ிீெேை"                                       # the vowel signs i, ii, e, ee, ai
+SIGN = {"அ": "", "ஆ": "ா", "இ": "ி", "ஈ": "ீ", "உ": "ு", "ஊ": "ூ", "எ": "ெ", "ஏ": "ே", "ஐ": "ை", "ஒ": "ொ", "ஓ": "ோ"}
+
+
+def _year(yy: int) -> str:
+    """27 -> ட்வென்டி செவன் (a year is said in English)."""
+    return f"{EN_TENS[yy // 10]} {EN_ONES[yy % 10]}".strip() if yy // 10 in EN_TENS else number_words(yy)
+
+
+def _join(m: re.Match) -> str:
+    """An ending joined to its word: பேங்க்-ஓட -> பேங்கோட, ஹீரோ-ஓட -> ஹீரோவோட, டெய்லி-உம் -> டெய்லியும், குவார்ட்டர்-ல -> குவார்ட்டர்ல."""
+    before, after = m.group(1), m.group(2)
+    if after not in SIGN:
+        return before + after
+    if before.endswith("்"):
+        return before[:-1] + SIGN[after]
+    return before + ("ய" if before[-1] in FRONT else "வ") + SIGN[after]       # after a front vowel Tamil glides with ய (டெய்லி-உம் -> டெய்லியும்), else வ
+
+
+def numbers_as_words(text: str) -> str:
+    """Only the numbers put into Tamil words, for a voice that reads English letters itself but spells digits out one by one (Edge's)."""
+    return re.sub(r"\d[\d,]*(?:\.\d+)?", lambda m: number_said(m.group(0)), text)
+
+
+def voiced(text: str) -> str:
+    """The line as the voice should be given it. What is not in SOUNDS stays as written."""
+    text = re.sub(r"\bFY\s?(\d{2})\b", lambda m: f"{_year(int(m.group(1)) - 1)} {_year(int(m.group(1)))} financial year", text)
+    text = _WORDS.sub(lambda m: SOUNDS[m.group(1).lower()], text)
+    text = re.sub(r"\d[\d,]*(?:\.\d+)?", lambda m: number_said(m.group(0)), text)
+    text = re.sub(r"([\u0B80-\u0BFF]+)-([\u0B80-\u0BFF])", _join, text)
+    return re.sub(r"\s+", " ", text.replace("%", " பர்சன்ட்")).strip()

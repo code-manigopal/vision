@@ -950,19 +950,109 @@
       ]
      ],
      "crew_reporter": "Analytics Manager"
+    },
+    {
+     "name": "Mani Market Tamil Director",
+     "status": "idle",
+     "label": "QUEUED",
+     "tier": "DEEP",
+     "note": "runs Mani Market Tamil",
+     "crew": [
+      {
+       "name": "Results Scout",
+       "tier": "API",
+       "note": "finds tonight's company in the index"
+      },
+      {
+       "name": "Market Analyst",
+       "tier": "API",
+       "note": "reads the filing's figures"
+      },
+      {
+       "name": "Tanglish Writer",
+       "tier": "CLOUD",
+       "note": "slides and spoken lines from the figures"
+      },
+      {
+       "name": "Voice Clone",
+       "tier": "GPU",
+       "note": "Mani's voice (or Edge's) for every line"
+      },
+      {
+       "name": "Slide Editor",
+       "tier": "LOCAL",
+       "note": "slides, presenter and voice into the video"
+      },
+      {
+       "name": "Market Uploader",
+       "tier": "API",
+       "note": "uploads private, asks you, schedules the release"
+      },
+      {
+       "name": "Market Analytics",
+       "tier": "API",
+       "note": "follows each video, reports the channel"
+      }
+     ],
+     "crew_stages": [
+      [
+       "PLAN",
+       [
+        "Results Scout"
+       ]
+      ],
+      [
+       "DATA",
+       [
+        "Market Analyst"
+       ]
+      ],
+      [
+       "SCRIPT",
+       [
+        "Tanglish Writer"
+       ]
+      ],
+      [
+       "VOICE",
+       [
+        "Voice Clone"
+       ]
+      ],
+      [
+       "EDIT",
+       [
+        "Slide Editor"
+       ]
+      ],
+      [
+       "UPLOAD",
+       [
+        "Market Uploader"
+       ]
+      ],
+      [
+       "REPORT",
+       [
+        "Market Analytics"
+       ]
+      ]
+     ],
+     "crew_reporter": "Market Analytics"
     }
    ],
    "stages": [
     {
      "title": "CHANNELS",
      "agents": [
-      "Confessions Everywhere Director"
+      "Confessions Everywhere Director",
+      "Mani Market Tamil Director"
      ],
      "parallel": true
     }
    ],
    "reporter": "Confessions Everywhere Director",
-   "demo_report": "Confessions Everywhere: 1 unlisted for your review",
+   "demo_report": "Confessions Everywhere: 1 unlisted for your review | Mani Market Tamil: 1 awaiting your approval",
    "loop": true
   },
   "visa": {

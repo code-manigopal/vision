@@ -25,7 +25,7 @@ def test_fonts_fetch_saves_missing_skips_present_and_survives_a_failure(tmp_path
         return httpx.Response(200, content=b"f" * 10_000)
 
     saved = asyncio.run(fonts.fetch(_client(handler)))
-    assert bad["name"] not in saved and have["name"] not in saved and len(saved) == len(fonts.FONTS) - 2
+    assert bad["name"] not in saved and have["name"] not in saved and len(saved) == len(fonts.ALL) - 2
     assert have["url"] not in calls and (tmp_path / have["file"]).read_bytes() == b"old" and not (tmp_path / bad["file"]).exists()
     assert asyncio.run(fonts.fetch(_client(handler))) == []        # the failed one is retried: still 404, nothing new
     assert fonts.path(have["name"]) == str(tmp_path / have["file"]) and fonts.path(bad["name"]) is None and fonts.path("nope") is None

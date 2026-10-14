@@ -26,8 +26,10 @@ import random
 import re
 import shutil
 import time
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import httpx
 
@@ -46,7 +48,7 @@ CHANNEL = {"id": "confessions", "name": "Confessions Everywhere", "director": "C
            "shorts_per_day": 1, "subreddits": ["confession", "offmychest", "TrueOffMyChest"], "seconds": [60, 120],
            "voice_engine": "edge", "voice": "en-US-GuyNeural", "voice_speed": 0.95, "pause": 0.32, "outro": "Subscribe to our channel for more interesting stories.",
            "outro_query": "city lights at night", "logo": "", "caption_font": "", "generator": {},
-           "privacy": "unlisted", "category": "24", "synthetic_flag": True, "uploads_per_run": 4, "drive_folder": "", "voices": {}, "music": True, "music_volume": 0.12, "ending": "hopeful", "originals": False, "original_genres": ["confession"],
+           "privacy": "unlisted", "report_privacy": "approval", "category": "24", "synthetic_flag": True, "uploads_per_run": 4, "drive_folder": "", "voices": {}, "music": True, "music_volume": 0.12, "ending": "hopeful", "originals": False, "original_genres": ["confession"],
            "publish_times": ["06:00", "12:00", "18:00", "00:00"], "create_after": "",
            "classics": [], "classics_per_day": 1, "playlists": {}, "viewer_comments": False, "cta": "", "long": {},
            "motion": True, "caption_styles": True, "sfx": True, "sfx_volume": 0.35, "quick": {},
@@ -452,11 +454,21 @@ def save_record(store, ch: dict, job: dict) -> None:
 def next_slot(store, ch: dict, now: float | None = None, fmt: str = "short") -> float:
     """The publishing time for the next video: the first of the channel's publish_times after the last one already
     scheduled (the releases form one queue, in upload order), and at least half an hour away. Long videos have
-    their own queue, one a day at long.publish_time, so they never take a Short's slot."""
+    their own queue, one a day at long.publish_time, so they never take a Short's slot. Times are the Mac's local
+    time unless the channel names a `timezone`."""
     now = now or time.time()
     taken = [v["publish_at"] for v in store.kv_list(LOG) if v.get("channel") == ch["id"] and v.get("publish_at") and v.get("status") != "deleted"
              and (v.get("format") == "long") == (fmt == "long")]
     after = max([now + 1800] + [t + 60 for t in taken])
+    if ch.get("timezone"):                         # a channel on another clock (option `timezone`, e.g. Asia/Kolkata): slots are that zone's wall time
+        base = datetime.fromtimestamp(after, ZoneInfo(ch["timezone"]))
+        for day in range(3):
+            for hm in sorted([long_of(ch)["publish_time"]] if fmt == "long" else ch["publish_times"]):
+                h, m = (int(x) for x in str(hm).split(":"))
+                ts = (base.replace(hour=h, minute=m, second=0, microsecond=0) + timedelta(days=day)).timestamp()
+                if ts > after:
+                    return ts
+        return after + 86400
     lt = time.localtime(after)
     for day in range(3):
         for hm in sorted([long_of(ch)["publish_time"]] if fmt == "long" else ch["publish_times"]):
@@ -465,6 +477,27 @@ def next_slot(store, ch: dict, now: float | None = None, fmt: str = "short") -> 
             if ts > after:
                 return ts
     return after + 86400
+
+
+REPORT_KINDS = ("premarket", "postmarket")     # Mani Market Tamil's two Shorts on a trading day (masters/market_crew.py)
+REPORT_LEAD = 15 * 60                          # a report is released this long after it is scheduled or approved (YouTube needs a future time; next_slot keeps 30 minutes)
+
+
+def _now() -> float:
+    return time.time()
+
+
+def report_release(kind: str, day: date, now: float) -> float | None:
+    """When a pre-market or post-market Short (made for the Indian date `day`) may go public, as a time stamp; None when it is stale.
+    Pre-market: REPORT_LEAD from now, only if that is before 09:10 IST (later it is yesterday's news). Post-market: 21:00 IST that day if still ahead,
+    else REPORT_LEAD from now while it is still that same Indian date. Neither touches next_slot, so the long video's 10:00 slot is never taken."""
+    ist = ZoneInfo("Asia/Kolkata")
+    soon, at = now + REPORT_LEAD, lambda h, m: datetime(day.year, day.month, day.day, h, m, tzinfo=ist).timestamp()
+    if kind == "premarket":
+        return soon if soon < at(9, 10) else None
+    if soon < at(21, 0):
+        return at(21, 0)
+    return soon if datetime.fromtimestamp(soon, ist).date() == day else None
 
 
 def made_today(store, ch: dict, fmt: str | None = None, quick: bool = False) -> int:
@@ -1311,6 +1344,56 @@ class UploadLimit(Exception):
     pass
 
 
+def channel_for(cfg, channel_id: str) -> dict | None:
+    """A channel's settings by id, from the master's options (an approval handler has no channel in hand)."""
+    for raw in (cfg.master("youtube").options.get("channels") or [{}]):
+        if channel(raw)["id"] == channel_id:
+            return channel(raw)
+    return None
+
+
+async def publish_approved(ctx: dict, ch: dict, key: str, rec: dict, make=None) -> str:
+    """Set an approved private video's release time on YouTube (videos.update) and mark it scheduled. No sign-in: it stays awaiting (and
+    approved) and the channel's Uploader tries again on its next run."""
+    acct, report = account(ch), rec.get("kind") in REPORT_KINDS
+    when = report_release(rec["kind"], date.fromisoformat(rec["date"]), _now()) if report else None
+    if report and when is None:                    # too late to be news: it stays private on YouTube, and is not published by approval
+        ctx["store"].kv_put(LOG, key, {**{k: v for k, v in rec.items() if not k.startswith("_")}, "status": "stale", "stale": True})
+        return f"stale: this {rec['kind']} update is for {rec['date']} and is too late to publish, so it stays private on YouTube (VISION does not delete videos)"
+    try:
+        token = await oauth.access_token(acct, "youtube")
+    except oauth.AuthNeeded:
+        port = ctx["cfg"].vision.port if ctx.get("cfg") else 8765
+        ctx["bus"].notice(f"auth:{acct}", f"Sign in to YouTube for {ch['name']}", f"http://127.0.0.1:{port}/auth/youtube/login?account={acct}")
+        return f"approved, but YouTube is not signed in for {ch['name']}: sign in and it is scheduled on the next run"
+    ctx["bus"].clear_notice(f"auth:{acct}")
+    when = when or next_slot(ctx["store"], ch, fmt="long" if rec.get("format") == "long" else "short")
+    body = {"id": rec["video_id"], "status": {"privacyStatus": "private", "publishAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(when)),
+                                              "selfDeclaredMadeForKids": False, "containsSyntheticMedia": bool(ch["synthetic_flag"])}}
+    async with (make() if make else httpx.AsyncClient(timeout=httpx.Timeout(60.0))) as c:
+        r = await c.put(VIDEOS, params={"part": "status"}, json=body, headers={"Authorization": f"Bearer {token}"})
+    if r.status_code != 200:
+        raise RuntimeError(f"YouTube would not schedule it ({r.status_code}): {_reason(r)}")
+    ctx["store"].kv_put(LOG, key, {**{k: v for k, v in rec.items() if not k.startswith("_")}, "status": "scheduled", "publish_at": when, "approved": True})
+    ctx["bus"].clear_notice(f"youtube-review-{rec['video_id']}")
+    tz = ZoneInfo(ch["timezone"]) if ch.get("timezone") else None
+    return "Scheduled for " + datetime.fromtimestamp(when, tz).strftime("%a %d %b %H:%M") + (f" ({ch['timezone']})" if tz else "")
+
+
+async def publish_decision(row: dict, decision: str, ctx: dict) -> str:
+    """The YOU gate for a private upload (kind yt_publish): approved = scheduled for the next release slot; rejected = it stays private
+    on YouTube (VISION never deletes a video)."""
+    p, store = row["payload"], ctx["store"]
+    rec, ch = store.kv_get(LOG, p["record"]), channel_for(ctx["cfg"], p["channel"])
+    if not rec or not ch:
+        return "the video is no longer in the log"
+    if decision != "approved":
+        store.kv_put(LOG, p["record"], {**rec, "status": "private", "rejected": True})
+        return "rejected: it stays private on YouTube (VISION does not delete videos)"
+    store.kv_put(LOG, p["record"], {**rec, "approved": True})     # an approval is decided once: remember it in case the sign-in is missing now
+    return await publish_approved(ctx, ch, p["record"], {**rec, "approved": True}, ctx.get("client_factory"))
+
+
 class Uploader(Crew):
     """Uploads finished Shorts as unlisted and hands Mani the link. Public or deleted is his move, on YouTube."""
     name, tier, note = "Uploader", "API", "uploads as unlisted, sends you the link"
@@ -1325,17 +1408,21 @@ class Uploader(Crew):
         ch = self.ch
         long = rec.get("format") == "long"
         tags = list(dict.fromkeys(rec["hashtags"] + ([] if long else ["#Shorts"])))
-        when = next_slot(ctx["store"], ch, fmt="long" if long else "short") if ch["privacy"] == "scheduled" else None     # private now, public by itself at its slot
+        report = rec.get("kind") in REPORT_KINDS
+        if report:                                  # a report Short never takes a slot: `report_privacy` scheduled = public by itself at report_release, approval = private until approved
+            when = report_release(rec["kind"], date.fromisoformat(rec["date"]), _now()) if ch["report_privacy"] == "scheduled" else None
+        else:
+            when = next_slot(ctx["store"], ch, fmt="long" if long else "short") if ch["privacy"] == "scheduled" else None     # private now, public by itself at its slot
         marks = rec.get("chapters") or []           # YouTube shows chapters from three or more timestamps starting at 0:00
         chapters = "\n\n" + "\n".join(f"{clock(m['t'])} {m['heading']}" for m in marks) if long and len(marks) >= 3 and marks[0]["t"] == 0 else ""
         seo = rec.get("seo") or {}                  # the strategist's search tags and opening lines, when it gave them
-        body = {"snippet": {"title": rec["title"][:100], "categoryId": str(ch["category"]), "tags": seo.get("tags") or [t.lstrip("#") for t in tags],
-                            "description": (seo["lead"] + "\n\n" if seo.get("lead") else "") + (rec["summary"] + "\n\n" if long and rec.get("summary") else "")
-                            + " ".join(tags) + (f"\n\n{ch['cta']}" if ch["cta"] else "")
-                            + _about(rec) + chapters
-                            + ("\n\nFootage: " + "; ".join(rec["credits"]) if rec.get("credits") else "")
-                            + (f"\nMusic: {rec['music']}" if rec.get("music") else "")},
-                "status": {"privacyStatus": "private" if when else ch["privacy"], "selfDeclaredMadeForKids": False, "containsSyntheticMedia": bool(ch["synthetic_flag"]),
+        about = (seo["lead"] + "\n\n" if seo.get("lead") else "") + (rec["summary"] + "\n\n" if long and rec.get("summary") else "") \
+            + " ".join(tags) + (f"\n\n{ch['cta']}" if ch["cta"] else "") + _about(rec) + chapters \
+            + ("\n\nFootage: " + "; ".join(rec["credits"]) if rec.get("credits") else "") + (f"\nMusic: {rec['music']}" if rec.get("music") else "")
+        if rec.get("kind") in ("result", "analysis", *REPORT_KINDS):   # a results, analysis or report video's description is written whole (the source and the disclaimer last)
+            about = rec["summary"]
+        body = {"snippet": {"title": rec["title"][:100], "categoryId": str(ch["category"]), "tags": seo.get("tags") or [t.lstrip("#") for t in tags], "description": about},
+                "status": {"privacyStatus": "private" if when or report or ch["privacy"] == "approval" else ch["privacy"], "selfDeclaredMadeForKids": False, "containsSyntheticMedia": bool(ch["synthetic_flag"]),
                            **({"publishAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(when))} if when else {})}}
         size = Path(rec["file"]).stat().st_size
         auth = {"Authorization": f"Bearer {token}"}
@@ -1578,9 +1665,42 @@ def more_today(ch: dict):
         made_today(ctx["store"], ch, "short") < ch["shorts_per_day"] or (bool(L["enabled"]) and made_today(ctx["store"], ch, "long") < L["per_day"]))
 
 
+def peer_line(store, ch: dict) -> str:
+    """One line on another channel for the master's report: what is waiting on Mani, what is scheduled, what is public."""
+    log = [v for v in store.kv_list(LOG) if v.get("channel") == ch["id"]]
+    n = {st: sum(v.get("status") == st for v in log) for st in ("ready", "awaiting", "scheduled", "public")}
+    views = sum((v.get("stats") or {}).get("view", 0) for v in log if v.get("status") == "public")
+    parts = [f"{n['ready']} waiting for upload"] * bool(n["ready"]) + [f"{n['awaiting']} awaiting your approval"] * bool(n["awaiting"]) + [f"{n['scheduled']} scheduled"] * bool(n["scheduled"]) \
+        + [f"{n['public']} public with {views:,} views"] * bool(n["public"])
+    return f"{ch['name']}: " + (", ".join(parts) or "nothing made yet")
+
+
+class Lead(Director):
+    """The first channel's Director when the master has more than one channel. Only one agent is the master's reporter, so this one
+    adds a line for each other channel to its own report (from the log, as the other Directors left it)."""
+
+    def __init__(self, *a: Any, peers: list[dict], **kw: Any) -> None:
+        super().__init__(*a, **kw)
+        self.peers = peers
+
+    async def run(self, ctx: dict[str, Any]) -> AgentResult:
+        res = await super().run(ctx)
+        more = [peer_line(ctx["store"], p) for p in self.peers]
+        return AgentResult(res.status, res.label, " | ".join([res.summary, *more]), {**res.data, "channels": more})
+
+
 def build_agents(options: dict, cfg) -> dict[str, SubAgent]:
     out: dict[str, SubAgent] = {}
-    for raw in options.get("channels") or [{}]:
-        ch = channel(raw)
-        out[ch["director"]] = Director(ch["director"], crew(ch), reporter="Analytics Manager", again=more_today(ch), note=f"runs {ch['name']}")
+    chs = [channel(raw) for raw in options.get("channels") or [{}]]
+    for n, ch in enumerate(chs):
+        if ch.get("crew") == "market":                 # a results-video channel with its own crew (masters/market_crew.py)
+            from . import market_crew
+            d = dict(crew=market_crew.crew(ch), reporter="Market Analytics")
+        else:
+            d = dict(crew=crew(ch), reporter="Analytics Manager", again=more_today(ch))
+        out[ch["director"]] = (Lead(ch["director"], peers=chs[1:], note=f"runs {ch['name']}", **d) if n == 0 and len(chs) > 1
+                               else Director(ch["director"], note=f"runs {ch['name']}", **d))
     return out
+
+
+APPROVAL_HANDLERS = {"yt_publish": publish_decision}

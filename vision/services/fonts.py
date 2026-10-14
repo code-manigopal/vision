@@ -30,6 +30,9 @@ _F = {"Anton": ("Anton-Regular.ttf", "ofl/anton", "SIL OFL 1.1"),
       "Black Ops One": ("BlackOpsOne-Regular.ttf", "ofl/blackopsone", "SIL OFL 1.1"),
       "Abril Fatface": ("AbrilFatface-Regular.ttf", "ofl/abrilfatface", "SIL OFL 1.1")}
 FONTS = [{"name": n, "file": f, "url": f"{BASE}{p}/{f}", "license": lic} for n, (f, p, lic) in _F.items()]
+# not a caption face: Mani Market Tamil's small disclaimer line on its Shorts (variable font; the slide page loads it from this file)
+UI = [{"name": "Nunito Sans", "file": "NunitoSans.ttf", "url": BASE + "ofl/nunitosans/NunitoSans%5BYTLC,opsz,wdth,wght%5D.ttf", "license": "SIL OFL 1.1"}]
+ALL = FONTS + UI
 
 _L = lambda font, fill, highlight: {"font": font, "fill": fill, "highlight": highlight}
 STYLES: dict[str, list[dict]] = {
@@ -46,7 +49,7 @@ DEFAULT = [_L("Anton", "#FFFFFF", "#FFD21F"), _L("Archivo Black", "#FFFFFF", "#F
 
 
 def path(name: str) -> str | None:
-    f = next((x["file"] for x in FONTS if x["name"] == name), None)
+    f = next((x["file"] for x in ALL if x["name"] == name), None)
     return str(DIR / f) if f and (DIR / f).exists() else None
 
 
@@ -55,7 +58,7 @@ async def fetch(client: httpx.AsyncClient | None = None) -> list[str]:
     DIR.mkdir(parents=True, exist_ok=True)
     saved: list[str] = []
     async with (client or httpx.AsyncClient(timeout=httpx.Timeout(60.0), follow_redirects=True)) as c:
-        for f in FONTS:
+        for f in ALL:
             if (DIR / f["file"]).exists():
                 continue
             try:

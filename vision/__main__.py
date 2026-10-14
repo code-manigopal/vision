@@ -2,7 +2,7 @@
 Quick checks:   python -m vision check      (validates config and keys, no server)
                 python -m vision traffic "Toronto"
                 python -m vision bgm [mood] [count]   (fetch background music into assets/bgm/)
-                python -m vision fonts                (fetch the ten caption fonts into assets/fonts/)
+                python -m vision fonts                (fetch the ten caption fonts and Nunito Sans into assets/fonts/)
                 python -m vision sfx [kind] [count]   (fetch sound effects into assets/sfx/)
                 python -m vision visa add|list|update|pause|resume|remove|check   (Visa Watch accounts)
 """
@@ -68,7 +68,7 @@ def main() -> int:
         from .services import fonts
         for n in asyncio.run(fonts.fetch()):
             print(f"  saved {n}")
-        print(", ".join(f"{f['name']}: {'yes' if fonts.path(f['name']) else 'MISSING'}" for f in fonts.FONTS))
+        print(", ".join(f"{f['name']}: {'yes' if fonts.path(f['name']) else 'MISSING'}" for f in fonts.ALL))
         return 0
     if args[:1] == ["sfx"]:      # python -m vision sfx [kind] [count]: add sound effects to assets/sfx/<kind>/
         from .services import sfx

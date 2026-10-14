@@ -34,7 +34,7 @@ bash scripts/setup.sh                     # venv + deps + .env from template + c
 .venv/bin/python -m vision fonts          # fetch the ten caption fonts + write the sample sheet data/shorts/_sample/caption-fonts.png
 .venv/bin/python -m vision sfx            # add 3 sound effects per kind to assets/sfx/ (or: sfx whoosh 5)
 .venv/bin/python -m vision visa list      # Visa Watch accounts: add | list | update | pause | resume | remove | check <id>
-.venv/bin/python -m pytest -q             # 27 tests, all external services mocked
+.venv/bin/python -m pytest -q             # 261 tests, all external services mocked
 bash scripts/install_launchagent.sh       # auto-start at login + restart on crash
 tail -f logs/vision.log
 ```
@@ -51,16 +51,17 @@ vision/
                    approval actions (watches approval_decided -> APPROVAL_HANDLERS[kind])
   server.py        FastAPI: dashboard, /ws, /api/*, OAuth + Fyers login callbacks
   ask.py           AskEngine: LLM tool-calling over master data; session memory 30 min
-  voice/           TTS (kokoro | piper | macos), STT (mlx-whisper), WakeWord (openWakeWord)
+  voice/           TTS (kokoro | piper | macos), STT (mlx-whisper), WakeWord (openWakeWord), clone.py + indic_f5.py (Mani's cloned Tamil voice)
   channels/telegram.py   briefs, alerts, reminders, notices, /commands, approve/reject buttons
   services/        llm.py (LM Studio OpenAI-compatible + Anthropic + a hosted "writer" tier on Groq), oauth.py (Google/Microsoft),
                    reddit.py (official API, read-only), gdrive.py (Drive folder, read-only), bgm.py (music library from Openverse), gutenberg.py (public-domain story books), stock_video.py (Pexels/Pixabay footage), genmedia.py (AI footage provider slot),
                    mailcal.py (Gmail/GCal/Graph), traffic_api.py (TomTom), news.py (Google News RSS),
                    weather.py (Open-Meteo), markets.py (Yahoo chart, CoinGecko, Bank of Canada FX),
                    fyers.py, kite_mcp.py (Zerodha via hosted Kite MCP, persistent session), wealthsimple.py (CSV),
-                   sysmon.py (Instruments: CPU/memory via psutil, GPU via ioreg or nvidia-smi),
+                   nse.py (NSE results filings, read-only), lmstudio.py (unload/reload LM Studio's models around heavy work),
+                   world.py (index moves, GIFT Nifty and NSE trading days for the market Shorts), sysmon.py (Instruments: CPU/memory via psutil, GPU via ioreg or nvidia-smi),
                    visa_portal.py (US visa portal for Canada, read-only: Selenium for the person's own sign-in, httpx GETs after), keyvault.py (Fernet key in the macOS Keychain)
-  masters/         catalog.json (shared with the dashboard) + one module per live master
+  masters/         catalog.json (shared with the dashboard) + one module per live master; market.py + fundamentals.py + market_crew.py + slides.py + tamil_say.py + names_ta.json (Mani Market Tamil)
 dashboard/
   Main.dc.html     the HUD (canvas "design" format: {{holes}}, <sc-for>, <sc-if>, logic class)
   dc-runtime.js    renders Main.dc.html locally with vendored Preact (no build step)
@@ -74,7 +75,7 @@ tests/             test_core, test_telegram, test_phase34, test_phase567
    `AgentResult.summary` (+ `data`) becomes the master report. Briefs use master reports only.
    Reporters: email=Summarizer, calendar=Scheduler, trading=Portfolio Manager, invest=Daily P&L Reporter,
    web=Proposal Drafter, jobs=Application Tracker, world=News Summarizer,
-   traffic=Incident Scout, visa=Slot Watcher, youtube=Confessions Everywhere Director (its crew reports to it through Analytics Manager).
+   traffic=Incident Scout, visa=Slot Watcher, youtube=Confessions Everywhere Director (its crew reports to it through Analytics Manager; it also adds Mani Market Tamil's line, whose own crew reports through Market Analytics).
 2. **Errors skip the chain**: a failing agent turns red, alerts the master log (Telegram once/30 min),
    and blocks later stages — unless the agent sets `blocking = False` (sync/data agents do).
 3. **Side effects need approval** (the YOU gate): sending email, booking meetings, job packages,
@@ -392,6 +393,116 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   Output: `data/shorts/<channel>/<date-slug>/final.mp4`; log in kv `yt_videos` (source URL, script, screenplay, keywords,
   credits), seen stories in kv `yt_seen`. Footage Generator is a provider slot (`services/genmedia.py`, `generator:` per
   channel), off until a provider is named. Writing uses `llm.writer_model` on Groq (reasoning models need large max_tokens).
+- Mani Market Tamil (`masters/market_crew.py`, a second channel `manimarket` under the YouTube Manager: `crew: market` in the channel's options makes
+  `youtube.build_agents` give it its own Director and crew instead of the Confessions one; the first Director is a `Lead` that adds a line for each other
+  channel to the master's report). One quarterly-results video a night in Tanglish over slides. Crew: Results Scout (PLAN) → Market Analyst (DATA) → Tanglish
+  Writer (SCRIPT) → Voice Clone (VOICE) → Slide Editor (EDIT) → Market Uploader (UPLOAD) → Market Analytics (REPORT, the Director's reporter); a failing member
+  does not block the rest (the Uploader must still schedule what Mani approved), each idles when the job lacks the earlier part. Rules, keep them: **reported
+  figures only, never advice** (`market.ADVICE` refuses it, the model's rewording is kept only if it adds no number), **a long video opens on the disclaimer
+  card** (the owner's exact English and Tamil paragraphs, `market.DISCLAIMER_EN` / `DISCLAIMER_TA`, shown whole with "Mani Market Tamil" in bold, the short spoken
+  line `NOTICE_SAY` unchanged; its line has `hold` 6 s, which `slides.assemble` pads the audio to) and **the description of every video on this channel ends with
+  both paragraphs** (`market_crew.DISCLAIMER`), after the "Source:" lines. **A Short has no disclaimer card and no spoken disclaimer**: one small line of black
+  text in Nunito Sans (`market.SHORT_NOTE`, `fonts.UI`, fetched by `python -m vision fonts`, loaded by the slide page with `@font-face` from the file, else a system
+  sans) across the very top of the frame for the whole video.
+  Source: NSE's integrated-filing results (`services/nse.py`: `recent` = what was filed lately market-wide, `filings`/`latest` per company), read the way a
+  browser would, a few GETs a night; Screener is not used. The Scout works only between `make_after` 23:00 and `make_before` 04:00 (a manual run ignores
+  that), takes one company of the index list (`index_csv`, Nifty LargeMidcap 250, kept a week in kv `mm_index`) whose newest quarter is not in kv `mm_done`
+  (`SYMBOL:quarter`), makes no new video while 2 wait (BACKLOG). Voice: Mani's cloned voice (`voice/clone.py` over IndicF5, spelling rules in
+  `masters/tamil_say.py`), about 22 s of work per second of speech, hence the night, and with `free_memory: true` LM Studio's model is unloaded for the
+  hour and always loaded again (`services/lmstudio.py` `freed()`, via `lms ps --json`); a line the voice would garble (English letters left after
+  `unspelt`) goes back to its plain wording; `voice_engine: edge` is the quick, artificial alternative. Upload is **private with no release time**, then an
+  approval (kind `yt_publish`, dashboard or Telegram): approved = `videos.update` sets `publishAt` at the next slot (long videos 10:00 IST,
+  `timezone: Asia/Kolkata` is honoured by `next_slot`; a channel with no `timezone` keeps the Mac's clock), rejected = it stays private (VISION never deletes a
+  video). An approval decided while YouTube is signed out is remembered (`approved` on the record) and the Uploader schedules it on its next run. The Scout
+  starts at 23:00 (`run_at`); one Director pass can take over an hour, and the master's lock makes the 03:00, 05:00 and six-hourly runs wait their turn, not
+  overlap. **SEBI's rule (education-only creators): no price data newer than 30 days about a named stock**; the videos use filed figures only.
+  **Analysis videos (a second kind of long video; Mani, 2026-10-13):** one company's fundamentals, insights only. Channel `pattern` maps the weekday of the
+  RELEASE (`youtube.next_slot(fmt="long")`, in the channel's timezone) to a kind: mon/wed/fri/sat `analysis`, tue/thu/sun `topic` (not built: a result is made and
+  the Scout's summary says so; a channel with no `pattern` makes results only). The Scout takes the index member not analysed in 180 days (kv `mm_done`
+  `analysis:SYMBOL`, a skipped one counts; never-analysed ones in a hash-of-release-date order, not alphabetical), plus up to 4 more for the Analyst to try when
+  one has fewer than 8 ratios. Data is all primary, no Screener (its terms forbid scraping): `nse.fundamentals` sums the last four quarterly filings (eight
+  consecutive ones also give the twelve months before), reads the balance sheet of the newest filing that has one (half-year or annual, opening equity from the
+  filing a year earlier), the March filings' full-year context (`parse_year`; only as far back as NSE lists, from March 2025) with revenue, profit and the
+  cash flow tags, and lease liabilities from the "other financial liabilities" description lines; `nse.shareholding` (promoter %), `nse.dividends`
+  (`corporates-corporateActions`, per share declared in 12 months). `masters/fundamentals.py` is plain arithmetic: ROE = TTM owners' profit / average equity,
+  ROCE = TTM (PBT + finance costs) / (equity + borrowings), debt = non-current + current borrowings (leases shown apart), book value = owners' equity / shares
+  (paid-up / face value), EV/EBITDA with EBITDA = the operating profit above; a bank gets profit, NII, ROE, ROA, reserves, book value, promoter and valuation only.
+  **Price lag (SEBI, from 1 July 2026: no named stock's price data from the preceding 30 days for an education-only creator):** `price_lag_days` (31): the price
+  is the last close at or before today minus the lag, the 52-week high/low are the year ending that same day, `fundamentals.lagged` drops newer closes first, and
+  the lag counts from the earlier of the Mac's date and IST's. No Yahoo answer = the price ratios are left out. The slides say the price's date and the rule, once,
+  in the lines. Readings are rules of thumb stated as such (ROE 20, ROCE 20, margin 20, debt to equity 0.5 and 1.5), never a verdict: `ADVICE` also refuses
+  undervalued/overvalued/cheap/expensive and their Tamil forms. Slide kind `facts` (label, value, note) was added to `slides.py`; every English word the
+  voice gets is in `tamil_say.SOUNDS`. `scripts/market_analysis_sample.py SYMBOL` renders one with Edge's voice.
+  **What backs a results video (Mani, 2026-10-13: more credible, "nothing is said that a source on screen does not support"):** the Market Analyst also reads
+  (each optional; no piece = no slide) `nse.announcements` (`corporate-announcements`, newest first) and `filings_text.choose` takes the company's press
+  release, then investor presentation, then board outcome filed within 3 days of the result (two at most, under 8 MB; `pypdf` reads the first 12 pages, a scan
+  gives nothing, `relevant` keeps the sentences about figures and reasons); `nse.fundamentals` for four filing-based Key Ratios (company ROE, ROCE, debt to
+  equity, net margin; bank ROE, ROA, book value; **no price ratio**, SEBI's rule), said with the analysis video's own templates; and Google News headlines
+  (`news.google_news_between`, India edition, the days around the filing). The Tanglish Writer asks the model for up to 5 reasons (`market.reasons`) and **code
+  keeps one only if** its quote (40+ characters) is in the document, the point is in the quote's own words (`supported`) and the quote speaks of that metric
+  (`ABOUT`), every number in the point and the Tamil line is in the quote, the Tamil line has no Latin letters, no `ADVICE`/`RUDE`, and its direction equals the
+  direction of our own year-on-year figure (`change`), a metric we have no figure for being dropped; at most 3 reasons (strongest move first, one a metric)
+  and 1 outlook (forward-looking words, no price or target words, always introduced as "Company-ஓட guidance படி"). Slide kind `quotes` (a chip and a sentence,
+  up to 4 rows) carries the reasons ("Source: Press Release, 08 Oct 2026, filed with NSE") and the news (headlines exactly as published with publication and
+  date, never article text; `news_pick` keeps 3 from different publications and drops share-price, advice, preview, social and non-English headlines; a
+  one-sentence Tamil gist per headline is spoken only if it passes the same checks, else the headline is shown with the template line alone). Spoken lines of
+  these slides are `fixed` (the model never rewords them). The record stores `reasons` (with quote and document url), `news` and `key_ratios`; the description
+  lists the filing, each company document used, each headline, then the disclaimer; the desk card has "Backed by" rows and the approval payload `backed`.
+  Slide notes are Tanglish (`note_ta`) with dates as 11 Sep 2026; a margin or growth ratio always states its basis. Company names for the voice are
+  `masters/names_ta.json` (all 250 index members, written by the writer model and checked to be Tamil letters only; `market.said_name`, falling back to the short
+  name, which `clone.unspelt` then flags); the slides keep the written name. **ITC (2026-10-13):** revenue from operations is gross of excise duty, which the
+  filing lists as a described "Excise Duty" line in other expenses (`nse.excise`, per period). Ratios now take revenue net of it where the filings list it
+  (ITC operating margin 26.7 % -> 33.6 %, matching Screener's 33.6 %; FY26 vs FY25 revenue growth +10.2 % -> +4.7 %, Screener shows -3.23 %, which does not
+  reconcile and is not forced); the note says "net of excise duty" or "as filed". The quarterly results table still shows revenue and margin as filed. ITC's
+  FY25 profit includes about Rs 15,016 cr from the hotels demerger (discontinued operations), so profit growth FY26 vs FY25 (-40 %) is not like for like and
+  its note says so (`years[].disc`).
+  **Pre-market and post-market Shorts (Mani, 2026-10-14; `services/world.py`, `market.report_deck/report_lines/report_react`, 1080x1920 slide kind `board`):** two
+  Shorts on every NSE trading day (`world.trading_day`: Mon-Fri, not in NSE's `holiday-master` CM list, kept 7 days in kv `mm_hol`), **made from templates only, no
+  model anywhere**. Pre-market is made at 07:00-08:15 IST (the run at `07:02 Asia/Kolkata`): how the US (S&P 500, Dow Jones, Nasdaq) and Europe (FTSE, DAX, CAC)
+  closed, how Asia (Nikkei, Kospi, Hang Seng) is trading, where GIFT Nifty is (NSE `marketStatus`). Post-market 18:00-20:30 IST (`18:02 Asia/Kolkata`): where Nifty 50
+  and Bank Nifty (NSE `allIndices`, with advances and declines) and Sensex (Yahoo) closed, how Asia closed, how Europe is trading now ("இப்போ", not closed). The
+  Scout picks the job by the Indian clock (`report_window`, the Mac's Toronto clock moves with daylight saving, India's does not), once per IST date (kv `mm_done`
+  `premarket:<date>`), before the night's long video; the backlog of long videos ignores Shorts. Yahoo chart (`range=5d&interval=1d`): the change is the last two
+  daily closes of a closed session, or `regularMarketPrice` against the previous daily close of a live one, **never `chartPreviousClose`** (that is the close
+  before the 5-day range). **Freshness is the credibility rule:** an index whose newest figure is not from the expected session (US/Europe: the last weekday before
+  today IST; Asia in the morning and India, Asia, Europe in the evening: today) is left out and named (`dropped`, shown on the desk), never shown stale; no fresh
+  GIFT Nifty skips the pre-market Short, no fresh Nifty or Sensex the post-market one, a region with nothing fresh is dropped, fewer than two regions = no Short
+  (the Analyst says SKIPPED; nothing is marked done, so a later run in the window may try again). **Report, never predict** (SEBI's rule on recent price data): no
+  line may say open/gap/expect/will/target/support/resistance/watch-a-level (`market.FORECAST`, English and Tamil, tested on every template together with `ADVICE`
+  and `clone.unspelt`), no individual stock; one comic reaction from `REACT` (only those that pass the same checks) after the day's biggest move when it is 1.5 % or
+  more. Every English word spoken is in `tamil_say.SOUNDS` (index names, "S&P 500" as a phrase so `&` and 500 are not read as a number). The voice is the clone or
+  Edge by `voice_engine`; **LM Studio's model is unloaded only for a long video** (`free_memory` is skipped for a 40-second Short). Title "Pre-Market Update 14 Oct |
+  US, Asia, GIFT Nifty என்ன சொல்லுது? #Shorts", description: what it covers, "Data: NSE, Yahoo Finance, as of <times>", then the two disclaimer paragraphs.
+  **Release (`report_privacy` on the channel):** `approval` (set now) = uploaded private + the usual `yt_publish` approval; `scheduled` = published with NO review
+  (held back only when a data or voice check fails; the owner has not decided). Either way `youtube.report_release`: pre-market 15 minutes after it is ready or
+  approved, only if that is before 09:10 IST that date, else **stale** (stays private, record status `stale`, desk stage "Stale · not published", never published
+  by approval); post-market 21:00 IST that day if still ahead, else 15 minutes on while still that Indian date, else stale. Reports never take a slot from
+  `next_slot`, so the long video's 10:00 stays free.
+  **Zoned `run_at`:** a master's `run_at` entry may carry a zone, `"07:02 Asia/Kolkata"` (`orchestrator.run_time`; a bare `"05:00"` is still the Mac's clock). The
+  youtube master runs ALL its channels at those times (Confessions Everywhere's own limits, `create_after` and per-day counts, still apply).
+  **Wording fixed, English captions, sign-offs (Mani, 2026-10-14; he approved the HDFC video's Tanglish by ear):** the template wording is final, so the Tanglish
+  Writer calls `market.reword` only when the channel option `reword` is true (default and config: false; the model still writes the verified reasons and headline gists, which
+  are `fixed`). **Every video and Short has English translated captions burned in** (channel option `captions`, config true): code writes them, no model. Each
+  spoken line dict carries `"en"` beside `"say"`, built by an English twin of every template (`_row_en`, `_fact_en`, `MEANS_EN`, `TELL_EN`, `REACT_EN`, takeaways, report
+  lines; reasons = the English lead-in + the verified `point`, headlines = the lead-in + the headline as published). Figures are read for reading (`fig_en`: ₹73,188 crore,
+  11.2%, ₹38.37); `tests/test_captions.py` checks that every line of every deck shape has an `en` whose numbers (`market.numbers`) equal the spoken line's, and that no
+  `en` matches `ADVICE`/`RUDE`/`FORECAST` (the company's own words and headlines on a `quotes` slide are exempt from FORECAST, and their numbers need only include the
+  spoken ones). A line with no `en` simply shows no caption. In `slides.py`: `caption_chunks` cuts a caption at sentence ends and commas first, then evenly at word breaks
+  (wide ~60 characters / 10 words, tall ~32 / 6; a number never parts from its unit), `caption_times` shares the line's spoken seconds by character count and gives its pause
+  (and the notice's hold) to the last chunk, so nothing shows across a line boundary; `pictures(..., captions=texts)` draws each distinct chunk once in the same Chrome
+  session as a transparent strip the width of the frame (dark band `#1b1b1b` at 85 %, white Nunito Sans 600, 40 px wide / 46 px tall; `CAP` holds the placement: wide
+  video above the channel mark and left of the presenter, Short above YouTube's bottom 280 px and left of the right 120 px) and returns it as a third value; `assemble(...,
+  captions={"plan", "pngs"})` overlays them with one more concat input and writes `captions.srt` beside `final.mp4` (not uploaded; for a subtitle track later). Without
+  `captions` the pipeline is unchanged; test fakes that return `(pngs, faces)` just get no captions. **Two fixed sign-offs** (`market.SUBSCRIBE_LONG`, `SUBSCRIBE_SHORT`,
+  never reworded): a long video says SUBSCRIBE_LONG as its very last line after the unchanged closing line (same slide, no new slide); a Short's last line is
+  SUBSCRIBE_SHORT (it replaced the old "analysis-க்கு" line; `SIGN_OFF` is kept as an alias). Their words are in `tamil_say.SOUNDS` (bell icon, click, notification, "time-க்கு"
+  as டைமுக்கு, market and finance, ...). `tamil_say._join` now glides with ய after a front vowel sign (ி ீ ெ ே ை: டெய்லி-உம் -> டெய்லியும்) and வ elsewhere; the 13 golden
+  lines in `tests/test_voice.py` come out unchanged. The sample scripts render captions by default (`--no-captions`), use the template wording (`--reword` opts in to the
+  model; `--plain` is accepted and does nothing) and take `--mani` for the cloned voice (suffix `-mani`); the English line is printed under each spoken line in the .txt.
+  Not built yet: lesson/news Shorts for non-trading days, finance-topic videos (Tue/Thu/Sun), thumbnails and SEO for this channel, and the presenter drawn from
+  Mani's own character art (now a stand-in drawing). `publish_times` in the channel's options is unused. A live Europe session in the post-market Short has only
+  been tested on made-up data (the sample was run in the morning); sample: `scripts/market_report_sample.py premarket|postmarket [--any-time] [--date D]`.
+  Edge's voice function is `market_crew.edge_speak`; the sample scripts in `scripts/` are for trying looks and voices by hand.
 
 ## Status
 | Master | Mode | Needs from Mani |
@@ -403,7 +514,7 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
 | Web Designer | live | GOOGLE_MAPS_API_KEY, CLOUDFLARE_API_TOKEN + ACCOUNT_ID, optional PEXELS_API_KEY / PIXABAY_API_KEY |
 | World Watch (news, weather, flights) | live | nothing; optional OPENSKY creds (a free account lifts flights from about 100 to 1,000 snapshots a day) |
 | Trading Desk | live | OANDA practice token + account |
-| YouTube Manager | live (upload mocked only, never run against YouTube) | GROQ_API_KEY, PEXELS_API_KEY (the .env line has no usable value), REDDIT_CLIENT_ID/SECRET or .txt stories in inbox/confessions/confessions; GOOGLE_CLIENT_ID/SECRET with YouTube Data API v3 and Google Drive API enabled and redirect `http://127.0.0.1:8765/auth/youtube/callback`, then the YouTube sign-in |
+| YouTube Manager (+ Mani Market Tamil) | live (upload mocked only, never run against YouTube) | GROQ_API_KEY, PEXELS_API_KEY (the .env line has no usable value), REDDIT_CLIENT_ID/SECRET or .txt stories in inbox/confessions/confessions; GOOGLE_CLIENT_ID/SECRET with YouTube Data API v3 and Google Drive API enabled and redirect `http://127.0.0.1:8765/auth/youtube/callback`, then the YouTube sign-in. Mani Market Tamil: its own YouTube sign-in (`/auth/youtube/login?account=youtube-manimarket`), `vault/voice/ref-tight.wav` + `ref.txt` and the IndicF5 model for the cloned voice, headless Chrome (selenium) for the slides, LM Studio's `lms` tool |
 | Visa Watch | live (never run signed in) | add the account on its desk, then sign in to the portal himself in the window it opens (again whenever the session runs out); the Keychain prompt allowed once |
 | Telegram | live | TELEGRAM_BOT_TOKEN, then /start → TELEGRAM_CHAT_ID |
 | Ask engine | live | LM Studio server + llm.local_model (optional ANTHROPIC_API_KEY + llm.cloud_model) |

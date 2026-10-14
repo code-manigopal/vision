@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import date, datetime, timedelta, timezone
 
 import httpx
 
@@ -30,6 +31,16 @@ async def yahoo_change(client: httpx.AsyncClient, symbol: str) -> dict:
     prev = closes[-2] if len(closes) >= 2 else res["meta"].get("chartPreviousClose")
     pct = (price / prev - 1) * 100 if price and prev else None
     return {"symbol": symbol, "price": price, "prev": prev, "pct": pct, "currency": res["meta"].get("currency")}
+
+
+async def yahoo_closes(client: httpx.AsyncClient, symbol: str, span: str = "2y") -> list[tuple[date, float]]:
+    """Daily closes (trading day in the exchange's own zone, close), oldest first. Only closes, never the live price."""
+    r = await client.get(f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}", params={"range": span, "interval": "1d"}, headers=UA)
+    r.raise_for_status()
+    res = r.json()["chart"]["result"][0]
+    zone = timezone(timedelta(seconds=res["meta"].get("gmtoffset") or 0))
+    close = res["indicators"]["quote"][0].get("close") or []
+    return [(datetime.fromtimestamp(t, zone).date(), c) for t, c in zip(res.get("timestamp") or [], close) if c is not None]
 
 
 async def indices() -> list[dict]:

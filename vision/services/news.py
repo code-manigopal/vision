@@ -24,6 +24,12 @@ def google_news_url(query: str, edition: str = "CA") -> str:
     return f"https://news.google.com/rss/search?q={quote_plus(query + ' when:1d')}&hl={hl}&gl={gl}&ceid={ceid}"
 
 
+def google_news_between(query: str, after: str, before: str, edition: str = "IN") -> str:
+    """The same search for a window of days (ISO dates; `before` is not included), e.g. the days around a company's result."""
+    hl, gl, ceid = EDITIONS.get(edition, EDITIONS["CA"])
+    return f"https://news.google.com/rss/search?q={quote_plus(f'{query} after:{after} before:{before}')}&hl={hl}&gl={gl}&ceid={ceid}"
+
+
 def _clean_title(title: str, source: str) -> str:
     # Google News titles look like "Headline - Source"
     if source and title.endswith(" - " + source):

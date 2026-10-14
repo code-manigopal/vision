@@ -163,7 +163,7 @@ masters:
     trust: ACT             # makes Shorts and uploads them as unlisted; you make them public (or delete them) on YouTube
     mode: live
     cycle_minutes: 360     # every six hours: follows up on published Shorts and reads new comments
-    run_at: ["03:00", "05:00"]   # 03:00 makes the day's long video, 05:00 the day's Shorts; each is uploaded and scheduled for release
+    run_at: ["23:00", "03:00", "05:00", "07:02 Asia/Kolkata", "18:02 Asia/Kolkata"]   # 23:00 starts Mani Market Tamil's night (a result video, about an hour of voice); 03:00 makes the day's long video, 05:00 the day's Shorts; each is uploaded and scheduled for release. A time followed by a zone is that zone's clock (India has no daylight saving; the Mac's Toronto does): 07:02 and 18:02 IST make Mani Market Tamil's pre-market and post-market Shorts
     options:
       channels:            # one Director (with its own crew) per channel; the director's name must match catalog.json
         - id: confessions
@@ -214,6 +214,30 @@ masters:
           publish_times: ["06:00", "12:00", "18:00", "00:00"]   # local time; one Short per slot (6 AM, noon, 6 PM, midnight)
           create_after: "05:00"          # the day's Shorts are not started before this hour (a run earlier in the night only follows up)
           generator: {}                  # AI footage for beats with no stock match, e.g. { provider: name, kind: image, key_env: NAME_API_KEY } (see vision/services/genmedia.py)
+        - id: manimarket
+          name: Mani Market Tamil
+          director: Mani Market Tamil Director
+          crew: market                   # its own crew (vision/masters/market_crew.py): a quarterly result from NSE's filings, told in Tanglish over slides
+          language: ta
+          privacy: approval              # uploaded private, then you approve it in VISION (dashboard or Telegram): approved = scheduled for the next release slot
+          report_privacy: approval        # the pre-market / post-market Shorts: approval = private until you approve (a pre-market one after 09:10 IST is stale and never published) | scheduled = published with NO review (pre-market 15 minutes after it is ready if before 09:10 IST, post-market at 21:00 IST), held back only when a data or voice check fails; not decided yet
+          timezone: Asia/Kolkata         # release slots are this zone's wall time
+          voice_engine: clone            # clone = Mani's own voice (about an hour a video) | edge = Edge's Tamil voice (fast, artificial)
+          free_memory: true              # clone only: LM Studio's model is unloaded while the voice is made, then loaded again
+          short_voice_speed: 1.2         # clone only: Shorts are spoken a little slower than long videos (which stay at 1.3, the pace Mani approved)
+          reword: false                  # false = the template wording is what Mani approved, said as written | true = the writer model may rephrase lines (numbers are guarded)
+          captions: true                 # English captions burned into every video and Short (and captions.srt beside it); written by code beside each Tamil line, no model
+          make_after: "23:00"            # a video is started only between these hours (a manual run ignores them)
+          make_before: "04:00"
+          per_run: 1                     # videos made a night
+          pattern: {mon: analysis, tue: topic, wed: analysis, thu: topic, fri: analysis, sat: analysis, sun: topic}   # the long video by the weekday it is RELEASED on (IST): analysis = one company's ratios from its filings; topic is not built yet (a result is made instead)
+          price_lag_days: 31             # analysis videos use a share price at least this old: SEBI bars an education-only creator from a named stock's price of the last 30 days
+          index_csv: https://nsearchives.nseindia.com/content/indices/ind_niftylargemidcap250list.csv   # the companies it covers (NSE's index list; read once a week)
+          publish_times: ["09:00", "21:00"]   # IST; for the Shorts (not built yet)
+          long:
+            publish_time: "10:00"        # IST; one result video a day
+            playlist: ""                 # none
+          category: "27"                 # Education
 
 voice:                     # local voice (install requirements-voice.txt); browser = use the browser's voice
   tts: kokoro              # kokoro | piper | macos | browser

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -16,6 +17,13 @@ from .masters import approval_handlers
 from .services.llm import LLM
 
 log = logging.getLogger("vision")
+
+
+def run_time(spec: str) -> tuple[int, int, ZoneInfo | None]:
+    """A master's `run_at` entry: "05:00" (the Mac's clock) or "07:02 Asia/Kolkata" (that zone's clock; India has no daylight saving, Toronto has) -> hour, minute, zone."""
+    hm, _, zone = spec.strip().partition(" ")
+    h, m = (int(x) for x in hm.split(":"))
+    return h, m, ZoneInfo(zone.strip()) if zone.strip() else None
 
 
 class Orchestrator:
@@ -82,8 +90,8 @@ class Orchestrator:
             self.scheduler.add_job(self.run_master, IntervalTrigger(minutes=minutes), args=[m.id, "schedule"],
                                    id=f"cycle:{m.id}", max_instances=1, coalesce=True, replace_existing=True)
             for hhmm in self.cfg.master(m.id).run_at:            # and at fixed times of day, where a master asks for them
-                h, mnt = (int(x) for x in hhmm.split(":"))
-                self.scheduler.add_job(self.run_master, CronTrigger(hour=h, minute=mnt), args=[m.id, "schedule"],
+                h, mnt, zone = run_time(hhmm)
+                self.scheduler.add_job(self.run_master, CronTrigger(hour=h, minute=mnt, **({"timezone": zone} if zone else {})), args=[m.id, "schedule"],
                                        id=f"at:{m.id}:{hhmm}", max_instances=1, coalesce=True, replace_existing=True)
         for hhmm in self.cfg.vision.brief_times:
             h, mnt = (int(x) for x in hhmm.split(":"))
