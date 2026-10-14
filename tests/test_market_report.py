@@ -319,7 +319,7 @@ def test_release_times_premarket_before_0910_postmarket_at_2100_else_same_day_el
 
 class Web:
     def __init__(self):
-        self.updates, self.metas, self.puts = [], [], 0
+        self.updates, self.metas, self.puts, self.thumbs, self.items = [], [], 0, 0, []
 
     def __call__(self):
         def handler(req):
@@ -332,6 +332,11 @@ class Web:
             if "youtube/v3/videos" in u and req.method == "PUT":
                 self.updates.append(json.loads(req.content))
                 return httpx.Response(200, json={"id": "x"})
+            if "youtube/v3/videos" in u and req.method == "GET":
+                return httpx.Response(200, json={"items": self.items})
+            if "thumbnails/set" in u:
+                self.thumbs += 1
+                return httpx.Response(200, json={})
             return httpx.Response(404)
         return httpx.AsyncClient(transport=httpx.MockTransport(handler))
 
@@ -577,3 +582,71 @@ def test_run_at_label_after_a_bar_is_ignored_by_run_time():
     assert run_time("05:00 | Shorts") == (5, 0, None)
     assert run_spec("05:00 | Shorts")[3] == "Shorts" and run_spec("05:00")[3] == ""
     assert run_spec("03:00 | Long videos | both")[3:] == ("Long videos", "both") and run_spec("03:00 | Long videos")[4] == ""
+
+
+# ---- review mode: one video of every kind, uploaded private for Mani to watch -----------------------------------------------------------------------
+
+def put_review(tmp_path, store, kind: str, key: str, fmt: str = "short") -> str:
+    put_record(tmp_path, store, kind, "2026-10-14", key)
+    rec = store.kv_get(youtube.LOG, key)
+    thumb = tmp_path / f"{key}.jpg"
+    thumb.write_bytes(b"j" * 100)
+    store.kv_put(youtube.LOG, key, {**rec, "status": "review", "review": True, "format": fmt, **({"thumb": str(thumb)} if fmt == "long" else {})})
+    return key
+
+
+def test_a_review_video_goes_up_private_with_no_release_time_and_no_approval_whatever_the_channel_mode(tmp_path, monkeypatch):
+    for mode in ("scheduled", "approval"):
+        ch, cfg, web, bus, store = uploader_env(tmp_path, monkeypatch, mode)
+        put_review(tmp_path, store, "premarket", "short1")
+        put_review(tmp_path, store, "lesson", "long1", "long")
+        put_review(tmp_path, store, "lesson_short", "short2")
+        upload(ch, cfg, web, bus, store)
+        recs = {v["_key"]: v for v in store.kv_list(youtube.LOG)}
+        assert {k: v["status"] for k, v in recs.items()} == {"short1": "review", "long1": "review", "short2": "review"} and all(v["video_id"] and v["publish_at"] is None for v in recs.values())
+        assert len(web.metas) == 3 and all(m["status"]["privacyStatus"] == "private" and "publishAt" not in m["status"] for m in web.metas)
+        assert store.pending_approvals() == [] and web.updates == [] and web.thumbs == 1          # the long video's cover is still set
+        upload(ch, cfg, web, bus, store)                                                          # nothing is uploaded twice
+        assert len(web.metas) == 3
+        for k in recs:
+            store.kv_put(youtube.LOG, k, {"channel": "other"})
+
+
+def test_analytics_leaves_a_review_status_alone_until_youtube_says_the_video_is_gone(tmp_path, monkeypatch):
+    ch, cfg, web, bus, store = uploader_env(tmp_path, monkeypatch, "approval")
+    put_review(tmp_path, store, "premarket", "short1")
+    upload(ch, cfg, web, bus, store)
+    vid = store.kv_get(youtube.LOG, "short1")["video_id"]
+    web.items = [{"id": vid, "status": {"privacyStatus": "private"}, "statistics": {"viewCount": "7"}}]
+    ctx = {"bus": bus, "store": store, "cfg": cfg, "reason": "schedule", "master": "youtube"}
+    asyncio.run(market_crew.MarketAnalytics(ch, client_factory=web).run(ctx))
+    rec = store.kv_get(youtube.LOG, "short1")
+    assert rec["status"] == "review" and rec["stats"]["view"] == 7 and web.updates == []
+    web.items = [{"id": vid, "status": {"privacyStatus": "private", "publishAt": "2030-01-01T00:00:00Z"}, "statistics": {}}]
+    asyncio.run(market_crew.MarketAnalytics(ch, client_factory=web).run(ctx))
+    assert store.kv_get(youtube.LOG, "short1")["status"] == "review"
+    web.items = []
+    asyncio.run(market_crew.MarketAnalytics(ch, client_factory=web).run(ctx))
+    assert store.kv_get(youtube.LOG, "short1")["status"] == "deleted"
+
+
+def test_a_review_job_lives_apart_and_marks_nothing_done(tmp_path, monkeypatch):
+    monkeypatch.setattr(youtube, "ROOT", tmp_path)
+    ch = youtube.channel({**RAW, "review": True})
+    assert market_crew.jobdir(ch, "2026-10-14-premarket") == str(tmp_path / "data" / "shorts" / "manimarket" / "_review" / "review-2026-10-14-premarket")
+    assert market_crew.jobdir(youtube.channel(RAW), "2026-10-14-premarket") == str(tmp_path / "data" / "shorts" / "manimarket" / "2026-10-14-premarket")
+    assert market_crew.stamp({"review": True}) == {"status": "review", "review": True} and market_crew.stamp({}) == {"status": "ready"}
+
+
+def test_a_closed_session_whose_daily_bar_is_still_empty_takes_the_regular_market_price():
+    """14 Oct 2026, evening IST: Yahoo's 14 Oct bar for the Nikkei had close None, regularMarketPrice was the close. The index is fresh, not stale."""
+    from datetime import datetime as _dt
+    from zoneinfo import ZoneInfo as _Z
+    tz = _Z("Asia/Tokyo")
+    d13, d14 = _dt(2026, 10, 13, 9, 0, tzinfo=tz).timestamp(), _dt(2026, 10, 14, 9, 0, tzinfo=tz).timestamp()
+    closed = _dt(2026, 10, 14, 15, 45, tzinfo=tz).timestamp()
+    res = {"meta": {"exchangeTimezoneName": "Asia/Tokyo", "regularMarketTime": closed, "regularMarketPrice": 67744.29,
+                    "currentTradingPeriod": {"regular": {"start": _dt(2026, 10, 15, 9, 0, tzinfo=tz).timestamp(), "end": _dt(2026, 10, 15, 15, 30, tzinfo=tz).timestamp()}}},
+           "timestamp": [d13, d14], "indicators": {"quote": [{"close": [67777.5, None]}]}}
+    m = world.index_move(res, "Nikkei 225", closed + 4 * 3600)
+    assert m["day"].isoformat() == "2026-10-14" and m["last"] == 67744.29 and m["prev_close"] == 67777.5 and m["session"] == "closed"

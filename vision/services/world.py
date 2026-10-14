@@ -56,6 +56,10 @@ def index_move(res: dict, name: str, now: float) -> dict | None:
             return None
         last, prev, day, as_of = float(meta["regularMarketPrice"]), before[-1], seen.date(), seen
     else:                                               # the last two daily closes; chartPreviousClose is the close before the range, not this one
+        if meta.get("regularMarketPrice") and bars[-1][0] < seen.date():
+            # Yahoo leaves the day's own bar empty for hours after the close (seen 14 Oct 2026: Nikkei, Kospi, Hang Seng closed, their 14 Oct close
+            # None, regularMarketPrice already the close): the day's close is regularMarketPrice, against the last bar before that day
+            bars = bars + [(seen.date(), float(meta["regularMarketPrice"]))]
         if len(bars) < 2:
             return None
         (day, last), prev = bars[-1], bars[-2][1]
