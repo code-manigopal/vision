@@ -2,7 +2,8 @@
 
 The free plan gives 10,000 neurons a day, reset at 00:00 UTC; past that Cloudflare answers 429 (no bill on the free
 plan). Every call here is costed from Cloudflare's price table and written to kv `cfai` `neurons:<UTC date>`, so a
-caller can stop before the allowance runs out (`left`). A 429 marks the day spent.
+caller can stop before the allowance runs out (`left`). A 429 pauses every call for PAUSE seconds (kv `cfai` `pause`):
+Cloudflare's reset was seen to lag past 00:00 UTC, so a refusal is asked again later rather than written off for the day.
 
 Credentials: CLOUDFLARE_API_TOKEN (with Workers AI permission) and CLOUDFLARE_ACCOUNT_ID, the same ones the Web
 Designer uses for Pages.
@@ -13,6 +14,7 @@ from __future__ import annotations
 import base64
 import io
 import math
+import time
 from datetime import datetime, timezone
 
 import httpx
@@ -25,6 +27,7 @@ FREE = 10_000
 NS = "cfai"
 TILE = 26.05                 # neurons per 512x512 output tile, flux-2-klein-4b (Cloudflare pricing page, 2026-10-14)
 LOOK_COST = 20               # a 768 px picture (~1,600 tokens in) and a short answer, rounded up
+PAUSE = 30 * 60
 
 
 class Spent(Exception):
@@ -54,8 +57,16 @@ def used(store) -> float:
     return float((store.kv_get(NS, f"neurons:{day()}") or {}).get("n", 0))
 
 
+def paused(store) -> bool:
+    return (store.kv_get(NS, "pause") or {}).get("until", 0) > time.time()
+
+
 def left(store, budget: int = FREE) -> float:
-    return max(0.0, budget - used(store))
+    return 0.0 if paused(store) else max(0.0, budget - used(store))
+
+
+def _refused(store) -> None:
+    store.kv_put(NS, "pause", {"until": time.time() + PAUSE})
 
 
 def _spend(store, n: float) -> None:
@@ -75,8 +86,8 @@ async def draw(store, prompt: str, w: int, h: int, seed: int, *, budget: int = F
     async with client or httpx.AsyncClient(timeout=180) as c:
         r = await c.post(f"{_base()}/run/{DRAW}", headers=_h(), files=form)
     if r.status_code == 429:
-        _spend(store, FREE)
-        raise Spent("Cloudflare says today's free allowance is used up")
+        _refused(store)
+        raise Spent("Cloudflare says the free allowance is used up; asking again in 30 minutes")
     if r.status_code != 200:
         raise CFError(f"draw {r.status_code}: {r.text[:200]}")
     _spend(store, cost)
@@ -109,8 +120,8 @@ async def look(store, png: bytes, question: str, *, budget: int = FREE, client: 
             await c.post(f"{_base()}/run/{LOOK}", headers=_h(), json={"prompt": "agree"})
             r = await c.post(f"{_base()}/v1/chat/completions", headers=_h(), json=body)
     if r.status_code == 429:
-        _spend(store, FREE)
-        raise Spent("Cloudflare says today's free allowance is used up")
+        _refused(store)
+        raise Spent("Cloudflare says the free allowance is used up; asking again in 30 minutes")
     if r.status_code != 200:
         raise CFError(f"look {r.status_code}: {r.text[:200]}")
     _spend(store, LOOK_COST)
