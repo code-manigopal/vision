@@ -295,7 +295,8 @@ class ResultsScout(MCrew):
         if waiting >= BACKLOG and not force:
             return AgentResult("idle", "BACKLOG", f"{waiting} finished videos are waiting to upload or for your approval; no new ones until they clear")
         per = int(ch.get("per_run") or 1)
-        if not manual and sum((v.get("made") or 0) > time.time() - 12 * 3600 for v in mine) >= per:
+        # a review upload (made by hand for Mani to watch) is not the night's video: the TCS review made at 16:07 on 2026-10-14 blocked that night
+        if not manual and sum((v.get("made") or 0) > time.time() - 12 * 3600 and not v.get("review") for v in mine) >= per:
             return AgentResult("idle", "DONE TONIGHT", f"{per} video made already tonight")
         kind, day = release_kind(store, ch)
         kind = force.get("kind") or kind

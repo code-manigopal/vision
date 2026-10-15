@@ -650,3 +650,26 @@ def test_a_closed_session_whose_daily_bar_is_still_empty_takes_the_regular_marke
            "timestamp": [d13, d14], "indicators": {"quote": [{"close": [67777.5, None]}]}}
     m = world.index_move(res, "Nikkei 225", closed + 4 * 3600)
     assert m["day"].isoformat() == "2026-10-14" and m["last"] == 67744.29 and m["prev_close"] == 67777.5 and m["session"] == "closed"
+
+
+def test_a_review_video_made_by_day_does_not_count_as_the_nights_video(tmp_path, monkeypatch):
+    ch = youtube.channel(RAW)
+    store = Store(tmp_path / "t.db")
+    monkeypatch.setattr(market_crew, "now_hm", lambda: "23:00")
+    monkeypatch.setattr(market_crew, "report_window", lambda now: "")
+
+    class Next(Exception):
+        pass
+
+    def stop(store_, ch_):
+        raise Next                                                                     # past the night count: the Scout goes on to choose the video
+
+    monkeypatch.setattr(market_crew, "release_kind", stop)
+    scout = market_crew.ResultsScout(ch)
+    ctx = {"store": store, "bus": EventBus(), "reason": "schedule", "now": datetime(2026, 10, 14, 23, 0, tzinfo=ZoneInfo("America/Toronto"))}
+    base = {"channel": ch["id"], "format": "long", "kind": "result", "made": time.time() - 7 * 3600}
+    store.kv_put(youtube.LOG, "tcs", {**base, "status": "review", "review": True})         # Mani's review video from the afternoon
+    with pytest.raises(Next):
+        asyncio.run(scout.pick(ctx))
+    store.kv_put(youtube.LOG, "night", {**base, "status": "scheduled"})                    # a real video already made tonight
+    assert asyncio.run(scout.pick(ctx)).label == "DONE TONIGHT"
