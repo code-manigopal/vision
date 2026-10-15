@@ -13,6 +13,8 @@ Requires: httpx, fastapi (for the route).  pip install httpx fastapi
 
 from __future__ import annotations
 
+import re
+
 import math
 import os
 import time
@@ -81,8 +83,20 @@ async def _get_json(client: httpx.AsyncClient, url: str, what: str, params: dict
 
 # ---------- Step 1: geocoding ----------
 
+PROVINCES = {"ON": "Ontario", "QC": "Quebec", "BC": "British Columbia", "AB": "Alberta", "MB": "Manitoba", "SK": "Saskatchewan",
+             "NS": "Nova Scotia", "NB": "New Brunswick", "NL": "Newfoundland and Labrador", "PE": "Prince Edward Island"}
+
+
+def spell_province(city: str) -> str:
+    """"Windsor, ON" -> "Windsor, Ontario, Canada": TomTom doesn't read the abbreviation and found Windsor in South Africa (2026-10-14)."""
+    m = re.match(r"^(.*?),\s*([A-Za-z]{2})\s*$", city)
+    if m and m.group(2).upper() in PROVINCES:
+        return f"{m.group(1)}, {PROVINCES[m.group(2).upper()]}, Canada"
+    return city
+
+
 async def _geocode_tomtom(client: httpx.AsyncClient, city: str, key: str) -> Place:
-    url = f"https://api.tomtom.com/search/2/geocode/{quote(city)}.json"
+    url = f"https://api.tomtom.com/search/2/geocode/{quote(spell_province(city))}.json"
     data = await _get_json(client, url, "TomTom geocoding", {"key": key, "limit": 1})
     results = data.get("results") or []
     if not results:

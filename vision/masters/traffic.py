@@ -58,8 +58,8 @@ class IncidentScout(SubAgent):
             ms = c.get("mostSevere")
             if c["majorDelay"] and ms:
                 major += 1
-                parts.append(f"{city} {c['totalActive']} incidents, major delay {ms['delayMinutes']} min"
-                             + (f" on {ms['road']}" if ms.get("road") else ""))
+                what = f"major delay {ms['delayMinutes']} min" if ms["delayMinutes"] else "a closure" if ms["magnitude"] >= 4 else "a major slowdown"
+                parts.append(f"{city} {c['totalActive']} incidents, {what}" + (f" on {ms['road']}" if ms.get("road") else ""))
             else:
                 parts.append(f"{city} {c['totalActive']} incidents, no major delays")
         summary = " · ".join(parts) or "No cities configured"
