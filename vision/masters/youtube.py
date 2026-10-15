@@ -1440,12 +1440,12 @@ class Uploader(Crew):
         long = rec.get("format") == "long"
         tags = list(dict.fromkeys(rec["hashtags"] + ([] if long else ["#Shorts"])))
         report, lesson = rec.get("kind") in SHORT_KINDS, rec.get("kind") in LESSON_KINDS
-        if report:                                  # a report Short never takes a slot: `report_privacy` scheduled = public by itself at report_release, approval = private until approved
+        if rec.get("review"):                       # a review upload (Mani Market Tamil): private, never a release time (decided first: it may have no window)
+            when = None
+        elif report:                                # a report Short never takes a slot: `report_privacy` scheduled = public by itself at report_release, approval = private until approved
             when = short_when(rec, _now()) if ch["report_privacy"] == "scheduled" else None      # lessons too, since Mani approved the channel (2026-10-14)
         else:
             when = next_slot(ctx["store"], ch, fmt="long" if long else "short") if ch["privacy"] == "scheduled" else None     # private now, public by itself at its slot
-        if rec.get("review"):                       # a review upload (Mani Market Tamil): private, never a release time
-            when = None
         marks = rec.get("chapters") or []           # YouTube shows chapters from three or more timestamps starting at 0:00
         chapters = "\n\n" + "\n".join(f"{clock(m['t'])} {m['heading']}" for m in marks) if long and len(marks) >= 3 and marks[0]["t"] == 0 else ""
         seo = rec.get("seo") or {}                  # the strategist's search tags and opening lines, when it gave them

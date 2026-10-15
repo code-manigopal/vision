@@ -624,6 +624,9 @@ def web(state):
         if u.startswith("https://official.test/"):
             state.setdefault("gets", []).append(u)
             return httpx.Response(200, text=PAGE, headers={"content-type": "text/html"}) if not u.endswith("/gone") else httpx.Response(404)
+        if "youtube/v3/videos" in u and req.method == "GET" and "vid1" in u and "meta" in state:
+            st = {"privacyStatus": "private", **({"publishAt": state["meta"]["status"]["publishAt"]} if "publishAt" in state["meta"]["status"] else {})}
+            return httpx.Response(200, json={"items": [{"id": "vid1", "status": st, "statistics": {}}]})
         if "googleapis.com/youtube/v3/search" in u or "youtube/v3/channels" in u or "youtube/v3/playlistItems" in u or ("youtube/v3/videos" in u and "statistics" in u):
             return api(req)
         if "upload/youtube/v3/videos" in u:
@@ -673,20 +676,29 @@ def agents(bus):
 
 
 @FFMPEG
-def test_a_topic_night_makes_a_lesson_from_the_official_page_and_it_always_waits_for_approval(tmp_path, monkeypatch):
-    for privacy in ("approval", "scheduled"):                                         # even a channel set to publish by itself never publishes a lesson without a yes
+def test_a_topic_night_makes_a_lesson_from_the_official_page_and_it_waits_for_approval_unless_the_channel_is_scheduled(tmp_path, monkeypatch):
+    for privacy in ("approval", "scheduled"):                                         # scheduled: released at its slot with no review (Mani approved the channel, 2026-10-14)
         m, state, bus, store, fetched, ch = crew_env(tmp_path, monkeypatch, datetime(2026, 10, 17, 12, 0, tzinfo=IST), privacy=privacy, report_privacy="scheduled")
         asyncio.run(m.cycle(bus, store))
         crew = agents(bus)
         assert [crew[n]["status"] for n in ("Results Scout", "Market Analyst", "Tanglish Writer", "Voice Clone", "Slide Editor", "Market Uploader")] == ["done"] * 6, crew
         rec, = store.kv_list(youtube.LOG)
-        assert rec["kind"] == "lesson" and rec["format"] == "long" and rec["status"] == "awaiting" and rec["topic"] == "fd-test" and rec["title"] == "How does a bank FD work?"
+        assert rec["kind"] == "lesson" and rec["format"] == "long" and rec["status"] == ("awaiting" if privacy == "approval" else "scheduled") \
+            and rec["topic"] == "fd-test" and rec["title"] == "How does a bank FD work?"
         assert rec["sources"] == [{"label": "RBI FAQ on deposits", "url": "https://official.test/fd"}] and rec["lines_dropped"] == 0 and rec["voice"] == "clone" and rec["thumb"].endswith("thumb.jpg")
         assert [i["title"] for i in rec["inspired"]] == ["FD vs RD explained", "Fixed deposit rates explained"] and fetched == ["v1", "v2"] and len(state["gets"]) == 2
         assert rec["summary"].endswith(market_crew.DISCLAIMER) and "Sources:\nRBI FAQ on deposits: https://official.test/fd" in rec["summary"]
         assert "FD vs RD explained" not in rec["summary"] and "Good Channel" not in rec["summary"] and all("FD vs RD" not in ln["say"] for ln in SEEN["lines"])
         meta = state["meta"]
-        assert meta["status"]["privacyStatus"] == "private" and "publishAt" not in meta["status"] and meta["snippet"]["description"] == rec["summary"]
+        assert meta["status"]["privacyStatus"] == "private" and meta["snippet"]["description"] == rec["summary"]
+        assert store.kv_has(market_crew.DONE, "lesson:fd-test") and SEEN["tall"] is False and SEEN["deck"][0] == market.NOTICE
+        assert not youtube.promises(rec["title"]) and not market.ADVICE.search(rec["title"])
+        if privacy == "scheduled":
+            assert meta["status"]["publishAt"] == "2026-10-20T04:30:00Z" and store.pending_approvals() == []     # Tuesday 10:00 IST, nobody asked
+            store.close() if hasattr(store, "close") else None
+            shutil.rmtree(tmp_path / "data", ignore_errors=True)
+            continue
+        assert "publishAt" not in meta["status"]
         ap, = store.pending_approvals()
         assert ap["payload"]["video"] == "lesson" and ap["payload"]["sources"] == rec["sources"] and ap["payload"]["watch"].startswith("https://youtu.be/")
         assert ap["payload"]["kind"] == "yt_publish" and any(b.startswith("source: RBI FAQ on deposits") for b in ap["payload"]["backed"]) \
@@ -729,7 +741,7 @@ def test_a_saturday_morning_makes_a_lesson_short_that_waits_for_approval_and_goe
     now = datetime(2026, 10, 17, 7, 20, tzinfo=IST)                                    # a Saturday inside the morning window
     plan = {"title": "What is an RD?", "concept": "recurring deposit", "slides": [{"kind": "points", "heading": "RD", "icon": "calendar", "items": ["Fixed amount monthly", "Agreed period"]}]}
     model = Model(plan=plan, lines=lessons_of([["rd", "month", "def", "pre"]]))
-    m, state, bus, store, fetched, ch = crew_env(tmp_path, monkeypatch, now, model=model, report_privacy="scheduled")
+    m, state, bus, store, fetched, ch = crew_env(tmp_path, monkeypatch, now, model=model, report_privacy="approval")
     asyncio.run(m.cycle(bus, store))
     crew = agents(bus)
     assert crew["Results Scout"]["label"] == "FOUND" and "lesson Short" in crew["Results Scout"]["summary"]
@@ -747,6 +759,19 @@ def test_a_saturday_morning_makes_a_lesson_short_that_waits_for_approval_and_goe
     said = asyncio.run(youtube.publish_decision(store.get_approval(ap["id"]), "approved", {"store": store, "cfg": m.services["cfg"], "bus": bus, "client_factory": web(state)}))
     assert datetime.fromtimestamp(state["update"]["status"]["publishAt"] and datetime.strptime(state["update"]["status"]["publishAt"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp(), IST).strftime("%H:%M") == "09:00"
     assert said.startswith("Scheduled for ")
+
+
+@FFMPEG
+def test_a_scheduled_channel_releases_a_lesson_short_at_9_with_no_approval(tmp_path, monkeypatch):
+    now = datetime(2026, 10, 17, 7, 20, tzinfo=IST)
+    plan = {"title": "What is an RD?", "concept": "recurring deposit", "slides": [{"kind": "points", "heading": "RD", "icon": "calendar", "items": ["Fixed amount monthly", "Agreed period"]}]}
+    model = Model(plan=plan, lines=lessons_of([["rd", "month", "def", "pre"]]))
+    m, state, bus, store, fetched, ch = crew_env(tmp_path, monkeypatch, now, model=model, report_privacy="scheduled")
+    asyncio.run(m.cycle(bus, store))
+    rec, = store.kv_list(youtube.LOG)
+    assert rec["kind"] == "lesson_short" and rec["status"] == "scheduled" and store.pending_approvals() == []
+    due = datetime.strptime(state["meta"]["status"]["publishAt"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    assert due.astimezone(IST).strftime("%Y-%m-%d %H:%M") == "2026-10-17 09:00"
 
 
 @FFMPEG
