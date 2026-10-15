@@ -512,6 +512,48 @@ async def backup(ctx: dict, ch: dict, log: list[dict], client) -> str:
     return f"{done} backed up to Drive" if done else ""
 
 
+def month_start(now: float | None = None) -> float:
+    t = time.localtime(now or time.time())
+    return time.mktime((t.tm_year, t.tm_mon, 1, 0, 0, 0, 0, 0, -1))
+
+
+async def prune_drive(ctx: dict, ch: dict, log: list[dict], client) -> str:
+    """Once a month, on its first run of the month (Mani, 2026-10-15: "every month 1st date, check the YT studio videos released
+    last month and those videos should be deleted from the drive"): the Drive copies of videos released before this month that
+    videos.list has just seen public on YouTube go to the Drive's trash (emptied by Drive after 30 days). A video gone from
+    YouTube keeps its copy: it is then the only one. kv `yt_state` `<channel>:drive_prune:<YYYY-MM>` marks the month done."""
+    if not ch.get("backup_folder"):
+        return ""
+    store, month = ctx["store"], time.strftime("%Y-%m")
+    mark = f"{ch['id']}:drive_prune:{month}"
+    if store.kv_get(STATE, mark):
+        return ""
+    start = month_start()
+    old = [v for v in log if v.get("drive") and not v.get("drive_removed") and v.get("status") == "public"
+           and (v.get("publish_at") or v.get("uploaded") or 0) < start and v.get("on_youtube", 0) > time.time() - 86400]
+    if old:
+        try:
+            token = await oauth.access_token(BACKUP_ACCOUNT, "gdrive")
+        except oauth.AuthNeeded:
+            return ""                            # the backup step has already asked for the sign-in
+        try:
+            async with client() as c:
+                for v in old:
+                    for part in ("video", "cover"):
+                        if (v["drive"].get(part) or {}).get("id"):
+                            await gdrive.trash(c, token, v["drive"][part]["id"])
+                    v["drive_removed"] = time.time()
+                    store.kv_put(LOG, v["_key"], {k: x for k, x in v.items() if not k.startswith("_")})
+        except (gdrive.DriveError, httpx.HTTPError) as e:
+            return f"Drive clean-up stopped: {e}"[:160]                 # tried again on the next run this month
+    unseen = [v for v in log if v.get("drive") and not v.get("drive_removed") and v.get("status") == "public"
+              and (v.get("publish_at") or v.get("uploaded") or 0) < start and v.get("on_youtube", 0) <= time.time() - 86400]
+    if unseen:                                   # not confirmed on YouTube today: the month stays open and they are looked at again next run
+        return f"{len(old)} of last month's backups moved to Drive's trash" if old else ""
+    store.kv_put(STATE, mark, {"at": time.time(), "trashed": len(old)})
+    return f"{len(old)} of last month's backups moved to Drive's trash" if old else ""
+
+
 def free_space(store, ch: dict, log: list[dict]) -> str:
     """Deletes the local folder of every video a videos.list call has found on YouTube since its upload (Mani: "check and make sure it is
     there... and then delete it from local"; never on the upload's answer alone; the log record stays), and the working
@@ -1693,13 +1735,16 @@ class AnalyticsManager(Crew):
             token = await oauth.access_token(account(self.ch), "youtube")
         except oauth.AuthNeeded:
             return                                 # the Uploader has already asked for the sign-in
+        found: dict[str, dict] = {}
         async with self.client() as c:
-            r = await c.get(VIDEOS, params={"part": "status,statistics", "id": ",".join(v["video_id"] for v in live[:50])}, headers={"Authorization": f"Bearer {token}"})
-        if r.status_code != 200:
-            raise RuntimeError(f"YouTube stats failed ({r.status_code}): {_reason(r)}")
-        found = {i["id"]: i for i in r.json().get("items", [])}
+            for i in range(0, len(live), 50):      # videos.list takes 50 ids a call (1 quota unit each); every video is followed, not just the first 50
+                r = await c.get(VIDEOS, params={"part": "status,statistics", "id": ",".join(v["video_id"] for v in live[i:i + 50])},
+                                headers={"Authorization": f"Bearer {token}"})
+                if r.status_code != 200:
+                    raise RuntimeError(f"YouTube stats failed ({r.status_code}): {_reason(r)}")
+                found.update({it["id"]: it for it in r.json().get("items", [])})
         invite = bool(self.ch["cta"]) and "youtube.force-ssl" in oauth.granted(account(self.ch))
-        for v in live[:50]:
+        for v in live:
             item = found.get(v["video_id"])
             was = v["status"]
             if was == "review":                    # uploaded for Mani to watch: only his deleting it on YouTube changes its status
@@ -1733,8 +1778,9 @@ class AnalyticsManager(Crew):
             return AgentResult("done", "LOGGED", f"{ch['name']}: no Shorts made yet", {"channel": ch["id"], "made": 0})
         await self._refresh(ctx, log)
         saved = await backup(ctx, ch, [v for v in ctx["store"].kv_list(LOG) if v.get("channel") == ch["id"]], self.client)
+        pruned = await prune_drive(ctx, ch, [v for v in ctx["store"].kv_list(LOG) if v.get("channel") == ch["id"]], self.client)
         log = [v for v in ctx["store"].kv_list(LOG) if v.get("channel") == ch["id"]]
-        freed = "; ".join(x for x in (saved, free_space(ctx["store"], ch, log)) if x)
+        freed = "; ".join(x for x in (saved, pruned, free_space(ctx["store"], ch, log)) if x)
         for v in log:                              # notices live in memory: put the reminder back after a restart
             if v["status"] == "unlisted" and v.get("video_id"):
                 review_notice(ctx["bus"], ch, v)

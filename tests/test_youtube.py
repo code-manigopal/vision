@@ -1150,3 +1150,69 @@ def test_a_posted_video_is_copied_to_drive_checked_and_only_then_removed_from_th
     assert folders == {"confessions_everywhere_yt", "Shorts", "Videos"}
     recs = {v["_key"]: v for v in store.kv_list(youtube.LOG)}
     assert recs["long1"]["drive"]["folder"] == "confessions_everywhere_yt/Videos" and recs["short1"]["drive"]["folder"] == "confessions_everywhere_yt/Shorts"
+
+
+def test_on_the_first_run_of_a_month_last_months_drive_backups_go_to_the_trash(tmp_path, monkeypatch):
+    """Mani, 2026-10-15: "every month 1st date, check the YT studio videos released last month and those videos should be deleted from the drive"."""
+    import time as _t
+    monkeypatch.setattr(youtube, "ROOT", tmp_path)
+
+    async def token(account, provider, client=None):
+        return "tok"
+
+    monkeypatch.setattr(oauth, "access_token", token)
+    store = Store(tmp_path / "t.db")
+    start = youtube.month_start()
+    last_month, this_month = start - 5 * 86400, start + 3600
+    on_yt = {"v1": "public", "v3": "public", "v4": "private"}                                 # v2 was deleted on YouTube
+
+    def rec(key, vid, released, status="public"):
+        store.kv_put(youtube.LOG, key, {"channel": "confessions", "status": status, "title": key, "seconds": 20, "made": 1, "uploaded": released - 60,
+                                         "publish_at": released, "video_id": vid, "local_removed": 1,
+                                         "drive": {"video": {"id": f"d-{vid}"}, "cover": {"id": f"c-{vid}"}, "folder": "x/Shorts"}})
+
+    rec("old", "v1", last_month)
+    rec("gone", "v2", last_month)
+    rec("new", "v3", this_month)
+    rec("later", "v4", last_month, "scheduled")
+    trashed = []
+
+    def handler(req):
+        u = str(req.url)
+        if "youtube/v3/videos" in u:
+            return httpx.Response(200, json={"items": [{"id": i, "status": {"privacyStatus": on_yt[i]}, "statistics": {}} for i in req.url.params["id"].split(",") if i in on_yt]})
+        if req.method == "PATCH" and u.startswith(gdrive.API):
+            trashed.append(req.url.path.rsplit("/", 1)[1])
+            return httpx.Response(200, json={"id": trashed[-1]})
+        return httpx.Response(404)
+
+    ch = youtube.channel({"backup_folder": "confessions_everywhere_yt"})
+    run = lambda: asyncio.run(youtube.AnalyticsManager(ch, client_factory=lambda: httpx.AsyncClient(transport=httpx.MockTransport(handler))).run({"store": store, "bus": EventBus()}))
+    res = run()
+    assert sorted(trashed) == ["c-v1", "d-v1"] and "1 of last month's backups moved to Drive's trash" in res.summary
+    recs = {v["_key"]: v for v in store.kv_list(youtube.LOG)}
+    assert recs["old"]["drive_removed"] and not recs["gone"].get("drive_removed") and not recs["new"].get("drive_removed")
+    assert recs["gone"]["status"] == "deleted"                                              # gone from YouTube: the Drive copy is the only one, kept
+    run()
+    assert len(trashed) == 2                                                                # once a month
+
+
+def test_every_video_is_followed_not_just_the_first_fifty(tmp_path, monkeypatch):
+    monkeypatch.setattr(youtube, "ROOT", tmp_path)
+
+    async def token(account, provider, client=None):
+        return "tok"
+
+    monkeypatch.setattr(oauth, "access_token", token)
+    store = Store(tmp_path / "t.db")
+    for i in range(120):
+        store.kv_put(youtube.LOG, f"k{i}", {"channel": "confessions", "status": "public", "title": f"t{i}", "seconds": 20, "made": 1, "video_id": f"v{i}"})
+    calls = []
+
+    def handler(req):
+        ids = req.url.params["id"].split(",")
+        calls.append(len(ids))
+        return httpx.Response(200, json={"items": [{"id": i, "status": {"privacyStatus": "public"}, "statistics": {"viewCount": "7"}} for i in ids]})
+
+    asyncio.run(youtube.AnalyticsManager(youtube.channel({}), client_factory=lambda: httpx.AsyncClient(transport=httpx.MockTransport(handler))).run({"store": store, "bus": EventBus()}))
+    assert calls == [50, 50, 20] and all((v.get("stats") or {}).get("view") == 7 for v in store.kv_list(youtube.LOG, 0, 500))

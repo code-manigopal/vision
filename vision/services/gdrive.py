@@ -121,3 +121,13 @@ async def upload(c: httpx.AsyncClient, token: str, path: Path, name: str, parent
     if int(got.get("size") or -1) != size or got.get("md5Checksum") != want:
         raise DriveError(f"the Drive copy of {name} does not match the file ({got.get('size')} bytes)")
     return {"id": fid, "name": name, "size": size}
+
+
+async def trash(c: httpx.AsyncClient, token: str, fid: str) -> bool:
+    """Moves a file VISION made to the Drive's trash (Drive empties it after 30 days). False when it is already gone."""
+    r = await c.patch(f"{API}/{fid}", json={"trashed": True}, params={"fields": "id"}, headers={"Authorization": f"Bearer {token}"})
+    if r.status_code == 404:
+        return False
+    if r.status_code != 200:
+        raise DriveError(f"Google Drive said {r.status_code}: {_why(r)}")
+    return True

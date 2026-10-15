@@ -317,7 +317,11 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   Manager / Market Analytics after videos.list has confirmed the video; each file is uploaded resumable (`gdrive.upload`) and checked by size
   and MD5; only then may `free_space` delete the local folder. Own sign-in `drive-backup`, oauth provider `gdrive`, scope `drive.file` (it sees
   only what VISION created, so it makes its own folders of those names; the two Mani made by hand are not used). No sign-in, a full Drive
-  (notice `gdrive-full`) or a mismatch = the local files stay and it tries again next run. VISION never deletes anything in Drive.
+  (notice `gdrive-full`) or a mismatch = the local files stay and it tries again next run.
+  **Monthly clean-up (Mani, 2026-10-15):** on the first run of each month `youtube.prune_drive` moves to Drive's trash (Drive empties it after 30
+  days) the backups of videos released before this month that videos.list has just seen public; a video gone from YouTube keeps its copy.
+  Marked done per month in kv `yt_state` `<channel>:drive_prune:<YYYY-MM>`, only once every such video was confirmed that run.
+  `_refresh` now asks videos.list in batches of 50, so every video is followed (it used to look at the first 50 only).
 - YouTube Manager (`masters/youtube.py`, took the Film Studio slot) has three levels: master → one Director per channel
   (`options.channels`) → that channel's crew. `Director` (agents.py) runs its crew like a master runs sub-agents; crew
   agent events carry `director`. Crew for Confessions Everywhere: Story Scout → Story Writer → Screenplay Writer →

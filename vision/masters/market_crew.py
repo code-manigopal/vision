@@ -887,8 +887,9 @@ class MarketAnalytics(youtube.AnalyticsManager):
             await self._refresh(ctx, mine)          # an awaiting video is left alone: it is not in the statuses followed until it is scheduled
         mine = [v for v in store.kv_list(youtube.LOG) if v.get("channel") == ch["id"]]
         saved = await youtube.backup(ctx, ch, mine, self.client)
+        pruned = await youtube.prune_drive(ctx, ch, [v for v in store.kv_list(youtube.LOG) if v.get("channel") == ch["id"]], self.client)
         mine = [v for v in store.kv_list(youtube.LOG) if v.get("channel") == ch["id"]]
-        freed = "; ".join(x for x in (saved, youtube.free_space(store, ch, mine)) if x)
+        freed = "; ".join(x for x in (saved, pruned, youtube.free_space(store, ch, mine)) if x)
         insights = learn(mine)
         store.kv_put(youtube.STATE, f"{ch['id']}:insights", insights)
         top = insights["top"]
