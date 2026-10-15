@@ -53,7 +53,7 @@ vision/
   server.py        FastAPI: dashboard, /ws, /api/*, OAuth + Fyers login callbacks
   ask.py           AskEngine: LLM tool-calling over master data; session memory 30 min
   voice/           TTS (kokoro | piper | macos), STT (mlx-whisper), WakeWord (openWakeWord), clone.py + indic_f5.py (Mani's cloned Tamil voice)
-  channels/telegram.py   briefs, alerts, reminders, notices, /commands (incl. `/say word = Tamil spelling`, `/say! ...` to force), approve/reject buttons
+  channels/telegram.py   briefs (grouped by area with emojis, a long report split into one line per part: `GROUPS`, `ICONS`, `PART_ICONS`, `report_lines`), alerts, reminders, notices, /commands (incl. `/say word = Tamil spelling`, `/say! ...` to force), approve/reject buttons
   services/        llm.py (LM Studio OpenAI-compatible + Anthropic + a hosted "writer" tier on Groq), oauth.py (Google/Microsoft),
                    reddit.py (official API, read-only), gdrive.py (Drive folder, read-only), bgm.py (music library from Openverse), gutenberg.py (public-domain story books), stock_video.py (Pexels/Pixabay footage), genmedia.py (AI footage provider slot),
                    mailcal.py (Gmail/GCal/Graph), traffic_api.py (TomTom), news.py (Google News RSS),

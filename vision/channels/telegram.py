@@ -38,6 +38,42 @@ HELP = (
 )
 
 
+GROUPS = [("📬 Inbox & day", ["email", "calendar"]), ("💰 Money", ["invest", "trading"]), ("🌍 World", ["world"]),
+          ("🎬 Creators", ["youtube", "ebooks", "web"]), ("💼 Career & life", ["jobs", "visa"])]
+NAMES = {"youtube": "YouTube Manager", "ebooks": "E-books Manager"}
+ICONS = {"email": "📧", "calendar": "📅", "invest": "💼", "trading": "📈", "world": "🌍", "youtube": "🎬", "ebooks": "📚", "web": "🌐",
+         "jobs": "🧑‍💻", "visa": "🛂"}
+PART_ICONS = [(r"°C", "🌤"), (r"in the air", "✈️"), (r"\bincidents?\b", "🚦"), (r"topics? updated|headlines", "📰"),
+              (r"^Portfolio", "💼"), (r"^Overall", "📊"), (r"^Top gainer", "🟢"), (r"^Top loser", "🔻"), (r"^(Fyers|Zerodha|Kite|WS )", "🏦"),
+              (r"^(NIFTY|SENSEX|NASDAQ|S&P|DOW|BTC)", "🌐"), (r"^Consider|^Idea", "💡"), (r"waiting on|sign-?in|log ?in", "⏳"),
+              (r"need you|waiting for your|awaiting", "👉"), (r"backed up|freed", "🗄"), (r"^latest", "🆕")]
+
+
+def _icon(part: str) -> str | None:
+    return next((e for pat, e in PART_ICONS if re.search(pat, part, re.I)), None)
+
+
+def report_lines(m, report: str) -> list[str]:
+    """One master's report: a short one on its own line; a long one as its name, then one line per part (" · "-separated).
+    A part with no icon of its own joins the line before it (\"9,725 in the air · showing 60 · 13 near home\" stays one line).
+    YouTube's channels (" | ") each get a line."""
+    icon, name = ICONS.get(m.id, "▪️"), esc(NAMES.get(m.id) or m.name.title())
+    flag = "⚠️ " if report.lower().startswith("blocked") else ""
+    if " | " in report:
+        return [f"{flag}{icon} <b>{name}</b>"] + [f"  ▸ {esc(ch.strip())}" for ch in report.split(" | ")]
+    parts = [p.strip() for p in report.split(" · ") if p.strip()]
+    if len(parts) <= 3 and len(report) <= 70:
+        return [f"{flag}{icon} <b>{name}</b>: {esc(report)}"]
+    out: list[str] = []
+    for p in parts:
+        e = _icon(p)
+        if out and (not e or e == out[-1][0]) and e not in ("🚦",):      # same kind (three brokers, three indices) or no icon: one line
+            out[-1][1] += " · " + p
+        else:
+            out.append([e or "•", p])
+    return [f"{flag}{icon} <b>{name}</b>"] + [f"  {e} {esc(t)}" for e, t in out]
+
+
 def esc(s: Any) -> str:
     return html.escape(str(s), quote=False)
 
@@ -121,19 +157,25 @@ class TelegramChannel:
         return await self.send(self.format_brief(kind))
 
     def format_brief(self, kind: str = "now") -> str:
+        """Grouped by area, one emoji per master, a long report split into short lines (Mani, 2026-10-15: "it just writes like a
+        paragraph... not readable")."""
         owner = esc(self.orch.cfg.vision.owner)
-        head = {"morning": f"☀️ <b>VISION · Good morning, {owner}</b>", "evening": f"🌙 <b>VISION · Evening wrap, {owner}</b>"}
-        lines = [head.get(kind, f"🛰 <b>VISION · Status for {owner}</b>")]
+        head = {"morning": f"☀️ <b>Good morning, {owner}</b>", "evening": f"🌙 <b>Evening wrap, {owner}</b>"}
+        lines = [head.get(kind, f"🛰 <b>VISION status, {owner}</b>")]
         reports = self.bus.state["reports"]
-        for m in self.orch.masters:
-            if not m.enabled:
-                continue
-            r = reports.get(m.id, "no report yet")
-            flag = "⚠️ " if r.lower().startswith("blocked") else ""
-            lines.append(f"{flag}<b>{esc(m.name.title())}</b>: {esc(r)}")
+        live = [m for m in self.orch.masters if m.enabled]
+        placed = set()
+        for title, ids in GROUPS + [("🧩 Other", [m.id for m in live])]:
+            block = []
+            for m in live:
+                if m.id in ids and m.id not in placed:
+                    placed.add(m.id)
+                    block += report_lines(m, reports.get(m.id, "no report yet"))
+            if block:
+                lines += ["", f"<b>{title}</b>", *block]
         pend = self.store.pending_approvals()
         if pend:
-            lines.append(f"\n🔴 <b>{len(pend)} need you:</b> " + esc(", ".join(a["title"] for a in pend[:5])))
+            lines += ["", f"🔴 <b>Needs you ({len(pend)})</b>"] + [f"  • {esc(a['title'])}" for a in pend[:6]] + ([f"  • …and {len(pend) - 6} more"] if len(pend) > 6 else [])
         return "\n".join(lines)
 
     # ---------- alerts from the bus ----------

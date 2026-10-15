@@ -88,8 +88,8 @@ def test_morning_brief_is_masters_only(tmp_path, monkeypatch):
     asyncio.run(orch.boot())
     asyncio.run(orch.brief("morning"))
     text = fake.sent()[-1]["text"]
-    assert text.startswith("☀️ <b>VISION · Good morning")
-    assert "⚠️ <b>World Watch</b>: Blocked" in text          # a failing blocking agent -> blocked, flagged
+    assert text.startswith("☀️ <b>Good morning")
+    assert "⚠️ 🌍 <b>World Watch</b>: Blocked" in text and "<b>🌍 World</b>" in text     # grouped by area; a blocked master is flagged
     assert "Summarizer" not in text                            # sub-agents never appear, only master reports
 
 
@@ -120,3 +120,17 @@ def test_alert_and_approval_buttons(tmp_path, monkeypatch):
     assert bus.state["approvals"] == []
     asyncio.run(tg.handle_update(tap))                         # second tap: already decided, no change
     assert ("answerCallbackQuery", {"callback_query_id": "cb1", "text": "Already decided"}) in fake.calls
+
+
+def test_a_long_report_is_split_into_short_lines_with_icons():
+    from types import SimpleNamespace as N
+    from vision.channels.telegram import report_lines
+    world = report_lines(N(id="world", name="WORLD WATCH"), "4 topics updated · Leamington 14°C cloudy · 9,725 in the air · showing 60 · 13 near home · "
+                         "Leamington 6 incidents, a closure on County Rd-20 · Windsor 174 incidents, major delay 27 min on I-94 E")
+    assert world == ["🌍 <b>World Watch</b>", "  📰 4 topics updated", "  🌤 Leamington 14°C cloudy", "  ✈️ 9,725 in the air · showing 60 · 13 near home",
+                     "  🚦 Leamington 6 incidents, a closure on County Rd-20", "  🚦 Windsor 174 incidents, major delay 27 min on I-94 E"]
+    assert report_lines(N(id="email", name="EMAIL MANAGER"), "23 new · 6 need you · 5 drafts") == ["📧 <b>Email Manager</b>: 23 new · 6 need you · 5 drafts"]
+    yt = report_lines(N(id="youtube", name="YOUTUBE MANAGER"), "Confessions Everywhere: 57 made | Mani Market Tamil: 2 public")
+    assert yt == ["🎬 <b>YouTube Manager</b>", "  ▸ Confessions Everywhere: 57 made", "  ▸ Mani Market Tamil: 2 public"]
+    money = report_lines(N(id="invest", name="INVESTMENTS"), "Portfolio +C$2 · Fyers −₹2,072 · WS TFSA +C$32 · NIFTY +1.21% · BTC +0.89% · Consider: a <b> & c")
+    assert money[2:] == ["  🏦 Fyers −₹2,072 · WS TFSA +C$32", "  🌐 NIFTY +1.21% · BTC +0.89%", "  💡 Consider: a &lt;b&gt; &amp; c"]
