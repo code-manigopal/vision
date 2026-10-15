@@ -1216,3 +1216,19 @@ def test_every_video_is_followed_not_just_the_first_fifty(tmp_path, monkeypatch)
 
     asyncio.run(youtube.AnalyticsManager(youtube.channel({}), client_factory=lambda: httpx.AsyncClient(transport=httpx.MockTransport(handler))).run({"store": store, "bus": EventBus()}))
     assert calls == [50, 50, 20] and all((v.get("stats") or {}).get("view") == 7 for v in store.kv_list(youtube.LOG, 0, 500))
+
+
+def test_vision_never_deletes_anything_on_youtube():
+    """Mani, 2026-10-15: "make sure we dont delete any in youtube channel". No code may send a DELETE to YouTube's API;
+    the monthly clean-up only trashes VISION's own Drive copies."""
+    from pathlib import Path
+    src = Path(youtube.__file__).resolve().parent.parent
+    bad = []
+    for f in src.rglob("*.py"):
+        text = f.read_text()
+        for n, line in enumerate(text.splitlines(), 1):
+            low = line.lower()
+            if ("youtube" in low or "videos" in low or "playlist" in low or "comment" in low) and re.search(r"\.delete\(|\"delete\"|method\s*=\s*['\"]delete", low):
+                bad.append(f"{f.name}:{n}: {line.strip()}")
+    assert bad == []
+    assert "googleapis.com/youtube" not in Path(gdrive.__file__).read_text()                 # the Drive clean-up only talks to Drive
