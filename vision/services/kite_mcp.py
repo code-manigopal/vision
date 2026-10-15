@@ -20,6 +20,13 @@ LOGIN_RE = re.compile(r"https://(?:kite\.zerodha\.com|kite\.trade)[^\s)\"'<>\]]+
 ANY_URL = re.compile(r"https://[^\s)\"'<>\]]+")
 
 
+def _cause(e: BaseException) -> str:
+    """The real error inside an ExceptionGroup ("unhandled errors in a TaskGroup" says nothing)."""
+    while getattr(e, "exceptions", None):
+        e = e.exceptions[0]
+    return f"{type(e).__name__}: {e}"
+
+
 class KiteLoginNeeded(Exception):
     def __init__(self, url: str | None):
         super().__init__("Zerodha login needed")
@@ -74,9 +81,11 @@ class KiteMCP:
         return open_session()
 
     async def _runner(self) -> None:
+        wait = 5
         while True:
             try:
                 async with self._factory(self.url) as session:
+                    wait = 5                      # connected: the next drop starts again at 5 s
                     while True:
                         tool, args, fut = await self._queue.get()
                         if fut.done():  # caller already gave up (timeout)
@@ -92,8 +101,10 @@ class KiteMCP:
             except asyncio.CancelledError:
                 raise
             except Exception as e:
-                log.warning("Kite MCP session dropped: %s (reconnecting)", e)
-                await asyncio.sleep(5)
+                # the server being down (a 502 seen 2026-10-14) is retried less and less often, up to every 10 minutes
+                log.warning("Kite MCP session dropped: %s (reconnecting in %d s)", _cause(e), wait)
+                await asyncio.sleep(wait)
+                wait = min(wait * 2, 600)
 
     async def call(self, tool: str, args: dict | None = None, timeout: float = 25) -> Any:
         if not self._task or self._task.done():
