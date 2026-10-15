@@ -282,7 +282,7 @@ def youtube(store):
                            ("Comments", stats.get("comment") if vid else None), ("Mood", v.get("mood")), ("Voice", v.get("voice")), ("Music", v.get("music")), ("Captions", v.get("caption")), ("Sound effects", v.get("sfx") if "sfx" in v else None), ("Quick", "yes" if v.get("quick") else None), ("Search tags", ", ".join((v.get("seo") or {}).get("tags") or [])),
                            ("Writer's title", (v.get("seo") or {}).get("title_before") if (v.get("seo") or {}).get("title_before") != v.get("title") else None),
                            ("Hashtags", " ".join(v.get("hashtags") or [])), *backed(v), *figures(v),
-                           ("Story from", "original (fiction)" if v.get("original") else f"{v['classic']['title']} by {v['classic']['author']}" if v.get("classic") else src.get("from")), ("Footage", "; ".join(v.get("credits") or []))),
+                           ("Story from", "original (fiction)" if v.get("original") else f"{v['classic']['title']} by {v['classic']['author']}" if v.get("classic") else src.get("from")), ("Footage", "; ".join(v.get("credits") or [])), ("Local files", "removed after upload" if v.get("local_removed") else None)),
                      _s(v.get("script")), _links(("Watch", v.get("url")), ("YouTube Studio", f"https://studio.youtube.com/video/{vid}/edit" if vid else None), ("Source", src.get("url"))))
     return stages, _each(_kv(store, "yt_videos", 500), one)
 

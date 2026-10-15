@@ -416,7 +416,10 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   `masters/shorts_edit.py` renders 1080x1920 with ffmpeg + Pillow (Homebrew ffmpeg has no subtitle filter, so captions are
   drawn as images); every segment must share one pixel format and colour range or the overlays reset mid-video.
   Output: `data/shorts/<channel>/<date-slug>/final.mp4`; log in kv `yt_videos` (source URL, script, screenplay, keywords,
-  credits), seen stories in kv `yt_seen`. Footage Generator is a provider slot (`services/genmedia.py`, `generator:` per
+  credits), seen stories in kv `yt_seen`. **Local copies (2026-10-15, the disk filled):** each Analytics Manager / Market Analytics run (`youtube.free_space`) deletes
+  the folder of a video a videos.list call found on YouTube after its upload (Mani: "check and make sure it is there", never the upload's answer
+  alone: `on_youtube`; status scheduled/public/private; record kept, `local_removed`, desk "Local files: removed after upload"),
+  and `build/ audio/ footage/` of an unrecorded run untouched for 2 days; ready/awaiting/review/stale/deleted keep theirs. `keep_local: true` keeps all. Footage Generator is a provider slot (`services/genmedia.py`, `generator:` per
   channel), off until a provider is named. Writing uses `llm.writer_model` on Groq (reasoning models need large max_tokens).
 - Mani Market Tamil (`masters/market_crew.py`, a second channel `manimarket` under the YouTube Manager: `crew: market` in the channel's options makes
   `youtube.build_agents` give it its own Director and crew instead of the Confessions one; the first Director is a `Lead` that adds a line for each other

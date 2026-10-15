@@ -53,7 +53,7 @@ CHANNEL = {"id": "confessions", "name": "Confessions Everywhere", "director": "C
            "classics": [], "classics_per_day": 1, "playlists": {}, "viewer_comments": False, "cta": "", "long": {},
            "motion": True, "caption_styles": True, "sfx": True, "sfx_volume": 0.35, "quick": {},
            "double_down": True, "double_down_after": 12, "explore": 0.15, "trends": True, "trend_region": "US",
-           "lessons": False, "lesson_shorts": False, "lesson_channels": [], "transcripts_per_day": 10, "lesson_model": "", "lesson_tamil_model": "qwen/qwen3.8-27b"}
+           "keep_local": False, "lessons": False, "lesson_shorts": False, "lesson_channels": [], "transcripts_per_day": 10, "lesson_model": "", "lesson_tamil_model": "qwen/qwen3.8-27b"}
 # Original stories: a premise is built from one of each, so no two start from the same place (20 x 12 x 10 x 10 combinations).
 THEMES = ["a family secret", "a betrayal by a close friend", "a lie that grew too big", "a second chance that felt undeserved", "a debt never repaid",
           "an inheritance dispute", "a workplace mistake hidden for years", "a kindness kept secret", "a marriage on autopilot", "jealousy of a sibling",
@@ -450,6 +450,45 @@ def save_record(store, ch: dict, job: dict) -> None:
                         **({"cue": b["cue"]} if b.get("cue") else {})} for b in job["beats"]],
         "credits": sorted({b["visual"]["credit"] for b in job["beats"] if b.get("visual")})})
     store.kv_put(SEEN, job["key"], {"state": "done"})
+
+
+ON_YOUTUBE = ("scheduled", "public", "private")      # with `on_youtube` (seen by videos.list after the upload), the local copy is not the only one
+SCRAPS = ("build", "audio", "footage")   # a run's working folders
+SCRAP_AFTER = 2 * 86400                  # a failed run's working folders are kept this long for a look
+
+
+def free_space(store, ch: dict, log: list[dict]) -> str:
+    """Deletes the local folder of every video a videos.list call has found on YouTube since its upload (Mani: "check and make sure it is
+    there... and then delete it from local"; never on the upload's answer alone; the log record stays), and the working
+    folders of a run that failed over two days ago. Only folders inside data/shorts/<channel>/; a video that is waiting, awaiting,
+    for review, stale or deleted on YouTube (then the local copy is the only one) keeps its files. `keep_local: true` keeps everything."""
+    root = (ROOT / "data" / "shorts" / ch["id"]).resolve()
+    if ch.get("keep_local") or not root.is_dir():
+        return ""
+    gone, used, freed = 0, set(), 0
+    for v in log:
+        if not v.get("file"):
+            continue
+        d = Path(v["file"]).resolve().parent
+        if d == root or not d.is_relative_to(root) or d.name.startswith("_"):
+            continue
+        used.add(d)
+        if v.get("status") in ON_YOUTUBE and v.get("video_id") and v.get("on_youtube", 0) >= (v.get("uploaded") or 0.1) and not v.get("local_removed"):
+            if d.is_dir():
+                freed += sum(f.stat().st_size for f in d.rglob("*") if f.is_file())
+                shutil.rmtree(d, ignore_errors=True)
+                gone += 1
+            v["local_removed"] = time.time()
+            store.kv_put(LOG, v["_key"], {k: x for k, x in v.items() if not k.startswith("_")})
+    for d in root.iterdir():                   # a failed run: no record points at it and nothing in it has moved for two days
+        if not d.is_dir() or d.name.startswith("_") or d in used:
+            continue
+        parts = [d / p for p in SCRAPS if (d / p).is_dir()]
+        if parts and time.time() - max(f.stat().st_mtime for f in [d, *d.rglob("*")]) > SCRAP_AFTER:
+            for p in parts:
+                freed += sum(f.stat().st_size for f in p.rglob("*") if f.is_file())
+                shutil.rmtree(p, ignore_errors=True)
+    return f"{freed / 1e6:.0f} MB freed" + (f" ({gone} posted videos' local copies)" if gone else "") if freed else ""
 
 
 def next_slot(store, ch: dict, now: float | None = None, fmt: str = "short") -> float:
@@ -1621,7 +1660,7 @@ class AnalyticsManager(Crew):
                 v["status"] = "scheduled"
             if item:
                 v["stats"] = {k: int(item.get("statistics", {}).get(f"{k}Count", 0)) for k in ("view", "like", "comment")}
-                v["checked"] = time.time()
+                v["checked"] = v["on_youtube"] = time.time()      # seen by videos.list: only this lets free_space delete the local copy
             if invite and v["status"] == "public" and not v.get("cta_done"):     # it has gone public: now it can take the channel's invitation
                 async with self.client() as c2:
                     v["cta_done"] = await post_invitation(c2, {"Authorization": f"Bearer {token}"}, self.ch, v["video_id"])
@@ -1633,8 +1672,10 @@ class AnalyticsManager(Crew):
         ch = self.ch
         log = [v for v in ctx["store"].kv_list(LOG) if v.get("channel") == ch["id"]]
         if not log:
+            free_space(ctx["store"], ch, [])
             return AgentResult("done", "LOGGED", f"{ch['name']}: no Shorts made yet", {"channel": ch["id"], "made": 0})
         await self._refresh(ctx, log)
+        freed = free_space(ctx["store"], ch, log)
         for v in log:                              # notices live in memory: put the reminder back after a restart
             if v["status"] == "unlisted" and v.get("video_id"):
                 review_notice(ctx["bus"], ch, v)
@@ -1653,6 +1694,8 @@ class AnalyticsManager(Crew):
             parts.append(f"{n['public']} public with {views:,} views")
         if n["deleted"]:
             parts.append(f"{n['deleted']} deleted")
+        if freed:
+            parts.append(freed)
         seen = [v for v in log if v["status"] == "public" and (v.get("stats") or {}).get("view", 0) > 0]      # what the channel's own results teach
         by_kind: dict[str, list[int]] = {}
         for v in seen:

@@ -619,7 +619,7 @@ def test_long_video_is_written_in_chapters_made_wide_given_a_cover_and_queued_ap
     monkeypatch.setattr(oauth, "access_token", token)
     monkeypatch.setattr(oauth, "granted", lambda account: "https://www.googleapis.com/auth/youtube.force-ssl")
     yt, llm = {}, WriterLLM(story_words=45)
-    m = make(tmp_path, monkeypatch, media, [], llm, yt, shorts_per_day=0, classics=[2776], privacy="scheduled", publish_times=["06:00"],
+    m = make(tmp_path, monkeypatch, media, [], llm, yt, shorts_per_day=0, keep_local=True, classics=[2776], privacy="scheduled", publish_times=["06:00"],
              long={"enabled": True, "minutes": [1, 1], "min_source_words": 300, "create_after": "", "publish_time": "20:00", "shot_seconds": 6})
     monkeypatch.delenv("REDDIT_CLIENT_ID")
     bus, store = EventBus(), Store(tmp_path / "t.db")
@@ -999,3 +999,70 @@ def test_analytics_compares_quick_and_regular_shorts(tmp_path, monkeypatch, medi
     row("z", 0)
     asyncio.run(analytics.run({"store": store, "bus": EventBus()}))
     assert "views_by_length" not in store.kv_get(youtube.STATE, "confessions:insights")      # no views, no data
+
+
+def test_analytics_removes_the_local_copy_of_a_video_youtube_has_and_keeps_the_rest(tmp_path, monkeypatch):
+    """2026-10-15: the disk filled up with posted Shorts. A video confirmed on YouTube loses its local folder, its record stays."""
+    import os
+    import time as _t
+    from vision import desk
+    monkeypatch.setattr(youtube, "ROOT", tmp_path)
+
+    async def token(account, provider, client=None):
+        return "tok"
+
+    monkeypatch.setattr(oauth, "access_token", token)
+    root = tmp_path / "data" / "shorts" / "confessions"
+    store = Store(tmp_path / "t.db")
+
+    def video(key, status, vid=None, **kw):
+        d = root / key
+        (d / "build").mkdir(parents=True)
+        (d / "final.mp4").write_bytes(b"x" * 1000)
+        (d / "thumb.jpg").write_bytes(b"x")
+        store.kv_put(youtube.LOG, key, {"channel": "confessions", "status": status, "title": key, "seconds": 20, "made": 1, "file": str(d / "final.mp4"),
+                                         **({"video_id": vid} if vid else {}), **kw})
+        return d
+
+    pub, sched, prv, gone = video("pub", "public", "v1"), video("sched", "scheduled", "v2"), video("prv", "private", "v3"), video("gone", "public", "v4")
+    keep = {k: video(k, k, f"x-{k}" if k in ("review", "stale") else None) for k in ("ready", "awaiting", "review", "stale")}
+    outside = tmp_path / "elsewhere"
+    outside.mkdir()
+    (outside / "final.mp4").write_bytes(b"x")
+    store.kv_put(youtube.LOG, "out", {"channel": "confessions", "status": "public", "video_id": "v5", "title": "out", "seconds": 1, "made": 1, "file": str(outside / "final.mp4")})
+    failed_old, failed_new = root / "20261001-failed", root / "20261015-running"
+    for d in (failed_old, failed_new):
+        for p in ("audio", "footage", "build"):
+            (d / p).mkdir(parents=True)
+            (d / p / "a.bin").write_bytes(b"x" * 500)
+    (failed_old / "notes.txt").write_text("kept")
+    old = _t.time() - 3 * 86400
+    for f in [failed_old, *failed_old.rglob("*")]:
+        os.utime(f, (old, old))
+    items = {"v1": "public", "v2": "private", "v3": "private", "v5": "public"}            # v4 was deleted on YouTube
+
+    def handler(req):
+        ids = req.url.params["id"].split(",")
+        return httpx.Response(200, json={"items": [{"id": i, "status": {"privacyStatus": items[i], **({"publishAt": "2030-01-01T00:00:00Z"} if i == "v2" else {})},
+                                                     "statistics": {"viewCount": "3"}} for i in ids if i in items]})
+
+    analytics = youtube.AnalyticsManager(youtube.channel({}), client_factory=lambda: httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+    res = asyncio.run(analytics.run({"store": store, "bus": EventBus()}))
+    assert not pub.exists() and not sched.exists() and not prv.exists() and "freed (3 posted videos' local copies)" in res.summary
+    recs = {v["_key"]: v for v in store.kv_list(youtube.LOG)}
+    assert recs["pub"]["local_removed"] and recs["sched"]["status"] == "scheduled" and recs["sched"]["local_removed"] and recs["pub"]["title"] == "pub"
+    assert gone.exists() and recs["gone"]["status"] == "deleted"           # deleted on YouTube: the local copy is the only one
+    assert all(d.exists() for d in keep.values()) and (outside / "final.mp4").exists()
+    assert not any((failed_old / p).exists() for p in ("audio", "footage", "build")) and (failed_old / "notes.txt").exists()
+    assert all((failed_new / p).exists() for p in ("audio", "footage", "build"))           # a run still going (or failed today) is left alone
+    card = next(i for i in desk.youtube(store)[1] if i["title"] == "pub")
+    assert ["Local files", "removed after upload"] in card["rows"]
+
+    unseen = video("unseen", "scheduled", "v6", uploaded=_t.time())                         # scheduled by the approval's answer, not yet seen by videos.list
+    youtube.free_space(store, youtube.channel({}), [{**store.kv_get(youtube.LOG, "unseen"), "_key": "unseen"}])
+    assert unseen.exists()
+    youtube.free_space(store, youtube.channel({}), [{**store.kv_get(youtube.LOG, "unseen"), "_key": "unseen", "on_youtube": _t.time() + 1}])
+    assert not unseen.exists()
+    video("kept", "public", "v1")                                                          # keep_local: the old behaviour
+    asyncio.run(youtube.AnalyticsManager(youtube.channel({"keep_local": True}), client_factory=lambda: httpx.AsyncClient(transport=httpx.MockTransport(handler))).run({"store": store, "bus": EventBus()}))
+    assert (root / "kept" / "final.mp4").exists()

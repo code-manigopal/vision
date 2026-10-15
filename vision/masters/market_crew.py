@@ -886,10 +886,11 @@ class MarketAnalytics(youtube.AnalyticsManager):
         if mine:
             await self._refresh(ctx, mine)          # an awaiting video is left alone: it is not in the statuses followed until it is scheduled
         mine = [v for v in store.kv_list(youtube.LOG) if v.get("channel") == ch["id"]]
+        freed = youtube.free_space(store, ch, mine)
         insights = learn(mine)
         store.kv_put(youtube.STATE, f"{ch['id']}:insights", insights)
         top = insights["top"]
-        line = youtube.peer_line(store, ch) + (f"; best kind: {top['kind']}, {top['per_day']:g} views a day" if top else "")
+        line = youtube.peer_line(store, ch) + (f"; best kind: {top['kind']}, {top['per_day']:g} views a day" if top else "") + (f"; {freed}" if freed else "")
         return AgentResult("done", "LOGGED", line, {"channel": ch["id"], "made": len(mine), "awaiting": sum(v.get("status") == "awaiting" for v in mine), "insights": insights,
                                                     "videos": [{k: v.get(k) for k in ("title", "status", "url", "seconds", "stats", "source")} for v in mine[:20]]})
 
