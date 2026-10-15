@@ -104,7 +104,7 @@ Tests: mock HTTP with `httpx.MockTransport`; use `FakeLLM` from tests/test_phase
 · `GET/POST /api/visa/accounts`, `POST /api/visa/accounts/{id}` (`{cities, booked, password?}` or `{action: signin|pause|resume|check|forget}`), `DELETE /api/visa/accounts/{id}` (a password is never returned; a request from another origin is refused)
 · `POST /api/tts {text, voice?}` → wav · `GET /api/voices` (Kokoro's English voices) · `POST /api/stt` (raw audio body) → `{text}` · `GET /api/schedule` (fire times in the next 24 h of the fixed-time jobs only: master `run_at` runs and briefs, `{at, local, kind, master, label, channel, zone_local?}`; `{standby: true, items: []}` in standby) · `GET /api/traffic?city=` · `GET /api/weather/grid` (globe weather, ~100 points, cached 1 h)
 · `GET /api/voice/fix?word=` → `{word, source: fix|table|learned|none, spelling}` · `POST /api/voice/fix {word, spelling, force?}` (Mani's pronunciation fixes; local origin only; 400 with the reason when refused)
-· `/auth/{google|microsoft|youtube}/login?account=` + `/callback` · `/auth/fyers/login` + `/callback` · `WS /ws`
+· `/auth/{google|microsoft|youtube|gdrive}/login?account=` + `/callback` · `/auth/fyers/login` + `/callback` · `WS /ws`
 
 WebSocket events: `snapshot, agent, master_report(+data), boot, log, notice, notice_clear, approval,
 approval_decided, telegram, brief, reminder, wake, system, power`.
@@ -311,6 +311,13 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   the cover art, rebuild and ask again (an older approval is answered "outdated"). Thresholds were calibrated on Mani's own Gemini book
   (`~/Downloads/Animals_Thematic_Coloring_Book_A4.pdf`, his quality bar). Gemini's image API is not free; Pollinations' terms unclear; the
   Gemini app is by hand only. Not built: edutainment/activity pages, story books, KDP sales CSV, dashboard Redraw button.
+- **Video backups to Drive (Mani, 2026-10-15: "this is for backup... no more local saves"):** each channel's `backup_folder`
+  (`confessions_everywhere_yt`, `mani_market_yt`) in kamanikagopal@gmail.com's Drive, sub-folders `Shorts` / `Videos`, files named
+  `youtube.backup_name` ("2026-10-15 <title without hashtags> [<video id>].mp4" + " cover.jpg"). `youtube.backup` runs in the Analytics
+  Manager / Market Analytics after videos.list has confirmed the video; each file is uploaded resumable (`gdrive.upload`) and checked by size
+  and MD5; only then may `free_space` delete the local folder. Own sign-in `drive-backup`, oauth provider `gdrive`, scope `drive.file` (it sees
+  only what VISION created, so it makes its own folders of those names; the two Mani made by hand are not used). No sign-in, a full Drive
+  (notice `gdrive-full`) or a mismatch = the local files stay and it tries again next run. VISION never deletes anything in Drive.
 - YouTube Manager (`masters/youtube.py`, took the Film Studio slot) has three levels: master → one Director per channel
   (`options.channels`) → that channel's crew. `Director` (agents.py) runs its crew like a master runs sub-agents; crew
   agent events carry `director`. Crew for Confessions Everywhere: Story Scout → Story Writer → Screenplay Writer →

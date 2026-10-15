@@ -15,7 +15,7 @@ from vision.agents import AgentResult, Director, Master, Stage, SubAgent
 from vision.bus import EventBus, Store
 from vision.config import Config, LLMConfig
 from vision.masters import shorts_edit, youtube
-from vision.services import bgm, fonts, genmedia, gutenberg, oauth, reddit, sfx, stock_video
+from vision.services import bgm, fonts, gdrive, genmedia, gutenberg, oauth, reddit, sfx, stock_video
 from vision.services.llm import LLM
 
 FFMPEG = pytest.mark.skipif(not shutil.which("ffmpeg"), reason="ffmpeg not installed")
@@ -1066,3 +1066,87 @@ def test_analytics_removes_the_local_copy_of_a_video_youtube_has_and_keeps_the_r
     video("kept", "public", "v1")                                                          # keep_local: the old behaviour
     asyncio.run(youtube.AnalyticsManager(youtube.channel({"keep_local": True}), client_factory=lambda: httpx.AsyncClient(transport=httpx.MockTransport(handler))).run({"store": store, "bus": EventBus()}))
     assert (root / "kept" / "final.mp4").exists()
+
+
+def test_backup_name_is_the_day_the_title_and_the_youtube_id():
+    import time as _t
+    t = _t.mktime((2026, 10, 15, 9, 0, 0, 0, 0, -1))
+    assert youtube.backup_name({"title": "Pre-Market Update 15 Oct | US/Asia: GIFT Nifty? #Shorts", "video_id": "abc", "uploaded": t}) == \
+        "2026-10-15 Pre-Market Update 15 Oct US Asia GIFT Nifty [abc]"
+
+
+def test_a_posted_video_is_copied_to_drive_checked_and_only_then_removed_from_the_mac(tmp_path, monkeypatch):
+    """Mani, 2026-10-15: "upload the videos in these drives... this is for backup... no more local saves"."""
+    import hashlib
+    import json as _json
+    monkeypatch.setattr(youtube, "ROOT", tmp_path)
+    signed = {"on": False}
+
+    async def token(account, provider, client=None):
+        if provider == "gdrive" and not signed["on"]:
+            raise oauth.AuthNeeded(account, provider)
+        return "tok"
+
+    monkeypatch.setattr(oauth, "access_token", token)
+    root = tmp_path / "data" / "shorts" / "confessions"
+    store = Store(tmp_path / "t.db")
+
+    def video(key, vid, fmt="short"):
+        d = root / key
+        d.mkdir(parents=True)
+        (d / "final.mp4").write_bytes(key.encode() * 300)
+        (d / "thumb.jpg").write_bytes(b"jpg" + key.encode())
+        store.kv_put(youtube.LOG, key, {"channel": "confessions", "status": "public", "title": f"{key} #Shorts", "seconds": 20, "made": 1, "uploaded": 1,
+                                         "file": str(d / "final.mp4"), "thumb": str(d / "thumb.jpg"), "video_id": vid, "format": fmt})
+        return d
+
+    short, long_ = video("short1", "v1"), video("long1", "v2", "long")
+    drive = {"folders": {}, "files": {}, "corrupt": False}
+
+    def handler(req):
+        u = str(req.url)
+        if "youtube/v3/videos" in u:
+            return httpx.Response(200, json={"items": [{"id": i, "status": {"privacyStatus": "public"}, "statistics": {}} for i in req.url.params["id"].split(",")]})
+        if req.method == "GET" and u.startswith(gdrive.API + "?"):
+            q = req.url.params["q"]
+            name = q.split("name = '")[1].split("'")[0]
+            hits = [{"id": k, **v} for k, v in {**drive["folders"], **drive["files"]}.items() if v["name"] == name]
+            return httpx.Response(200, json={"files": hits})
+        if req.method == "POST" and u.startswith(gdrive.API):
+            meta = _json.loads(req.content)
+            fid = f"f{len(drive['folders'])}"
+            drive["folders"][fid] = {"name": meta["name"], "parents": meta.get("parents")}
+            return httpx.Response(200, json={"id": fid})
+        if req.method == "POST" and u.startswith(gdrive.UPLOAD):
+            meta = _json.loads(req.content)
+            return httpx.Response(200, headers={"location": "https://upload.test/s?" + meta["name"]}, json={})
+        if req.method == "PUT" and u.startswith("https://upload.test/"):
+            body = req.read()
+            fid = f"d{len(drive['files'])}"
+            drive["files"][fid] = {"name": __import__("urllib.parse").parse.unquote(req.url.query.decode()), "size": str(len(body)),
+                                   "md5Checksum": "bad" if drive["corrupt"] else hashlib.md5(body).hexdigest()}
+            return httpx.Response(200, json={"id": fid})
+        if req.method == "GET" and u.startswith(gdrive.API + "/"):
+            f = drive["files"][req.url.path.rsplit("/", 1)[1]]
+            return httpx.Response(200, json={"size": f["size"], "md5Checksum": f["md5Checksum"]})
+        return httpx.Response(404)
+
+    ch = youtube.channel({"backup_folder": "confessions_everywhere_yt"})
+    run = lambda: asyncio.run(youtube.AnalyticsManager(ch, client_factory=lambda: httpx.AsyncClient(transport=httpx.MockTransport(handler))).run({"store": store, "bus": bus}))
+    bus = EventBus()
+    res = run()                                                                            # no Drive sign-in yet: nothing leaves the Mac
+    assert short.exists() and long_.exists() and "gdrive-backup" in bus.state["notices"] and "sign-in" in res.summary
+    signed["on"] = True
+    drive["corrupt"] = True                                                                # Drive's copy doesn't match: kept, tried again later
+    res = run()
+    assert short.exists() and long_.exists() and "does not match" in res.summary
+    drive.update(corrupt=False, files={})
+    res = run()
+    assert not short.exists() and not long_.exists() and "2 backed up to Drive" in res.summary and "gdrive-backup" not in bus.state["notices"]
+    names = sorted(v["name"] for v in drive["files"].values())
+    day = __import__("time").strftime("%Y-%m-%d", __import__("time").localtime(1))
+    assert names == [f"{day} long1 [v2] cover.jpg", f"{day} long1 [v2].mp4", f"{day} short1 [v1] cover.jpg", f"{day} short1 [v1].mp4"]
+    folders = {v["name"] for v in drive["folders"].values()}
+    assert folders == {"confessions_everywhere_yt", "Shorts", "Videos"}
+    recs = {v["_key"]: v for v in store.kv_list(youtube.LOG)}
+    assert recs["long1"]["drive"]["folder"] == "confessions_everywhere_yt/Videos" and recs["short1"]["drive"]["folder"] == "confessions_everywhere_yt/Shorts"

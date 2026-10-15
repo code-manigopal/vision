@@ -53,7 +53,7 @@ CHANNEL = {"id": "confessions", "name": "Confessions Everywhere", "director": "C
            "classics": [], "classics_per_day": 1, "playlists": {}, "viewer_comments": False, "cta": "", "long": {},
            "motion": True, "caption_styles": True, "sfx": True, "sfx_volume": 0.35, "quick": {},
            "double_down": True, "double_down_after": 12, "explore": 0.15, "trends": True, "trend_region": "US",
-           "keep_local": False, "lessons": False, "lesson_shorts": False, "lesson_channels": [], "transcripts_per_day": 10, "lesson_model": "", "lesson_tamil_model": "qwen/qwen3.8-27b"}
+           "keep_local": False, "backup_folder": "", "lessons": False, "lesson_shorts": False, "lesson_channels": [], "transcripts_per_day": 10, "lesson_model": "", "lesson_tamil_model": "qwen/qwen3.8-27b"}
 # Original stories: a premise is built from one of each, so no two start from the same place (20 x 12 x 10 x 10 combinations).
 THEMES = ["a family secret", "a betrayal by a close friend", "a lie that grew too big", "a second chance that felt undeserved", "a debt never repaid",
           "an inheritance dispute", "a workplace mistake hidden for years", "a kindness kept secret", "a marriage on autopilot", "jealousy of a sibling",
@@ -457,6 +457,61 @@ SCRAPS = ("build", "audio", "footage")   # a run's working folders
 SCRAP_AFTER = 2 * 86400                  # a failed run's working folders are kept this long for a look
 
 
+BACKUP_ACCOUNT = "drive-backup"          # the Google sign-in the backups go to (oauth provider "gdrive"): /auth/gdrive/login?account=drive-backup
+
+
+def backup_name(v: dict) -> str:
+    """"2026-10-15 The Devotee by Rabindranath Tagore [abc123]": the day it went up, the title without hashtags, the YouTube id."""
+    day = time.strftime("%Y-%m-%d", time.localtime(v.get("uploaded") or v.get("made") or time.time()))
+    title = re.sub(r"#\w+", "", v.get("title") or "")
+    title = re.sub(r"\s+", " ", re.sub(r'[<>:"/\\|?*\x00-\x1f]', " ", title)).strip(" .-|")[:90].strip()
+    return f"{day} {title} [{v['video_id']}]"
+
+
+async def backup(ctx: dict, ch: dict, log: list[dict], client) -> str:
+    """Copies each video YouTube has confirmed (see free_space) to Drive before its local copy goes: `backup_folder`/Shorts or
+    /Videos in the backup sign-in's Drive, the video and its cover, each checked by size and MD5 (Mani, 2026-10-15: "this is for
+    backup... no more local saves"). No sign-in, a full Drive or an error = the local files stay and it is tried again next run."""
+    if not ch.get("backup_folder") or ch.get("keep_local"):
+        return ""
+    todo = [v for v in log if v.get("status") in ON_YOUTUBE and v.get("video_id") and v.get("on_youtube", 0) >= (v.get("uploaded") or 0.1)
+            and not v.get("drive") and not v.get("local_removed") and v.get("file") and Path(v["file"]).is_file()]
+    if not todo:
+        return ""
+    store, bus = ctx["store"], ctx["bus"]
+    try:
+        token = await oauth.access_token(BACKUP_ACCOUNT, "gdrive")
+    except oauth.AuthNeeded:
+        bus.notice("gdrive-backup", "Sign in to Google Drive once so posted videos are backed up there (then removed from the Mac)",
+                   f"http://127.0.0.1:{ctx['cfg'].vision.port if ctx.get('cfg') else 8765}/auth/gdrive/login?account={BACKUP_ACCOUNT}")
+        return "Drive backup waits for a sign-in"
+    bus.clear_notice("gdrive-backup")
+    done = 0
+    try:
+        async with client() as c:
+            top = await gdrive.ensure_folder(c, token, ch["backup_folder"])
+            subs: dict[str, str] = {}
+            for v in todo:
+                sub_ = "Videos" if v.get("format") == "long" else "Shorts"
+                if sub_ not in subs:
+                    subs[sub_] = await gdrive.ensure_folder(c, token, sub_, top)
+                name, f = backup_name(v), Path(v["file"])
+                saved = {"video": await gdrive.upload(c, token, f, name + f.suffix, subs[sub_], "video/mp4"), "folder": f"{ch['backup_folder']}/{sub_}"}
+                thumb = Path(v.get("thumb") or "")
+                if v.get("thumb") and thumb.is_file():
+                    saved["cover"] = await gdrive.upload(c, token, thumb, name + " cover" + thumb.suffix, subs[sub_], "image/jpeg")
+                v["drive"] = {**saved, "at": time.time()}
+                store.kv_put(LOG, v["_key"], {k: x for k, x in v.items() if not k.startswith("_")})
+                done += 1
+    except gdrive.DriveFull:
+        bus.notice("gdrive-full", f"Google Drive is full: {ch['name']}'s videos stay on the Mac until there is room", None)
+        return f"Drive is full; {done} backed up"
+    except (gdrive.DriveError, httpx.HTTPError) as e:
+        return f"Drive backup stopped: {e}"[:160] + (f"; {done} backed up" if done else "")
+    bus.clear_notice("gdrive-full")
+    return f"{done} backed up to Drive" if done else ""
+
+
 def free_space(store, ch: dict, log: list[dict]) -> str:
     """Deletes the local folder of every video a videos.list call has found on YouTube since its upload (Mani: "check and make sure it is
     there... and then delete it from local"; never on the upload's answer alone; the log record stays), and the working
@@ -473,6 +528,8 @@ def free_space(store, ch: dict, log: list[dict]) -> str:
         if d == root or not d.is_relative_to(root) or d.name.startswith("_"):
             continue
         used.add(d)
+        if ch.get("backup_folder") and not v.get("drive"):
+            continue                           # backups are on: the local copy goes only after Drive holds a checked copy
         if v.get("status") in ON_YOUTUBE and v.get("video_id") and v.get("on_youtube", 0) >= (v.get("uploaded") or 0.1) and not v.get("local_removed"):
             if d.is_dir():
                 freed += sum(f.stat().st_size for f in d.rglob("*") if f.is_file())
@@ -1675,7 +1732,9 @@ class AnalyticsManager(Crew):
             free_space(ctx["store"], ch, [])
             return AgentResult("done", "LOGGED", f"{ch['name']}: no Shorts made yet", {"channel": ch["id"], "made": 0})
         await self._refresh(ctx, log)
-        freed = free_space(ctx["store"], ch, log)
+        saved = await backup(ctx, ch, [v for v in ctx["store"].kv_list(LOG) if v.get("channel") == ch["id"]], self.client)
+        log = [v for v in ctx["store"].kv_list(LOG) if v.get("channel") == ch["id"]]
+        freed = "; ".join(x for x in (saved, free_space(ctx["store"], ch, log)) if x)
         for v in log:                              # notices live in memory: put the reminder back after a restart
             if v["status"] == "unlisted" and v.get("video_id"):
                 review_notice(ctx["bus"], ch, v)

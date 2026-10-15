@@ -46,6 +46,13 @@ PROVIDERS = {
         "id": "GOOGLE_CLIENT_ID", "secret": "GOOGLE_CLIENT_SECRET",
         "extra": {"access_type": "offline", "prompt": "consent"},
     },
+    "gdrive": {       # the same Google app; only the files VISION itself creates in that Drive (the video backups), nothing else there
+        "auth": "https://accounts.google.com/o/oauth2/v2/auth",
+        "token": "https://oauth2.googleapis.com/token",
+        "scopes": ["https://www.googleapis.com/auth/drive.file", "openid", "email"],
+        "id": "GOOGLE_CLIENT_ID", "secret": "GOOGLE_CLIENT_SECRET",
+        "extra": {"access_type": "offline", "prompt": "consent"},
+    },
     "microsoft": {
         "auth": "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
         "token": "https://login.microsoftonline.com/common/oauth2/v2.0/token",
