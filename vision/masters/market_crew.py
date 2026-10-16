@@ -91,6 +91,14 @@ def report_window(now: datetime) -> str:
     return next((k for k, (after, before) in REPORT_WINDOWS.items() if in_window(after, before, hm)), "")
 
 
+def night_began(after: str, now: float | None = None) -> float:
+    """When tonight's making window opened: the last `after` o'clock (HH:MM, the Mac's clock) at or before now."""
+    t = datetime.fromtimestamp(time.time() if now is None else now)
+    h, m = map(int, after.split(":"))
+    start = t.replace(hour=h, minute=m, second=0, microsecond=0)
+    return (start - timedelta(days=1) if start > t else start).timestamp()
+
+
 def in_window(after: str, before: str, now: str) -> bool:
     """Is `now` (HH:MM) between the two hours? The window may run through midnight (23:00 to 04:00)."""
     return (now >= after or now < before) if after > before else after <= now < before
@@ -295,8 +303,10 @@ class ResultsScout(MCrew):
         if waiting >= BACKLOG and not force:
             return AgentResult("idle", "BACKLOG", f"{waiting} finished videos are waiting to upload or for your approval; no new ones until they clear")
         per = int(ch.get("per_run") or 1)
-        # a review upload (made by hand for Mani to watch) is not the night's video: the TCS review made at 16:07 on 2026-10-14 blocked that night
-        if not manual and sum((v.get("made") or 0) > time.time() - 12 * 3600 and not v.get("review") for v in mine) >= per:
+        # only what was made since tonight's window opened counts: a review upload (the TCS review at 16:07 on 2026-10-14) or a video made by hand
+        # by day (PI Industries at 14:19 on 2026-10-16, for the next release) is not the night's video; "the last 12 hours" blocked both nights
+        since = night_began(after)
+        if not manual and sum((v.get("made") or 0) >= since and not v.get("review") for v in mine) >= per:
             return AgentResult("idle", "DONE TONIGHT", f"{per} video made already tonight")
         kind, day = release_kind(store, ch)
         kind = force.get("kind") or kind

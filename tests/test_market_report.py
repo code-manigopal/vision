@@ -652,10 +652,11 @@ def test_a_closed_session_whose_daily_bar_is_still_empty_takes_the_regular_marke
     assert m["day"].isoformat() == "2026-10-14" and m["last"] == 67744.29 and m["prev_close"] == 67777.5 and m["session"] == "closed"
 
 
-def test_a_review_video_made_by_day_does_not_count_as_the_nights_video(tmp_path, monkeypatch):
+def test_a_video_made_by_day_does_not_count_as_the_nights_video(tmp_path, monkeypatch):
     ch = youtube.channel(RAW)
     store = Store(tmp_path / "t.db")
     monkeypatch.setattr(market_crew, "now_hm", lambda: "23:00")
+    monkeypatch.setattr(market_crew, "night_began", lambda after: time.time() - 3600)      # the window opened an hour ago
     monkeypatch.setattr(market_crew, "report_window", lambda now: "")
 
     class Next(Exception):
@@ -669,7 +670,16 @@ def test_a_review_video_made_by_day_does_not_count_as_the_nights_video(tmp_path,
     ctx = {"store": store, "bus": EventBus(), "reason": "schedule", "now": datetime(2026, 10, 14, 23, 0, tzinfo=ZoneInfo("America/Toronto"))}
     base = {"channel": ch["id"], "format": "long", "kind": "result", "made": time.time() - 7 * 3600}
     store.kv_put(youtube.LOG, "tcs", {**base, "status": "review", "review": True})         # Mani's review video from the afternoon
+    store.kv_put(youtube.LOG, "piind", {**base, "status": "scheduled"})                    # a real video made by hand that afternoon, for the next release
     with pytest.raises(Next):
         asyncio.run(scout.pick(ctx))
-    store.kv_put(youtube.LOG, "night", {**base, "status": "scheduled"})                    # a real video already made tonight
+    store.kv_put(youtube.LOG, "night", {**base, "status": "scheduled", "made": time.time() - 600})      # a video already made tonight
     assert asyncio.run(scout.pick(ctx)).label == "DONE TONIGHT"
+
+
+def test_the_night_begins_at_the_last_window_opening():
+    at = lambda *a: datetime(2026, 10, 16, *a).timestamp()                                 # noqa: E731
+    assert market_crew.night_began("23:00", at(23, 30)) == at(23, 0)
+    assert market_crew.night_began("23:00", at(23, 0)) == at(23, 0)
+    assert market_crew.night_began("23:00", at(1, 0)) == datetime(2026, 10, 15, 23, 0).timestamp()      # the 01:00 retry belongs to the night before
+    assert market_crew.night_began("23:00", at(14, 19)) == datetime(2026, 10, 15, 23, 0).timestamp()
