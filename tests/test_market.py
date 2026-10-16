@@ -367,6 +367,17 @@ def test_the_analysis_slides_and_lines_follow_the_ratios_and_say_the_price_date_
     assert market.analysis_deck(f, fundamentals.ratios(f))[-2]["title"] == "Balance Sheet 3/3" and "Valuation" not in " ".join(s.get("title", "") for s in market.analysis_deck(f, fundamentals.ratios(f)))
 
 
+def test_asset_turnover_is_said_as_two_lines_the_meaning_then_the_figure():
+    """As one line the cloned voice garbled it (NH and PIIND, 2026-10-15); the words are unchanged, only split."""
+    rows, deck, said = analysis(fund())
+    at = next(i for i, ln in enumerate(said) if ln["say"] == market.MEANS["turnover"])
+    meaning, figure = said[at], said[at + 1]
+    assert meaning["en"] == market.MEANS_EN["turnover"] and (meaning["slide"], meaning["show"]) == (figure["slide"], figure["show"])
+    assert figure["say"].startswith("Asset turnover ") and market.MEANS["turnover"] not in figure["say"] and "tone" in figure
+    assert not market.numbers(meaning["say"]) and market.numbers(figure["say"]) == market.numbers(figure["en"])
+    assert sum(ln["say"].count("Asset turnover-னா") for ln in said) == 1
+
+
 def test_every_english_word_the_voice_is_given_is_in_the_sounds_table():
     allowed = {"Sample"}                                      # a company's own name is not in the table
     for f in (fund(), bank_fund()):

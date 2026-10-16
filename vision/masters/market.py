@@ -595,6 +595,7 @@ NOTES = [("interest income less finance costs", "வட்டி வருமா
          ]
 DATED = [(r"price on ([\d\w ]{11}) x shares", r"\1 price x share எண்ணிக்கை"), (r"as (?:on|of) ([\d\w ]{11})", r"\1 நிலவரம்"),
          (r"close on ([\d\w ]{11})", r"\1 close"), (r"year to ([\d\w ]{11})", r"\1 வரை")]
+SPLIT = {"turnover"}       # said as two lines, the meaning then the figure: as one line the cloned voice garbled it (NH and PIIND, 2026-10-15)
 DEFINED = {"ttm_revenue", "opm", "npm", "rev_growth", "profit_growth", "prem_growth"}          # a ratio whose basis the slide always states, beside the reading
 
 
@@ -687,9 +688,9 @@ def analysis_deck(f: dict, rows: list[dict], per_table: int = 4) -> list[dict]:
             {"kind": "points", "title": "ஆக மொத்தம்", "items": analysis_takeaways(f, rows), "note": "Company report பண்ண numbers மட்டும் · முதலீட்டு ஆலோசனை இல்ல"}]
 
 
-def _fact_line(r: dict, bank: bool) -> tuple[str, str, float]:
+def _fact_line(r: dict, bank: bool, meaning: bool = True) -> tuple[str, str, float]:
     k, v = r["key"], r["value"]
-    out = [MEANS[k]] if k in MEANS else []
+    out = [MEANS[k]] if k in MEANS and meaning else []
     if k in ("rev_growth", "profit_growth", "prem_growth"):
         what = {"rev_growth": "Revenue", "prem_growth": "Premium"}.get(k, "Profit")
         basis = "போன financial year-ஓட ஒப்பிட்டா" if r["note"].startswith("FY") else "முந்தின பன்னிரண்டு மாசத்தோட ஒப்பிட்டா"
@@ -712,10 +713,10 @@ def date_en(iso: str) -> str:
     return f"{d.day} {d:%B %Y}"
 
 
-def _fact_en(r: dict, bank: bool) -> str:
+def _fact_en(r: dict, bank: bool, meaning: bool = True) -> str:
     """The English caption of a ratio's line, with the same figures `_fact_line` says."""
     k, v = r["key"], r["value"]
-    out = [MEANS_EN[k]] if k in MEANS_EN else []
+    out = [MEANS_EN[k]] if k in MEANS_EN and meaning else []
     if k in ("rev_growth", "profit_growth", "prem_growth"):
         basis = "Compared with the last financial year," if r["note"].startswith("FY") else "Compared with the previous twelve months,"
         out.append(f"{basis} {({'rev_growth': 'revenue', 'prem_growth': 'premium'}).get(k, 'profit')} has {'grown' if v >= 0 else 'fallen'} by {abs(v):.1f}%.")
@@ -747,8 +748,12 @@ def analysis_lines(f: dict, rows: list[dict], slides: list[dict]) -> list[dict]:
         if slide["kind"] == "facts":
             n = len(slide["items"])
             for i, it in enumerate(slide["items"]):
-                say, tone, weight = _fact_line(by_key[it["key"]], bank)
-                out.append({"slide": s, "show": i + 1 + (1 if i == n - 1 and slide.get("note") else 0), "say": say, "en": _fact_en(by_key[it["key"]], bank), "tone": tone, "weight": weight})
+                r, show = by_key[it["key"]], i + 1 + (1 if i == n - 1 and slide.get("note") else 0)
+                whole = r["key"] not in SPLIT or r["key"] not in MEANS
+                if not whole:
+                    out.append({"slide": s, "show": show, "say": MEANS[r["key"]], "en": MEANS_EN[r["key"]]})
+                say, tone, weight = _fact_line(r, bank, meaning=whole)
+                out.append({"slide": s, "show": show, "say": say, "en": _fact_en(r, bank, meaning=whole), "tone": tone, "weight": weight})
         elif slide["kind"] == "points":
             out += [{"slide": s, "show": i + 1, "say": it["say"], **en_of(it, "en"), "tone": it["tone"]} for i, it in enumerate(slide["items"])]
             out += closing(s, len(slide["items"]) + 1)
