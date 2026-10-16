@@ -138,3 +138,16 @@ def test_a_stuck_recogniser_gets_one_second_listen_before_a_line_fails(monkeypat
     assert listen.check(Path("x.wav"), said, hear=hear)["ok"] and calls == [0.0, 0.2]
     calls.clear()
     assert not listen.check(Path("x.wav"), said, hear=lambda wav, temperature=0.0: calls.append(temperature) or "வேற ஏதோ")["ok"] and calls == [0.0, 0.2]
+
+
+def test_a_line_of_english_words_only_is_heard_in_the_language_whisper_detects(monkeypatch):
+    """PIIND, 2026-10-16: "Promoter holding 46.1 percent." looped as Tamil on every take though the voice said it right."""
+    monkeypatch.setattr(listen, "silences", lambda wav: {"lead": 0.0, "tail": 0.0, "gap": 0.2})
+    said, calls = voiced("Promoter holding 46.1 percent."), []
+
+    def hear(wav, temperature=0.0, language="ta"):
+        calls.append(language)
+        return "Promoter holding 46.1%." if language is None else "பார்ப்பார்ப்பார்ப்பார்ப்பார்"
+    got = listen.check(Path("x.wav"), said, hear=hear)
+    assert got["ok"] and got["score"] >= 0.95 and calls == ["ta", "ta", None]
+    assert not listen.check(Path("x.wav"), said, hear=lambda wav, temperature=0.0, language="ta": "Something else entirely.")["ok"]     # a wrong take still fails

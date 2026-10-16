@@ -39,9 +39,9 @@ def score(say: str, heard: str) -> float:
     return round(difflib.SequenceMatcher(None, a, b, autojunk=False).ratio(), 3) if a and b else 0.0
 
 
-def heard(wav: Path, model: str = MODEL, temperature: float = 0.0) -> str:
+def heard(wav: Path, model: str = MODEL, temperature: float = 0.0, language: str | None = "ta") -> str:
     import mlx_whisper
-    return mlx_whisper.transcribe(str(wav), path_or_hf_repo=model, language="ta", condition_on_previous_text=False, temperature=temperature)["text"].strip()
+    return mlx_whisper.transcribe(str(wav), path_or_hf_repo=model, language=language, condition_on_previous_text=False, temperature=temperature)["text"].strip()
 
 
 def silences(wav: Path, run=subprocess.run) -> dict:
@@ -65,6 +65,11 @@ def check(wav: Path, say: str, hear=heard) -> dict:
         try:                                            # a low score gets one second listen, slightly less greedy, and the better of the two counts
             sc = max(sc, score(say, hear(wav, temperature=0.2)))
         except TypeError:                               # a listener that takes no temperature (tests' fakes)
+            pass
+    if sc < MIN_SCORE:                                  # a line of English words only ("Promoter holding 46.1 percent."), heard as Tamil, loops on one syllable
+        try:                                            # every take (PIIND, 2026-10-16), though the voice said it right: heard in the language Whisper detects,
+            sc = max(sc, score(say, hear(wav, language=None)))     # it is written in English and scored through the same spelling table
+        except TypeError:
             pass
     why = [f"heard only {sc:.2f} of the line (needs {MIN_SCORE})"] * (sc < MIN_SCORE) + [f"a {s['gap']} s hole inside the line"] * (s["gap"] > MAX_GAP) \
         + [f"{max(s['lead'], s['tail'])} s of silence at an end"] * (max(s["lead"], s["tail"]) > MAX_EDGE)
