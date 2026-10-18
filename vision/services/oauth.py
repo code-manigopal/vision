@@ -42,7 +42,8 @@ PROVIDERS = {
         "token": "https://oauth2.googleapis.com/token",
         "scopes": ["https://www.googleapis.com/auth/youtube.upload", "https://www.googleapis.com/auth/youtube.readonly",
                    "https://www.googleapis.com/auth/youtube.force-ssl",    # playlists, reading and posting comments
-                   "https://www.googleapis.com/auth/drive.readonly"],      # Drive: the folder stories are dropped into
+                   "https://www.googleapis.com/auth/drive.readonly",       # Drive: the folder stories are dropped into
+                   "https://www.googleapis.com/auth/yt-analytics.readonly"],   # YouTube Analytics: how each video is watched
         "id": "GOOGLE_CLIENT_ID", "secret": "GOOGLE_CLIENT_SECRET",
         "extra": {"access_type": "offline", "prompt": "consent"},
     },

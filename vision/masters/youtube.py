@@ -35,7 +35,7 @@ import httpx
 
 from ..agents import AgentResult, Director, Stage, SubAgent
 from ..config import ROOT
-from ..services import bgm, fonts, gdrive, genmedia, gutenberg, oauth, reddit, sfx, stock_video, yt_suggest, yt_trends
+from ..services import bgm, fonts, gdrive, genmedia, gutenberg, oauth, reddit, sfx, stock_video, yt_analytics, yt_suggest, yt_trends
 from . import shorts_edit
 
 SEEN, LOG, DRIVE, STATE, PREMISES, CLASSICS = "yt_seen", "yt_videos", "yt_drive", "yt_state", "yt_premises", "yt_classics"
@@ -53,6 +53,7 @@ CHANNEL = {"id": "confessions", "name": "Confessions Everywhere", "director": "C
            "classics": [], "classics_per_day": 1, "playlists": {}, "viewer_comments": False, "cta": "", "long": {},
            "motion": True, "caption_styles": True, "sfx": True, "sfx_volume": 0.35, "quick": {},
            "double_down": True, "double_down_after": 12, "explore": 0.15, "trends": True, "trend_region": "US",
+           "daily_mix": {}, "mix_auto": True, "mix_min_videos": 6, "mix_days": 28,
            "keep_local": False, "backup_folder": "", "lessons": False, "lesson_shorts": False, "lesson_channels": [], "transcripts_per_day": 10, "lesson_model": "", "lesson_tamil_model": "qwen/qwen3.8-27b"}
 # Original stories: a premise is built from one of each, so no two start from the same place (20 x 12 x 10 x 10 combinations).
 THEMES = ["a family secret", "a betrayal by a close friend", "a lie that grew too big", "a second chance that felt undeserved", "a debt never repaid",
@@ -670,6 +671,84 @@ def made_today(store, ch: dict, fmt: str | None = None, quick: bool = False) -> 
                and (not quick or bool(v.get("quick"))) for v in store.kv_list(LOG))
 
 
+# The day's mix (Mani, 2026-10-18: "daily two videos are of science, one from stories and one for finance"): the day's Shorts
+# are slots per category; the Analytics Manager re-splits them once a week by how the categories are really watched.
+MIX_CATS = ("science", "story", "money")
+SUB_WEIGHT = 50                      # a subscriber gained counts as much as 50 fully watched views
+
+
+def category(k: str | None) -> str:
+    """A Short's category for the mix: science, money (finance), or story (real, viewer, classic, original, motivational)."""
+    return k if k in ("science", "money") else "story"
+
+
+def mix_of(store, ch: dict) -> dict[str, int]:
+    """Today's slots per category: the Analytics Manager's latest re-split, else the channel's `daily_mix`; {} = no mix."""
+    if not ch.get("daily_mix"):
+        return {}
+    kept = (store.kv_get(STATE, f"{ch['id']}:mix") or {}).get("mix") if ch.get("mix_auto") else None
+    return {c: int(n) for c, n in (kept or ch["daily_mix"]).items() if c in MIX_CATS}
+
+
+def made_by_category(store, ch: dict) -> dict[str, int]:
+    start = max(_midnight(), (store.kv_get(STATE, f"{ch['id']}:quota_reset") or {}).get("at", 0))
+    out = {c: 0 for c in MIX_CATS}
+    for v in store.kv_list(LOG):
+        if v.get("channel") == ch["id"] and (v.get("made") or 0) >= start and v.get("format") != "long":
+            out[category(v.get("kind"))] += 1
+    return out
+
+
+def next_category(mix: dict[str, int], made: dict[str, int]) -> str | None:
+    """The category with the most slots still open today (a tie goes to the bigger slot, then MIX_CATS order); None = all filled."""
+    open_ = {c: mix[c] - made.get(c, 0) for c in mix if mix[c] - made.get(c, 0) > 0}
+    return max(open_, key=lambda c: (open_[c], mix[c], -MIX_CATS.index(c))) if open_ else None
+
+
+def category_scores(log: list[dict], days: int = 28, now: float | None = None) -> dict[str, dict]:
+    """How each category is really watched, from YouTube Analytics: public Shorts released in the last `days` and at least two
+    days old (Analytics lags). score = average of views x share watched, plus SUB_WEIGHT per subscriber gained, per Short."""
+    now = now or time.time()
+    rows: dict[str, list[dict]] = {}
+    for v in log:
+        a, at = v.get("analytics"), v.get("publish_at") or v.get("uploaded") or 0
+        if a and v.get("status") == "public" and v.get("format") != "long" and now - days * 86400 <= at <= now - 2 * 86400:
+            rows.setdefault(category(v.get("kind")), []).append(a)
+    out = {}
+    for c, xs in rows.items():
+        n = len(xs)
+        out[c] = {"n": n, "views": round(sum(x.get("views", 0) for x in xs) / n), "pct": round(sum(x.get("avg_pct", 0) for x in xs) / n, 1),
+                  "subs": sum(x.get("subs", 0) for x in xs),
+                  "score": round(sum(x.get("views", 0) * x.get("avg_pct", 0) / 100 + SUB_WEIGHT * x.get("subs", 0) for x in xs) / n, 1)}
+    return out
+
+
+def resplit(mix: dict[str, int], scores: dict[str, dict], least: int) -> dict[str, int]:
+    """The same number of slots shared by score: every category keeps at least one; a category with fewer than `least` measured
+    Shorts keeps its slots as they are; the rest go to the measured ones in proportion to score (largest remainder)."""
+    total = sum(mix.values())
+    measured = [c for c in mix if (scores.get(c) or {}).get("n", 0) >= least and scores[c]["score"] > 0]
+    if len(measured) < 2:
+        return dict(mix)
+    out = {c: mix[c] for c in mix if c not in measured}
+    pool = total - sum(out.values())
+    out.update({c: 1 for c in measured})
+    spare = pool - len(measured)
+    if spare <= 0:
+        return {c: out[c] for c in mix}
+    tot = sum(scores[c]["score"] for c in measured)
+    share = {c: spare * scores[c]["score"] / tot for c in measured}
+    for c in measured:
+        out[c] += int(share[c])
+    for c in sorted(measured, key=lambda c: (share[c] - int(share[c]), scores[c]["score"]), reverse=True)[:spare - sum(int(x) for x in share.values())]:
+        out[c] += 1
+    return {c: out[c] for c in mix}
+
+
+def mix_text(mix: dict[str, int]) -> str:
+    return " / ".join(f"{n} {'finance' if c == 'money' else c}" for c, n in mix.items() if n)
+
+
 def _midnight() -> float:
     lt = time.localtime()
     return time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday, 0, 0, 0, 0, 0, -1))
@@ -745,9 +824,12 @@ class StoryScout(Crew):
         ch, store = self.ch, ctx["store"]
         L, now = long_of(ch), time.strftime("%H:%M")
         shorts, longs = made_today(store, ch, "short"), made_today(store, ch, "long")
-        short_due, long_due = shorts < ch["shorts_per_day"], bool(L["enabled"]) and longs < L["per_day"]
+        mix = mix_of(store, ch)
+        short_due = (next_category(mix, made_by_category(store, ch)) is not None) if mix else shorts < ch["shorts_per_day"]
+        long_due = bool(L["enabled"]) and longs < L["per_day"]
         if not short_due and not long_due:
-            return AgentResult("idle", "QUOTA MET", f"{shorts} of {ch['shorts_per_day']} Shorts made today" + (f", {longs} of {L['per_day']} long" if L["enabled"] else ""))
+            return AgentResult("idle", "QUOTA MET", f"{shorts} of {sum(mix.values()) if mix else ch['shorts_per_day']} Shorts made today"
+                               + (f" ({mix_text(mix)})" if mix else "") + (f", {longs} of {L['per_day']} long" if L["enabled"] else ""))
         waiting = sum(v.get("channel") == ch["id"] and v.get("status") == "ready" for v in store.kv_list(LOG))
         if waiting >= max(1, ch["shorts_per_day"] + (L["per_day"] if L["enabled"] else 0)):    # a day's worth is piling up unsent (YouTube's upload limit)
             return AgentResult("idle", "BACKLOG", f"{waiting} finished videos are waiting to upload; no new ones until they go")
@@ -786,9 +868,19 @@ class StoryScout(Crew):
         return kept
 
     async def _short(self, ctx: dict) -> AgentResult:
-        """Find the next Short's story: viewers' comments and Mani's own stories, then a classic, then an original."""
+        """Find the next Short's story: viewers' comments and Mani's own stories, then a classic, then an original. With a daily
+        mix, the category with the most open slots decides: science and finance are originals of that kind; a story slot
+        takes a real story first, then a classic, then an original confession."""
         ch, store, bus = self.ch, ctx["store"], ctx["bus"]
         await self._trends(ctx)
+        mix = mix_of(store, ch)
+        cat = next_category(mix, made_by_category(store, ch)) if mix else None
+        if cat in ("science", "money"):
+            p = await self._original(ctx, cat)
+            if p:
+                return AgentResult("done", "INVENTED", f"Today's {mix_text({cat: 1}).split(' ', 1)[1]} slot" + (" (a quick one)" if ctx["job"].get("quick") else "")
+                                   + f": “{p['title'][:70]}”", {"source": ctx["job"]["source"], "category": cat})
+            return AgentResult("idle", "NOTHING NEW", f"No {cat} premise could be made for today's slot")
         await self._from_drive(ctx)
         cands = self._inbox() + await self._from_comments(ctx)
         if reddit.configured():
@@ -835,7 +927,7 @@ class StoryScout(Crew):
         if c:
             return AgentResult("done", "CLASSIC", f"“{c['title']}” by {c['author']}", {"source": ctx["job"]["source"]})
         if ch["originals"]:                         # no real story to tell today: an original one, from a premise never used before
-            p = await self._original(ctx)
+            p = await self._original(ctx, "confession" if cat == "story" else None)
             if p:
                 return AgentResult("done", "INVENTED", f"An original {ctx['job']['genre']} story" + (" (a quick one)" if ctx["job"].get("quick") else "") + f": “{p['title'][:70]}”", {"source": ctx["job"]["source"]})
         return AgentResult("idle", "NOTHING NEW", f"No usable story among {len(cands)} candidates")
@@ -957,7 +1049,7 @@ class StoryScout(Crew):
         # the floor is held to 70% of the whole, so a long list (seven patterns) still leaves something to lean on
         return choose(options, told, views, min(self.ch["explore"], 0.7 / len(options)))
 
-    async def _original(self, ctx: dict) -> dict | None:
+    async def _original(self, ctx: dict, want: str | None = None) -> dict | None:
         ch, store = self.ch, ctx["store"]
         everything = [p for p in store.kv_list(PREMISES, limit=5000) if p.get("channel") == ch["id"]]
         genres = [g for g in ch["original_genres"] if g in GENRE_ASK] or ["confession"]
@@ -965,7 +1057,9 @@ class StoryScout(Crew):
         log = [v for v in store.kv_list(LOG) if v.get("channel") == ch["id"]]
         insights = store.kv_get(STATE, f"{ch['id']}:insights") or {}
         learned = ch["double_down"] and insights.get("videos", 0) >= ch["double_down_after"]       # enough results to lean on
-        if learned:
+        if want and want in GENRE_ASK:             # the day's mix names the kind
+            genre = want
+        elif learned:
             by_kind = insights.get("views_by_kind") or {}
             genre = self._lean(genres, told, {g: by_kind["original" if g == "confession" else g] for g in genres if ("original" if g == "confession" else g) in by_kind})
         else:
@@ -1771,6 +1865,58 @@ class AnalyticsManager(Crew):
                 ctx["bus"].clear_notice(f"youtube-review-{v['video_id']}")
             ctx["store"].kv_put(LOG, v["_key"], {k: x for k, x in v.items() if not k.startswith("_")})
 
+    async def _analytics(self, ctx: dict, log: list[dict]) -> str:
+        """YouTube Analytics for every public Short at least two days out (watch share, duration, subscribers), at most every
+        6 hours; kept on each record as `analytics`. Without the permission: a "sign in again" notice, nothing else stops."""
+        ch, store, bus = self.ch, ctx["store"], ctx["bus"]
+        mark = f"{ch['id']}:analytics_at"
+        if time.time() - (store.kv_get(STATE, mark) or {}).get("at", 0) < 6 * 3600:
+            return ""
+        due = [v for v in log if v.get("video_id") and v.get("status") == "public" and v.get("format") != "long"
+               and (v.get("publish_at") or v.get("uploaded") or time.time()) <= time.time() - 2 * 86400]
+        if not due:
+            return ""
+        if yt_analytics.SCOPE not in oauth.granted(account(ch)):
+            port = ctx["cfg"].vision.port if ctx.get("cfg") else 8765
+            bus.notice(f"youtube-analytics-{ch['id']}", f"Sign in to YouTube again for {ch['name']}: reading YouTube Analytics (watch share, "
+                                                        "subscribers) needs one more read-only permission", f"http://127.0.0.1:{port}/auth/youtube/login?account={account(ch)}")
+            return "analytics wait for a sign-in"
+        bus.clear_notice(f"youtube-analytics-{ch['id']}")
+        try:
+            token = await oauth.access_token(account(ch), "youtube")
+            async with self.client() as c:
+                got = await yt_analytics.per_video(c, token, [v["video_id"] for v in due])
+        except oauth.AuthNeeded:
+            return ""
+        except (yt_analytics.AnalyticsError, httpx.HTTPError) as e:
+            return f"analytics not read: {e}"[:160]
+        for v in due:
+            if v["video_id"] in got:
+                v["analytics"] = {**got[v["video_id"]], "at": time.time()}
+                store.kv_put(LOG, v["_key"], {k: x for k, x in v.items() if not k.startswith("_")})
+        store.kv_put(STATE, mark, {"at": time.time(), "videos": len(got)})
+        return ""
+
+    def _rebalance(self, ctx: dict, scores: dict[str, dict]) -> str:
+        """Once a week the day's slots are re-split by score (resplit: same total, at least one each). A change is logged and
+        sent to Telegram with its reason; the re-split is kept in kv `yt_state` `<channel>:mix`."""
+        ch, store = self.ch, ctx["store"]
+        if not ch.get("daily_mix") or not ch.get("mix_auto"):
+            return ""
+        kept = store.kv_get(STATE, f"{ch['id']}:mix") or {}
+        if time.time() - kept.get("at", 0) < 7 * 86400:
+            return ""
+        now_mix = mix_of(store, ch)
+        new = resplit(now_mix, scores, int(ch["mix_min_videos"]))
+        store.kv_put(STATE, f"{ch['id']}:mix", {"mix": new, "at": time.time(), "was": now_mix, "scores": scores})
+        if new == now_mix:
+            return ""
+        why = " · ".join(f"{'finance' if c == 'money' else c} {s['pct']}% watched, {s['views']} views/Short, {s['subs']} subs ({s['n']})" for c, s in scores.items())
+        text = f"🎬 {ch['name']}: the daily mix is now {mix_text(new)} (was {mix_text(now_mix)}). YouTube Analytics, last {ch['mix_days']} days: {why}"
+        ctx["bus"].say(text)
+        ctx["bus"].publish({"type": "reminder", "text": text})              # reminders go to Telegram as they are
+        return f"mix now {mix_text(new)}"
+
     async def run(self, ctx: dict) -> AgentResult:
         ch = self.ch
         log = [v for v in ctx["store"].kv_list(LOG) if v.get("channel") == ch["id"]]
@@ -1778,6 +1924,7 @@ class AnalyticsManager(Crew):
             free_space(ctx["store"], ch, [])
             return AgentResult("done", "LOGGED", f"{ch['name']}: no Shorts made yet", {"channel": ch["id"], "made": 0})
         await self._refresh(ctx, log)
+        read = await self._analytics(ctx, [v for v in ctx["store"].kv_list(LOG) if v.get("channel") == ch["id"]])
         saved = await backup(ctx, ch, [v for v in ctx["store"].kv_list(LOG) if v.get("channel") == ch["id"]], self.client)
         pruned = await prune_drive(ctx, ch, [v for v in ctx["store"].kv_list(LOG) if v.get("channel") == ch["id"]], self.client)
         log = [v for v in ctx["store"].kv_list(LOG) if v.get("channel") == ch["id"]]
@@ -1826,8 +1973,19 @@ class AnalyticsManager(Crew):
             insights["views_by_hook"] = {k: round(sum(x) / len(x)) for k, x in by_hook.items()}
         if by_len:
             insights["views_by_length"] = {k: round(sum(x) / len(x)) for k, x in by_len.items()}
+        scores = category_scores(log, int(ch["mix_days"]))
+        if scores:
+            insights["by_category"] = scores
         ctx["store"].kv_put(STATE, f"{ch['id']}:insights", insights)
-        latest = log[0]
+        moved = self._rebalance(ctx, scores) if scores else ""
+        mix = mix_of(ctx["store"], ch)
+        if scores:
+            parts.append("watched: " + " · ".join(f"{'finance' if c == 'money' else c} {s['pct']}% of {s['views']} views/Short" for c, s in
+                                                 sorted(scores.items(), key=lambda x: -x[1]["score"])))
+        if mix:
+            parts.append(f"daily mix {mix_text(mix)}")
+        parts += [x for x in (read, moved) if x]
+        latest = max(log, key=lambda v: v.get("made") or 0)            # by when it was made (the store's order follows each save)
         return AgentResult("done", "LOGGED", f"{ch['name']}: {', '.join(parts)}; latest “{latest['title']}” ({round(latest['seconds'])} s)",
                            {"channel": ch["id"], "made": len(log), **n, "views": views,
                             "videos": [{k: v.get(k) for k in ("title", "status", "url", "seconds", "stats", "source")} for v in log[:20]]})
@@ -1848,8 +2006,11 @@ def reset_today(store, channel_id: str) -> None:
 def more_today(ch: dict):
     """One pass of the crew makes one Short. Go round again while the last pass made one and the day's number isn't reached."""
     L = long_of(ch)
+    def shorts_left(store) -> bool:
+        mix = mix_of(store, ch)
+        return next_category(mix, made_by_category(store, ch)) is not None if mix else made_today(store, ch, "short") < ch["shorts_per_day"]
     return lambda ctx: bool((ctx.get("job") or {}).get("file")) and (
-        made_today(ctx["store"], ch, "short") < ch["shorts_per_day"] or (bool(L["enabled"]) and made_today(ctx["store"], ch, "long") < L["per_day"]))
+        shorts_left(ctx["store"]) or (bool(L["enabled"]) and made_today(ctx["store"], ch, "long") < L["per_day"]))
 
 
 def peer_line(store, ch: dict) -> str:

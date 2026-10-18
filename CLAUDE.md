@@ -35,7 +35,7 @@ bash scripts/setup.sh                     # venv + deps + .env from template + c
 .venv/bin/python -m vision sfx            # add 3 sound effects per kind to assets/sfx/ (or: sfx whoosh 5)
 .venv/bin/python -m vision visa list      # Visa Watch accounts: add | list | update | pause | resume | remove | check <id>
 .venv/bin/python -m vision ebooks list    # E-books Manager: list | published <book> [ASIN] | redraw <book> <page>
-.venv/bin/python -m pytest -q             # 492 tests, all external services mocked
+.venv/bin/python -m pytest -q             # 499 tests, all external services mocked
 bash scripts/install_launchagent.sh       # auto-start at login + restart on crash
 tail -f logs/vision.log
 ```
@@ -423,6 +423,17 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   asks the model, line by line, for one cue from `CUES` (riser, impact, heartbeat, drone, tick, ding, whoosh, pop, coin,
   notification; only kinds the library holds) or "none", most lines none; `sfx_plan` places each at its line, keeps them at
   least 4 s apart and about one per 8 s, and never adds any on its own (`sfx`, `sfx_volume`). No model answer = no effects. The record keeps `caption` and `sfx`; both show on the desk.
+  **Daily mix and YouTube Analytics (Mani, 2026-10-18: "daily two videos are of science, one from stories and one for finance"):** `daily_mix`
+  `{science: 2, story: 1, money: 1}` replaces `shorts_per_day` for the channel: the Scout fills the category with most slots still open
+  (`next_category`, `made_by_category`; story = real, viewer, classic or an original confession, never motivational; science/money = an
+  original of that kind, `_original(ctx, want)`); a real story that finds the story slot used waits for tomorrow. The Analytics Manager reads
+  YouTube Analytics API v2 (`services/yt_analytics.py`, scope `yt-analytics.readonly`: one more YouTube sign-in, notice
+  `youtube-analytics-<channel>`; "YouTube Analytics API" must be enabled on the Google app) at most every 6 h for public Shorts 2+ days out:
+  views, engaged views (dropped if the API refuses them), average view duration and percentage, subscribers; kept as `analytics` on the record.
+  `category_scores` (last `mix_days` 28): score = average of views x share watched + 50 per subscriber; shown in the report ("watched: ...").
+  `mix_auto: true`: once a week `resplit` shares the same total by score, at least 1 each, a category with under `mix_min_videos` (6) measured
+  Shorts keeps its slots; kept in kv `yt_state` `<channel>:mix`, a change is logged and sent to Telegram (a `reminder` event) with the figures.
+  The report's "latest" is the last made (it followed the store's save order and flipped).
   **Quick Shorts** (`quick`, `QUICK`: 20-35 s, ends on its own outro, `per_day` 1, 0 = off): only an original story can be one (Scout sets
   `job["quick"]`), counted among the day's Shorts; `word_range(ch, quick=True)`; insights keep `views_by_length` (quick vs regular).
   **Double down** (`double_down`, `double_down_after` 12, `explore` 0.15): `choose(options, told, views, floor)` gives each option a floor share
