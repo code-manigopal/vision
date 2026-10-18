@@ -182,3 +182,14 @@ def test_telegram_jobs_buttons_move_a_job(tmp_path, monkeypatch):
     assert store.kv_get("jobs", "j1")["status"] == "applied"
     asyncio.run(tg.on_command("/track https://ca.indeed.com/viewjob?jk=1"))
     assert "never touches Indeed" in fake.sent()[-1]["text"]
+
+
+def test_jobs_the_old_code_marked_applied_on_approval_become_approved(tmp_path):
+    store = Store(tmp_path / "t.db")
+    store.kv_put("jobs", "old", {"id": "old", "title": "Dev", "status": "applied", "applied_at": 5, "followups": 1, "followup_at": 6})
+    store.kv_put("jobs", "mine", {"id": "mine", "title": "QA", "status": "applied", "source": "added by you"})
+    store.kv_put("jobs", "real", {"id": "real", "title": "BA", "status": "applied", "applied_at": 7, "history": [{"status": "applied", "at": 7}]})
+    assert jobs.legacy_approved(store) == 1 and jobs.legacy_approved(store) == 0
+    old = store.kv_get("jobs", "old")
+    assert old["status"] == "approved" and old["approved_at"] == 5 and "applied_at" not in old and "followups" not in old
+    assert store.kv_get("jobs", "mine")["status"] == "applied" and store.kv_get("jobs", "real")["status"] == "applied"

@@ -137,9 +137,9 @@ def test_scout_duplicates_gates_and_companies(tmp_path, monkeypatch):
 
 def test_follow_up_reminders(tmp_path):
     store, bus, day = Store(tmp_path / "t.db"), EventBus(), 86400
-    store.kv_put("jobs", "a", {"id": "a", "title": "Dev", "company": "Acme", "url": "https://x/a", "status": "applied", "applied_at": time.time() - 11 * day})
+    store.kv_put("jobs", "a", {"id": "a", "title": "Dev", "company": "Acme", "url": "https://x/a", "status": "applied", "history": [], "applied_at": time.time() - 11 * day})
     store.kv_put("jobs", "b", {"id": "b", "title": "Dev", "company": "Beta", "status": "applied", "applied_at": time.time() - 2 * day})
-    store.kv_put("jobs", "c", {"id": "c", "title": "Dev", "company": "Old", "status": "applied", "applied_at": time.time() - 70 * day, "followups": 2,
+    store.kv_put("jobs", "c", {"id": "c", "title": "Dev", "company": "Old", "status": "applied", "history": [], "applied_at": time.time() - 70 * day, "followups": 2,
                                "followup_at": time.time() - 40 * day})
     run = lambda: asyncio.run(jobs.ApplicationTracker().run({"store": store, "bus": bus, "options": {}, "results": {}}))
     run()

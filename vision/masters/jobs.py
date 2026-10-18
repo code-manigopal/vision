@@ -556,6 +556,7 @@ class ApplicationTracker(SubAgent):
 
     async def run(self, ctx):
         store, bus, opts, now = ctx["store"], ctx.get("bus"), ctx.get("options") or {}, time.time()
+        legacy_approved(store)
         jobs = store.kv_list("jobs", limit=2000)
         mail = store.kv_list("emails", since=time.time() - 14 * 86400)
         wait, most, stale, nudged = float(opts.get("followup_days", 10)) * 86400, int(opts.get("followups", 2)), float(opts.get("stale_days", 60)) * 86400, 0
@@ -568,6 +569,7 @@ class ApplicationTracker(SubAgent):
                             j["status"] = "interview"
                         elif j["status"] == "approved" and re.search(r"application (was )?received|thank you for (applying|your application)", txt):
                             j.update(status="applied", applied_at=e.get("ts") or now)
+                            j.setdefault("history", []).append({"status": "applied", "at": now, "by": "email"})
                         elif re.search(r"unfortunately|not moving forward|other candidates", txt):
                             j["status"] = "rejected"
                 # No word since applying: a reminder after `followup_days`, at most `followups` of them, then the job is set aside.
@@ -631,6 +633,21 @@ DRIVE_ACCOUNT = "drive-backup"                              # the same Google si
 
 def _client() -> httpx.AsyncClient:
     return httpx.AsyncClient(timeout=120)
+
+
+def legacy_approved(store) -> int:
+    """Before 2026-10-18 approving a package set it `applied`. Such a record (applied, no history, not added by Mani) was only
+    approved: it becomes `approved`, its follow-up count cleared, so Mani marks it applied when he has sent it. Returns the count."""
+    n = 0
+    for j in store.kv_list("jobs", limit=2000):
+        if j.get("status") == "applied" and "history" not in j and j.get("source") != "added by you":
+            key = j.pop("_key")
+            j.update(status="approved", approved_at=j.pop("applied_at", None) or j.get("found"), history=[{"status": "approved", "at": time.time(), "by": "fix"}])
+            for k in ("followups", "followup_at"):
+                j.pop(k, None)
+            store.kv_put("jobs", key, {k: v for k, v in j.items() if k != "_ts"})
+            n += 1
+    return n
 
 
 def set_status(store, key: str, status: str, note: str | None = None) -> dict:

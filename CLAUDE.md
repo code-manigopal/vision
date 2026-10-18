@@ -35,7 +35,7 @@ bash scripts/setup.sh                     # venv + deps + .env from template + c
 .venv/bin/python -m vision sfx            # add 3 sound effects per kind to assets/sfx/ (or: sfx whoosh 5)
 .venv/bin/python -m vision visa list      # Visa Watch accounts: add | list | update | pause | resume | remove | check <id>
 .venv/bin/python -m vision ebooks list    # E-books Manager: list | published <book> [ASIN] | redraw <book> <page>
-.venv/bin/python -m pytest -q             # 491 tests, all external services mocked
+.venv/bin/python -m pytest -q             # 492 tests, all external services mocked
 bash scripts/install_launchagent.sh       # auto-start at login + restart on crash
 tail -f logs/vision.log
 ```
@@ -320,7 +320,7 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   job to applied. `jobs.track` adds a job applied to elsewhere (status applied, source "added by you"; only its public page is read, for the
   title; Indeed links refused). Approved and later packages go to Drive (`jobs.to_drive`, same `drive-backup` sign-in, every file checked by
   size and MD5) and only then is `data/applications/<folder>` deleted (`local_removed`; the desk links "Files in Drive"); approval tries it
-  at once, the Application Tracker again each run. Rejected packages stay on the Mac.
+  at once, the Application Tracker again each run. Rejected packages stay on the Mac. `legacy_approved` turns the jobs the old code marked applied on approval (applied, no `history`) into approved; ran live 2026-10-18 (21 jobs, 84 files to Drive).
 - **Video backups to Drive (Mani, 2026-10-15: "this is for backup... no more local saves"):** each channel's `backup_folder`
   (`confessions_everywhere_yt`, `mani_market_yt`) in kamanikagopal@gmail.com's Drive, sub-folders `Shorts` / `Videos`, files named
   `youtube.backup_name` ("2026-10-15 <title without hashtags> [<video id>].mp4" + " cover.jpg"). `youtube.backup` runs in the Analytics

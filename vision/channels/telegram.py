@@ -53,7 +53,7 @@ PART_ICONS = [(r"°C", "🌤"), (r"in the air", "✈️"), (r"\bincidents?\b", "
               (r"need you|waiting for your|awaiting", "👉"), (r"backed up|freed", "🗄"), (r"^latest", "🆕")]
 
 
-DOTS = {"error": "🔴", "done": "🟢", "wait": "🟡", "running": "🔵", "idle": "⚪"}
+DOTS = {"error": "🔴", "done": "🟢", "wait": "🟡", "work": "🔵", "idle": "⚪"}
 COMMANDS = [("brief", "brief from every master now"), ("agents", "masters, or one master's agents"), ("agent", "one agent in detail"),
             ("jobs", "jobs you're tracking"), ("track", "track a job you applied to elsewhere"), ("approvals", "what's waiting for you"),
             ("traffic", "live traffic for a city"), ("say", "fix how the voice says a word"), ("help", "all commands")]
