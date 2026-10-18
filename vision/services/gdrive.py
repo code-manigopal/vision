@@ -2,6 +2,7 @@
 
 Reading uses the channel's Google sign-in (oauth provider "youtube", which carries the drive.readonly scope). The backups
 use their own sign-in (provider "gdrive", scope drive.file: only files and folders VISION created are visible to it).
+Everything VISION keeps there sits under one folder, `TOP` (Vision/YouTube/<channel>, Vision/Jobs/<package>).
 The Google app needs "Google Drive API" enabled.
 """
 
@@ -16,6 +17,8 @@ import httpx
 API = "https://www.googleapis.com/drive/v3/files"
 UPLOAD = "https://www.googleapis.com/upload/drive/v3/files"
 DOC, FOLDER = "application/vnd.google-apps.document", "application/vnd.google-apps.folder"
+SIGN_IN = "Sign in to Google Drive once so VISION keeps its files there (posted videos, approved job packages), then removes them from the Mac"
+TOP = "Vision"      # everything VISION keeps in Drive lives under this one folder (Mani, 2026-10-18)
 
 
 class DriveError(Exception):
@@ -78,6 +81,41 @@ async def ensure_folder(c: httpx.AsyncClient, token: str, name: str, parent: str
     if r.status_code not in (200, 201):
         raise DriveError(f"Google Drive said {r.status_code}: {_why(r)}")
     return r.json()["id"]
+
+
+async def find_folder(c: httpx.AsyncClient, token: str, name: str, parent: str = "root") -> str | None:
+    """The id of folder `name` directly inside `parent` ("root" = the top of the Drive), or None."""
+    safe = name.replace("\\", "\\\\").replace("'", "\\'")
+    q = f"name = '{safe}' and mimeType = '{FOLDER}' and trashed = false and '{parent}' in parents"
+    found = (await _get(c, token, API, q=q, fields="files(id)", pageSize=1)).json().get("files", [])
+    return found[0]["id"] if found else None
+
+
+async def move(c: httpx.AsyncClient, token: str, fid: str, parent: str, name: str | None = None) -> None:
+    """Moves file or folder `fid` (with everything in it) into `parent`, renamed to `name` if given."""
+    old = (await _get(c, token, f"{API}/{fid}", fields="parents")).json().get("parents") or []
+    r = await c.patch(f"{API}/{fid}", json={"name": name} if name else {}, headers={"Authorization": f"Bearer {token}"},
+                      params={"addParents": parent, "removeParents": ",".join(old), "fields": "id"})
+    if r.status_code != 200:
+        raise DriveError(f"Google Drive said {r.status_code}: {_why(r)}")
+
+
+async def vision_path(c: httpx.AsyncClient, token: str, *names: str, legacy: str | None = None) -> str:
+    """The id of Vision/<names...>, each folder made if it isn't there. `legacy` is a folder of the old layout at the top of the
+    Drive: when the last folder doesn't exist yet, that one is moved here and renamed instead, so nothing is uploaded twice."""
+    pid = await ensure_folder(c, token, TOP, "root")
+    for i, n in enumerate(names):
+        if legacy and i == len(names) - 1 and not await find_folder(c, token, n, pid):
+            old = await find_folder(c, token, legacy, "root")
+            if old:
+                await move(c, token, old, pid, n)
+                return old
+        pid = await ensure_folder(c, token, n, pid)
+    return pid
+
+
+def folder_url(fid: str) -> str:
+    return f"https://drive.google.com/drive/folders/{fid}"
 
 
 def md5(path: Path) -> str:

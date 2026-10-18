@@ -25,7 +25,9 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import mimetypes
 import re
+import shutil
 import time
 from html import unescape
 from pathlib import Path
@@ -35,6 +37,7 @@ import httpx
 
 from ..agents import AgentResult, SubAgent, request_approval
 from ..config import ROOT, secret
+from ..services import gdrive, oauth
 from ..services.llm import LLMUnavailable
 from .job_facts import unsupported
 from .job_match import FENCE_RULE, ats_ref, coverage, fence, gate, has, same_keys
@@ -557,18 +560,22 @@ class ApplicationTracker(SubAgent):
         mail = store.kv_list("emails", since=time.time() - 14 * 86400)
         wait, most, stale, nudged = float(opts.get("followup_days", 10)) * 86400, int(opts.get("followups", 2)), float(opts.get("stale_days", 60)) * 86400, 0
         for j in jobs:
-            if j.get("status") in ("applied", "interview") and j.get("company"):
+            if j.get("status") in ("approved", "applied", "interview") and j.get("company"):
                 for e in mail:
                     txt = (e.get("subject", "") + " " + e.get("snippet", "")).lower()
                     if j["company"].lower() in txt:
                         if re.search(r"interview|schedule a call|next steps", txt) and j["status"] != "interview":
                             j["status"] = "interview"
+                        elif j["status"] == "approved" and re.search(r"application (was )?received|thank you for (applying|your application)", txt):
+                            j.update(status="applied", applied_at=e.get("ts") or now)
                         elif re.search(r"unfortunately|not moving forward|other candidates", txt):
                             j["status"] = "rejected"
                 # No word since applying: a reminder after `followup_days`, at most `followups` of them, then the job is set aside.
                 since, sent = j.get("followup_at") or j.get("applied_at") or j.get("found") or now, j.get("followups", 0)
                 applied = j.get("applied_at") or j.get("found") or now
-                if j["status"] != "applied":
+                if j["status"] == "approved":
+                    pass
+                elif j["status"] != "applied":
                     if sent and bus:
                         bus.clear_notice(f"followup:{j['_key']}")
                 elif sent < most and now - since >= wait and nudged < 3:
@@ -582,9 +589,10 @@ class ApplicationTracker(SubAgent):
                     if bus:
                         bus.clear_notice(f"followup:{j['_key']}")
                 store.kv_put("jobs", j["_key"], {k: v for k, v in j.items() if k not in ("_key", "_ts")})
-        stages = {s: sum(1 for j in jobs if j.get("status") == s) for s in ("match", "tailored", "awaiting_ok", "applied", "interview", "rejected")}
+        stages = {s: sum(1 for j in jobs if j.get("status") == s) for s in ("match", "tailored", "awaiting_ok", "approved", "applied", "interview", "offer", "rejected")}
+        moved = await to_drive(ctx)
         recent = [j for j in jobs if j.get("found", 0) > time.time() - 86400 and j.get("status") != "skipped"]
-        parts = [f"{len(recent)} new matches"] + [f"{v} {k.replace('_', ' ')}" for k, v in stages.items() if v and k not in ("match",)]
+        parts = [f"{len(recent)} new matches"] + [f"{v} {k.replace('_', ' ')}" for k, v in stages.items() if v and k not in ("match",)] + ([moved] if moved else [])
         scout = ctx["results"].get("Job Scout")
         if scout and scout.status == "idle" and not jobs:
             parts = [scout.summary]
@@ -612,6 +620,103 @@ class InterviewPrep(SubAgent):
         return AgentResult("done", "PREPPED", f"Interview notes ready for {todo[0]['company']}")
 
 
+# The tracker, like LinkedIn's "My Jobs" (Mani, 2026-10-18): approving a package makes it `approved` (ready, not yet sent);
+# Mani marks it applied once he has submitted it, then interview, offer, rejected or archived (dashboard desk, Telegram /jobs).
+TRACK = {"approved": "Approved", "applied": "Applied", "interview": "Interview", "offer": "Offer", "rejected": "Rejected", "archived": "Archived"}
+NEXT = {"approved": ("applied", "archived"), "applied": ("interview", "offer", "rejected", "archived"), "interview": ("offer", "rejected", "archived"),
+        "offer": ("archived",), "rejected": ("archived",), "archived": ("applied",)}
+KEPT = ("approved", "applied", "interview", "offer")       # packages of these go to Drive and leave the Mac
+DRIVE_ACCOUNT = "drive-backup"                              # the same Google sign-in as the video backups (oauth provider "gdrive")
+
+
+def _client() -> httpx.AsyncClient:
+    return httpx.AsyncClient(timeout=120)
+
+
+def set_status(store, key: str, status: str, note: str | None = None) -> dict:
+    """Mani's move of a tracked job (dashboard or Telegram). ValueError for an unknown job or status."""
+    if status not in TRACK:
+        raise ValueError(f"status must be one of {', '.join(TRACK)}")
+    j = store.kv_get("jobs", key)
+    if not j:
+        raise ValueError("no such job")
+    now = time.time()
+    j["status"] = status
+    j.setdefault("history", []).append({"status": status, "at": now})
+    if status == "applied" and not j.get("applied_at"):
+        j["applied_at"] = now                               # follow-up reminders count from here
+    if note is not None:
+        j["note"] = note.strip()[:500]
+    store.kv_put("jobs", key, j)
+    return {**j, "_key": key}
+
+
+async def track(store, url: str, title: str = "", company: str = "", client=None) -> dict:
+    """A job Mani applied to outside VISION, added as `applied`. Only its public page is read, for a title if none is given;
+    Indeed is never touched."""
+    url = (url or "").strip()
+    if not re.match(r"https?://", url):
+        raise ValueError("give the posting's link (https://...)")
+    if re.search(r"(^|\.)indeed\.", url.split("/")[2].lower()):
+        raise ValueError("VISION never touches Indeed: add it with a title instead of the link")
+    key = "track:" + hashlib.sha1(url.encode()).hexdigest()[:12]
+    if store.kv_get("jobs", key):
+        raise ValueError("already tracked")
+    if not title:
+        try:
+            async with (client or _client)() as c:
+                r = await c.get(url, follow_redirects=True, headers={"User-Agent": "Mozilla/5.0"}, timeout=20)
+            m = re.search(r'<meta[^>]+property="og:title"[^>]+content="([^"]+)"', r.text) or re.search(r"<title[^>]*>([^<]+)</title>", r.text, re.I)
+            title = unescape(m.group(1)).strip() if m else ""
+        except httpx.HTTPError:
+            pass
+    now = time.time()
+    j = {"id": key, "title": (title or url.split("/")[2])[:160], "company": company.strip(), "url": url, "source": "added by you",
+         "status": "applied", "found": now, "applied_at": now, "history": [{"status": "applied", "at": now}]}
+    store.kv_put("jobs", key, j)
+    return {**j, "_key": key}
+
+
+async def to_drive(ctx: dict, client=None) -> str:
+    """Approved and later packages go to Drive, Vision/Jobs/<package folder>; each file is checked by size and MD5, and only
+    then is the local folder removed (Mani, 2026-10-18: "not in local"). No sign-in, a full Drive or an error = the files stay
+    and the Application Tracker tries again on its next run."""
+    store, bus = ctx["store"], ctx.get("bus")
+    todo = [j for j in store.kv_list("jobs", limit=2000) if j.get("status") in KEPT and not j.get("drive") and j.get("folder") and Path(j["folder"]).is_dir()]
+    if not todo:
+        return ""
+    try:
+        token = await oauth.access_token(DRIVE_ACCOUNT, "gdrive")
+    except oauth.AuthNeeded:
+        if bus:
+            port = ctx["cfg"].vision.port if ctx.get("cfg") else 8765
+            bus.notice("gdrive-backup", gdrive.SIGN_IN, f"http://127.0.0.1:{port}/auth/gdrive/login?account={DRIVE_ACCOUNT}")
+        return "packages wait for a Drive sign-in"
+    if bus:
+        bus.clear_notice("gdrive-backup")
+    done = 0
+    try:
+        async with (client or _client)() as c:
+            for j in todo:
+                d = Path(j["folder"])
+                fid = await gdrive.vision_path(c, token, "Jobs", d.name)
+                files = [await gdrive.upload(c, token, f, f.relative_to(d).as_posix().replace("/", " - "), fid,
+                                             mimetypes.guess_type(f.name)[0] or "application/octet-stream")
+                         for f in sorted(d.rglob("*")) if f.is_file()]
+                j["drive"] = {"id": fid, "url": gdrive.folder_url(fid), "folder": f"{gdrive.TOP}/Jobs/{d.name}", "files": files, "at": time.time()}
+                shutil.rmtree(d, ignore_errors=True)        # every file is in Drive and matches
+                j["local_removed"] = time.time()
+                store.kv_put("jobs", j.pop("_key"), {k: v for k, v in j.items() if k != "_ts"})
+                done += 1
+    except gdrive.DriveFull:
+        if bus:
+            bus.notice("gdrive-full", "Google Drive is full: job packages stay on the Mac until there is room", None)
+        return f"Drive is full; {done} packages moved"
+    except (gdrive.DriveError, httpx.HTTPError) as e:
+        return f"Drive upload stopped: {e}"[:160]
+    return f"{done} packages moved to Drive" if done else ""
+
+
 async def approve_package(row: dict, decision: str, ctx: dict) -> str:
     store, p = ctx["store"], row["payload"]
     j = store.kv_get("jobs", p["job"])
@@ -621,10 +726,12 @@ async def approve_package(row: dict, decision: str, ctx: dict) -> str:
         j["status"] = "passed"
         store.kv_put("jobs", p["job"], j)
         return "skipped"
-    j.update(status="applied", applied_at=time.time())
-    store.kv_put("jobs", p["job"], j)
-    ctx["bus"].notice(f"apply:{p['job']}", f"Submit your application: {j['title']} @ {j['company'] or j['source']} (files in {p.get('folder')})", p["url"])
-    return "package ready: open the posting and submit"
+    set_status(store, p["job"], "approved")
+    note = await to_drive(ctx)
+    j = store.kv_get("jobs", p["job"]) or j
+    where = f"files in Drive: {j['drive']['folder']}" if j.get("drive") else f"files in {p.get('folder')}"
+    ctx["bus"].notice(f"apply:{p['job']}", f"Submit your application: {j['title']} @ {j['company'] or j['source']} ({where}), then mark it applied", p["url"])
+    return "approved: open the posting and submit" + (f" ({note})" if note else "")
 
 
 APPROVAL_HANDLERS = {"job_package": approve_package}

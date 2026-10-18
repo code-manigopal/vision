@@ -33,6 +33,10 @@ HELP = (
     "/status – same, short form\n"
     "/traffic &lt;city&gt; – live traffic (e.g. /traffic Windsor)\n"
     "/approvals – what's waiting for you\n"
+    "/agents – every master, one line each; /agents &lt;master&gt; – its agents (e.g. /agents youtube)\n"
+    "/agent &lt;name&gt; – one agent in detail (e.g. /agent resume tailor)\n"
+    "/jobs – the jobs you're tracking, with buttons to move them\n"
+    "/track &lt;link&gt; [| title | company] – track a job you applied to elsewhere\n"
     "/say &lt;word&gt; = &lt;Tamil spelling&gt; – fix how the voice says a word (/say &lt;word&gt; shows it; /say! forces)\n"
     "Or just type: <i>what's up</i>"
 )
@@ -47,6 +51,12 @@ PART_ICONS = [(r"°C", "🌤"), (r"in the air", "✈️"), (r"\bincidents?\b", "
               (r"^Portfolio", "💼"), (r"^Overall", "📊"), (r"^Top gainer", "🟢"), (r"^Top loser", "🔻"), (r"^(Fyers|Zerodha|Kite|WS )", "🏦"),
               (r"^(NIFTY|SENSEX|NASDAQ|S&P|DOW|BTC)", "🌐"), (r"^Consider|^Idea", "💡"), (r"waiting on|sign-?in|log ?in", "⏳"),
               (r"need you|waiting for your|awaiting", "👉"), (r"backed up|freed", "🗄"), (r"^latest", "🆕")]
+
+
+DOTS = {"error": "🔴", "done": "🟢", "wait": "🟡", "running": "🔵", "idle": "⚪"}
+COMMANDS = [("brief", "brief from every master now"), ("agents", "masters, or one master's agents"), ("agent", "one agent in detail"),
+            ("jobs", "jobs you're tracking"), ("track", "track a job you applied to elsewhere"), ("approvals", "what's waiting for you"),
+            ("traffic", "live traffic for a city"), ("say", "fix how the voice says a word"), ("help", "all commands")]
 
 
 def _icon(part: str) -> str | None:
@@ -113,6 +123,10 @@ class TelegramChannel:
             self.status(False, f"send /start to @{name} to get your chat ID")
         else:
             self.status(True, f"@{name}")
+        try:                                     # the bot's command menu in Telegram
+            await self._call("setMyCommands", commands=[{"command": c, "description": d} for c, d in COMMANDS])
+        except Exception as e:
+            log.warning("Telegram setMyCommands failed: %s", e)
         self.tasks.append(asyncio.create_task(self._poll()))
         if self.chat_id and self.orch.cfg.telegram.get("alerts", True):
             self.tasks.append(asyncio.create_task(self._watch_bus()))
@@ -255,11 +269,110 @@ class TelegramChannel:
                 await self.send(f"🔴 {esc(a['master'])} / {esc(a['agent'])}\n{esc(a['title'])}",
                                 buttons=[[{"text": "✅ Approve", "callback_data": f"ap:{a['id']}:approved"},
                                           {"text": "✖ Reject", "callback_data": f"ap:{a['id']}:rejected"}]])
+        elif re.match(r"/agents(\s|$|@)", t):
+            arg = text.split(None, 1)[1].strip() if len(text.split(None, 1)) > 1 else ""
+            await self.send(self.agents_text(arg))
+        elif re.match(r"/agent(\s|$|@)", t):
+            arg = text.split(None, 1)[1].strip() if len(text.split(None, 1)) > 1 else ""
+            await self.send(self.agent_text(arg))
+        elif re.match(r"/jobs(\s|$|@)", t):
+            await self._jobs()
+        elif re.match(r"/track(\s|$|@)", t):
+            await self.send(await self._track(text.split(None, 1)[1] if len(text.split(None, 1)) > 1 else ""))
         elif t.startswith("/traffic") or t.startswith("traffic in "):
             city = text.split(" ", 1)[1].replace("in ", "", 1).strip() if " " in text else self.orch.cfg.vision.home_city
             await self.send(await self._traffic(city))
         else:
-            await self.send("I can do /brief, /traffic &lt;city&gt; and /approvals for now. Full conversation arrives with the Ask engine.")
+            await self.send("I can do /brief, /agents, /agent, /jobs, /track, /traffic &lt;city&gt; and /approvals for now. /help lists them all.")
+
+    # ---------- agents, one by one ----------
+    def _master(self, q: str):
+        q = q.lower().strip()
+        ms = [m for m in self.orch.masters]
+        return next((m for m in ms if m.id == q), None) or next((m for m in ms if q in m.name.lower() or q in NAMES.get(m.id, "").lower()), None)
+
+    def agents_text(self, q: str = "") -> str:
+        """/agents: one line per master; /agents <master>: that master's agents, crews marked ›, each with its status and summary."""
+        live = self.bus.state["masters"]
+        if not q:
+            lines = ["🤖 <b>Masters</b>"]
+            for m in self.orch.masters:
+                ags = (live.get(m.id) or {}).get("agents") or []
+                errs = sum(1 for a in ags if a.get("status") == "error")
+                state = "on hold" if not m.enabled else f"{len(ags)} agents" + (f" · {errs} 🔴" if errs else " · all fine" if ags else " · not run yet")
+                lines.append(f"{ICONS.get(m.id, '🧩')} <b>{esc(NAMES.get(m.id, m.name))}</b> <code>{esc(m.id)}</code> · {state}")
+            return "\n".join(lines + ["", "Send /agents &lt;id&gt; for one master's agents."])
+        m = self._master(q)
+        if not m:
+            return f"No master matches “{esc(q)}”. Send /agents for the list."
+        ags = (live.get(m.id) or {}).get("agents") or []
+        lines = [f"{ICONS.get(m.id, '🧩')} <b>{esc(NAMES.get(m.id, m.name))}</b>" + ("" if m.enabled else " · on hold")]
+        if not ags:
+            return "\n".join(lines + ["No agent has run since VISION started."])
+        for a in ags:
+            crew = "  › " if a.get("director") else ""
+            rep = " 📣" if a.get("reporter") else ""
+            summ = (a.get("summary") or "").strip()
+            lines.append(f"{crew}{DOTS.get(a.get('status'), '⚪')} <b>{esc(a['name'])}</b>{rep} · {esc(a.get('label') or a.get('status') or '')}"
+                         + (f"\n{crew}    {esc(summ[:160] + ('…' if len(summ) > 160 else ''))}" if summ else ""))
+        return "\n".join(lines)
+
+    def agent_text(self, q: str) -> str:
+        """/agent <name>: status, last summary, last run time and any error of one agent (first match across masters)."""
+        if not q:
+            return "Use /agent &lt;name&gt;, e.g. /agent resume tailor."
+        ql = q.lower().strip()
+        hits = [(mid, a) for mid, m in self.bus.state["masters"].items() for a in m.get("agents") or [] if ql in a["name"].lower()]
+        hits.sort(key=lambda h: h[1]["name"].lower() != ql)
+        if not hits:
+            return f"No agent matches “{esc(q)}”. Send /agents &lt;master&gt; to see names."
+        mid, a = hits[0]
+        m = self.orch.by_id.get(mid)
+        lines = [f"{DOTS.get(a.get('status'), '⚪')} <b>{esc(a['name'])}</b> · {esc(NAMES.get(mid, m.name if m else mid))}"
+                 + (f" › {esc(a['director'])}" if a.get("director") else ""),
+                 f"Status: {esc(a.get('label') or a.get('status') or '')}" + (" · reports for the master" if a.get("reporter") else ""),
+                 f"Tier: {esc(a.get('tier') or '')}"]
+        if a.get("summary"):
+            lines.append(f"Says: {esc(a['summary'][:600])}")
+        try:
+            r = self.store.last_run(mid, a["name"])
+        except Exception:
+            r = None
+        if r:
+            lines.append(f"Last run: {time.strftime('%d %b %H:%M', time.localtime(r['ts']))}" + (f" · {r['ms'] / 1000:.1f} s" if r.get("ms") else ""))
+            if r.get("error"):
+                lines.append(f"Error: {esc(str(r['error'])[:400])}")
+        if len(hits) > 1:
+            lines.append("Also matches: " + ", ".join(esc(h[1]["name"]) for h in hits[1:6]))
+        return "\n".join(lines)
+
+    # ---------- the job tracker ----------
+    async def _jobs(self) -> None:
+        from ..masters.jobs import KEPT, NEXT, TRACK
+        js = sorted((j for j in self.store.kv_list("jobs", limit=2000) if j.get("status") in KEPT),
+                    key=lambda j: -(j.get("applied_at") or j.get("found") or 0))
+        if not js:
+            await self.send("No jobs tracked yet. Approve a package, or /track &lt;link&gt; one you applied to.")
+            return
+        counts = " · ".join(f"{sum(1 for j in js if j['status'] == k)} {TRACK[k].lower()}" for k in KEPT if any(j["status"] == k for j in js))
+        await self.send(f"💼 <b>Tracked jobs</b> · {counts}" + (f"\nShowing the latest 10 of {len(js)}." if len(js) > 10 else ""))
+        for j in js[:10]:
+            key = j["_key"]
+            when = j.get("applied_at") and time.strftime("%d %b", time.localtime(j["applied_at"]))
+            link = f"\n<a href=\"{esc(j['url'])}\">Posting</a>" if j.get("url") else ""
+            drive = f" · <a href=\"{esc(j['drive']['url'])}\">Files</a>" if (j.get("drive") or {}).get("url") else ""
+            btns = [{"text": TRACK[n], "callback_data": f"jb:{key}:{n}"} for n in NEXT.get(j["status"], ()) if len(f"jb:{key}:{n}") <= 64]
+            await self.send(f"<b>{esc(TRACK[j['status']])}</b> · {esc(j.get('title'))} @ {esc(j.get('company') or j.get('source') or '')}"
+                            + (f" · applied {when}" if when else "") + link + drive, buttons=[btns] if btns else None)
+
+    async def _track(self, arg: str) -> str:
+        from ..masters import jobs
+        url, title, company = ([p.strip() for p in arg.split("|")] + ["", ""])[:3]
+        try:
+            j = await jobs.track(self.store, url, title, company)
+        except ValueError as e:
+            return f"Not tracked: {esc(e)}. Use /track &lt;link&gt; [| title | company]."
+        return f"💼 Tracking <b>{esc(j['title'])}</b> as applied. /jobs shows it."
 
     def _say(self, text: str) -> str:
         """/say word = Tamil spelling saves Mani's fix (data/voice_fixes.json); /say word shows what the voice uses and where it comes from; /say! forces a word of the approved reference."""
@@ -286,6 +399,9 @@ class TelegramChannel:
 
     async def _on_button(self, cq: dict) -> None:
         data = cq.get("data", "")
+        if data.startswith("jb:"):
+            await self._on_job_button(cq, data)
+            return
         try:
             _, sid, decision = data.split(":")
             row = self.store.decide_approval(int(sid), decision)
@@ -303,3 +419,23 @@ class TelegramChannel:
         if row:
             self.bus.publish({"type": "approval_decided", "id": row["id"], "decision": decision})
             self.bus.say(f"{row['title']} → {decision} via Telegram")
+
+    async def _on_job_button(self, cq: dict, data: str) -> None:
+        from ..masters import jobs
+        _, rest = data.split(":", 1)
+        key, _, status = rest.rpartition(":")
+        try:
+            j = jobs.set_status(self.store, key, status)
+            note = f"Marked {jobs.TRACK[status].lower()}"
+        except ValueError as e:
+            j, note = None, str(e)
+        try:
+            await self._call("answerCallbackQuery", callback_query_id=cq["id"], text=note)
+            if j:
+                m = cq["message"]
+                await self._call("editMessageText", chat_id=m["chat"]["id"], message_id=m["message_id"],
+                                 text=esc(m.get("text", "")) + f"\n\n<b>{esc(note)}</b>", parse_mode="HTML")
+        except Exception as e:
+            log.warning("Telegram button reply failed: %s", e)
+        if j:
+            self.bus.say(f"Job: {j['title']} → {jobs.TRACK[status]} via Telegram")

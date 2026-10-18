@@ -469,8 +469,8 @@ def backup_name(v: dict) -> str:
 
 
 async def backup(ctx: dict, ch: dict, log: list[dict], client) -> str:
-    """Copies each video YouTube has confirmed (see free_space) to Drive before its local copy goes: `backup_folder`/Shorts or
-    /Videos in the backup sign-in's Drive, the video and its cover, each checked by size and MD5 (Mani, 2026-10-15: "this is for
+    """Copies each video YouTube has confirmed (see free_space) to Drive before its local copy goes: Vision/YouTube/<channel>/Shorts
+    or /Videos in the backup sign-in's Drive (`backup_folder` switches it on and names the older top-level folder moved in there), the video and its cover, each checked by size and MD5 (Mani, 2026-10-15: "this is for
     backup... no more local saves"). No sign-in, a full Drive or an error = the local files stay and it is tried again next run."""
     if not ch.get("backup_folder") or ch.get("keep_local"):
         return ""
@@ -482,21 +482,22 @@ async def backup(ctx: dict, ch: dict, log: list[dict], client) -> str:
     try:
         token = await oauth.access_token(BACKUP_ACCOUNT, "gdrive")
     except oauth.AuthNeeded:
-        bus.notice("gdrive-backup", "Sign in to Google Drive once so posted videos are backed up there (then removed from the Mac)",
+        bus.notice("gdrive-backup", gdrive.SIGN_IN,
                    f"http://127.0.0.1:{ctx['cfg'].vision.port if ctx.get('cfg') else 8765}/auth/gdrive/login?account={BACKUP_ACCOUNT}")
         return "Drive backup waits for a sign-in"
     bus.clear_notice("gdrive-backup")
     done = 0
     try:
         async with client() as c:
-            top = await gdrive.ensure_folder(c, token, ch["backup_folder"])
+            # Vision/YouTube/<channel name>; the channel's older top-level `backup_folder` is moved in there the first time
+            top = await gdrive.vision_path(c, token, "YouTube", ch["name"], legacy=ch["backup_folder"])
             subs: dict[str, str] = {}
             for v in todo:
                 sub_ = "Videos" if v.get("format") == "long" else "Shorts"
                 if sub_ not in subs:
                     subs[sub_] = await gdrive.ensure_folder(c, token, sub_, top)
                 name, f = backup_name(v), Path(v["file"])
-                saved = {"video": await gdrive.upload(c, token, f, name + f.suffix, subs[sub_], "video/mp4"), "folder": f"{ch['backup_folder']}/{sub_}"}
+                saved = {"video": await gdrive.upload(c, token, f, name + f.suffix, subs[sub_], "video/mp4"), "folder": f"{gdrive.TOP}/YouTube/{ch['name']}/{sub_}"}
                 thumb = Path(v.get("thumb") or "")
                 if v.get("thumb") and thumb.is_file():
                     saved["cover"] = await gdrive.upload(c, token, thumb, name + " cover" + thumb.suffix, subs[sub_], "image/jpeg")

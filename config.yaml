@@ -179,7 +179,7 @@ masters:
       channels:            # one Director (with its own crew) per channel; the director's name must match catalog.json
         - id: confessions
           name: Confessions Everywhere
-          backup_folder: confessions_everywhere_yt   # each posted video (and its cover) is copied to this Drive folder (Shorts/ or Videos/), checked, then removed from the Mac; sign in once at /auth/gdrive/login?account=drive-backup
+          backup_folder: confessions_everywhere_yt   # on: each posted video (and its cover) is copied to Drive, Vision/YouTube/<channel name>/Shorts or /Videos (this older top-level folder is moved in there once), checked, then removed from the Mac; sign in once at /auth/gdrive/login?account=drive-backup
           director: Confessions Everywhere Director
           shorts_per_day: 4              # a run keeps making Shorts, one after another, until the day's number is reached or the stories run out
           subreddits: [confession, offmychest, TrueOffMyChest]   # needs REDDIT_CLIENT_ID / REDDIT_CLIENT_SECRET; or drop .txt files in inbox/confessions/confessions/
@@ -228,7 +228,7 @@ masters:
           generator: {}                  # AI footage for beats with no stock match, e.g. { provider: name, kind: image, key_env: NAME_API_KEY } (see vision/services/genmedia.py)
         - id: manimarket
           name: Mani Market Tamil
-          backup_folder: mani_market_yt   # each posted video (and its cover) is copied to this Drive folder (Shorts/ or Videos/), checked, then removed from the Mac; sign in once at /auth/gdrive/login?account=drive-backup
+          backup_folder: mani_market_yt   # on: each posted video (and its cover) is copied to Drive, Vision/YouTube/<channel name>/Shorts or /Videos (this older top-level folder is moved in there once), checked, then removed from the Mac; sign in once at /auth/gdrive/login?account=drive-backup
           director: Mani Market Tamil Director
           crew: market                   # its own crew (vision/masters/market_crew.py): a quarterly result from NSE's filings, told in Tanglish over slides
           language: ta

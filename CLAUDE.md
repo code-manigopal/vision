@@ -35,7 +35,7 @@ bash scripts/setup.sh                     # venv + deps + .env from template + c
 .venv/bin/python -m vision sfx            # add 3 sound effects per kind to assets/sfx/ (or: sfx whoosh 5)
 .venv/bin/python -m vision visa list      # Visa Watch accounts: add | list | update | pause | resume | remove | check <id>
 .venv/bin/python -m vision ebooks list    # E-books Manager: list | published <book> [ASIN] | redraw <book> <page>
-.venv/bin/python -m pytest -q             # 452 tests, all external services mocked
+.venv/bin/python -m pytest -q             # 491 tests, all external services mocked
 bash scripts/install_launchagent.sh       # auto-start at login + restart on crash
 tail -f logs/vision.log
 ```
@@ -53,7 +53,7 @@ vision/
   server.py        FastAPI: dashboard, /ws, /api/*, OAuth + Fyers login callbacks
   ask.py           AskEngine: LLM tool-calling over master data; session memory 30 min
   voice/           TTS (kokoro | piper | macos), STT (mlx-whisper), WakeWord (openWakeWord), clone.py + indic_f5.py (Mani's cloned Tamil voice)
-  channels/telegram.py   briefs (grouped by area with emojis, a long report split into one line per part: `GROUPS`, `ICONS`, `PART_ICONS`, `report_lines`), alerts, reminders, notices, /commands (incl. `/say word = Tamil spelling`, `/say! ...` to force), approve/reject buttons
+  channels/telegram.py   briefs (grouped by area with emojis, a long report split into one line per part: `GROUPS`, `ICONS`, `PART_ICONS`, `report_lines`), alerts, reminders, notices, /commands (incl. `/say word = Tamil spelling`, `/say! ...` to force; `/agents`, `/agents <master>`, `/agent <name>` list agents from the live state; `/jobs` with move buttons `jb:<key>:<status>`, `/track <link> [| title | company]`; the menu is set with setMyCommands, `COMMANDS`), approve/reject buttons
   services/        llm.py (LM Studio OpenAI-compatible + Anthropic + a hosted "writer" tier on Groq), oauth.py (Google/Microsoft),
                    reddit.py (official API, read-only), gdrive.py (Drive folder, read-only), bgm.py (music library from Openverse), gutenberg.py (public-domain story books), stock_video.py (Pexels/Pixabay footage), genmedia.py (AI footage provider slot),
                    mailcal.py (Gmail/GCal/Graph), traffic_api.py (TomTom), news.py (Google News RSS),
@@ -100,7 +100,7 @@ Tests: mock HTTP with `httpx.MockTransport`; use `FakeLLM` from tests/test_phase
 · `GET/POST /api/approvals` · `POST /api/approvals/{id}/{approved|rejected}` · `POST /api/ask {text, session}`
 · `POST /api/notices/{key}/dismiss` (the Close button: that notice stays away for a day unless its text changes; in memory only)
 · `GET /api/issues` · `POST /api/issues/explain {master, agent}` → `{text, source}` · `GET /api/approvals/{id}/email` (full body + attachments) · `GET /api/approvals/{id}/attachments/{att}` (streamed, never stored)
-· `GET /api/desk/{master}` (read-only pipeline: stages + items + artifacts) · `GET /api/files/{path}` (only `data/sites`, `data/applications`)
+· `GET /api/desk/{master}` (read-only pipeline: stages + items + artifacts; a jobs item also has `actions`, the tracker's next moves) · `POST /api/jobs/{key}/status {status, note?}` · `POST /api/jobs/track {url, title?, company?}` (both local origin only) · `GET /api/files/{path}` (only `data/sites`, `data/applications`)
 · `GET/POST /api/visa/accounts`, `POST /api/visa/accounts/{id}` (`{cities, booked, password?}` or `{action: signin|pause|resume|check|forget}`), `DELETE /api/visa/accounts/{id}` (a password is never returned; a request from another origin is refused)
 · `POST /api/tts {text, voice?}` → wav · `GET /api/voices` (Kokoro's English voices) · `POST /api/stt` (raw audio body) → `{text}` · `GET /api/schedule` (fire times in the next 24 h of the fixed-time jobs only: master `run_at` runs and briefs, `{at, local, kind, master, label, channel, zone_local?}`; `{standby: true, items: []}` in standby) · `GET /api/traffic?city=` · `GET /api/weather/grid` (globe weather, ~100 points, cached 1 h)
 · `GET /api/voice/fix?word=` → `{word, source: fix|table|learned|none, spelling}` · `POST /api/voice/fix {word, spelling, force?}` (Mani's pronunciation fixes; local origin only; 400 with the reason when refused)
@@ -311,6 +311,16 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   the cover art, rebuild and ask again (an older approval is answered "outdated"). Thresholds were calibrated on Mani's own Gemini book
   (`~/Downloads/Animals_Thematic_Coloring_Book_A4.pdf`, his quality bar). Gemini's image API is not free; Pollinations' terms unclear; the
   Gemini app is by hand only. Not built: edutainment/activity pages, story books, KDP sales CSV, dashboard Redraw button.
+- **One Vision folder in Drive (Mani, 2026-10-18):** everything VISION keeps in kamanikagopal's Drive sits under `Vision/` (`gdrive.TOP`,
+  `gdrive.vision_path`): `Vision/YouTube/<channel name>/{Shorts,Videos}` and `Vision/Jobs/<package folder>`. A channel's older top-level
+  `backup_folder` (confessions_everywhere_yt, mani_market_yt) is moved in and renamed the first time (`legacy`), nothing re-uploaded.
+- **Job tracker (Mani, 2026-10-18, like LinkedIn's My Jobs):** approving a package sets `approved` (not applied: dashboard and Telegram say
+  Approved); Mani marks it applied (that date starts the follow-ups), then interview, offer, rejected or archived (`jobs.TRACK`, `NEXT`,
+  `set_status`, history kept on the record), on the desk's card buttons or Telegram /jobs. An "application received" email moves an approved
+  job to applied. `jobs.track` adds a job applied to elsewhere (status applied, source "added by you"; only its public page is read, for the
+  title; Indeed links refused). Approved and later packages go to Drive (`jobs.to_drive`, same `drive-backup` sign-in, every file checked by
+  size and MD5) and only then is `data/applications/<folder>` deleted (`local_removed`; the desk links "Files in Drive"); approval tries it
+  at once, the Application Tracker again each run. Rejected packages stay on the Mac.
 - **Video backups to Drive (Mani, 2026-10-15: "this is for backup... no more local saves"):** each channel's `backup_folder`
   (`confessions_everywhere_yt`, `mani_market_yt`) in kamanikagopal@gmail.com's Drive, sub-folders `Shorts` / `Videos`, files named
   `youtube.backup_name` ("2026-10-15 <title without hashtags> [<video id>].mp4" + " cover.jpg"). `youtube.backup` runs in the Analytics

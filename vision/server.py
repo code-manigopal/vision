@@ -27,7 +27,7 @@ from .channels.telegram import TelegramChannel
 from .services import fyers, kite_mcp, mailcal, oauth, sysmon, traffic_api, weather
 from .services.llm import LLMUnavailable
 from .masters.email import accounts as email_accounts
-from .masters import visa
+from .masters import jobs, visa
 
 log = logging.getLogger("vision")
 DASH = ROOT / "dashboard"
@@ -437,6 +437,29 @@ def create_app(*, boot_on_start: bool = True, schedules: bool = True, telegram_o
         if not app.state.bus.dismiss_notice(key):
             raise HTTPException(404, "No such notice")
         return {"ok": True}
+
+    @app.post("/api/jobs/track")
+    async def jobs_track(request: Request):
+        """A job Mani applied to outside VISION: {url, title?, company?} -> tracked as applied."""
+        _visa(request)                                                          # local origin only
+        b = await request.json()
+        try:
+            j = await jobs.track(app.state.store, b.get("url") or "", b.get("title") or "", b.get("company") or "")
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        return {"ok": True, "key": j["_key"], "title": j["title"]}
+
+    @app.post("/api/jobs/{key:path}/status")
+    async def jobs_status(key: str, request: Request):
+        """Mani moves a tracked job: {status: approved|applied|interview|offer|rejected|archived, note?}."""
+        _visa(request)
+        b = await request.json()
+        try:
+            j = jobs.set_status(app.state.store, key, b.get("status") or "", b.get("note"))
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        app.state.bus.say(f"Job: {j['title']} → {jobs.TRACK[j['status']]}")
+        return {"ok": True, "status": j["status"]}
 
     @app.get("/api/desk/{master_id}")
     async def desk_view(master_id: str):

@@ -1906,6 +1906,11 @@ class Component extends DCLogic {
     try { const r = await fetch('/api/desk/' + m); j = r.ok ? await r.json() : null; } catch (e) {}
     this.setState({ desk: Object.assign({}, this.state.desk, { [m]: j || { failed: true } }) });
   }
+  async jobSet(key, status) {
+    // the jobs desk's tracker buttons (Mark applied, interview, offer, rejected, archived); the desk is read again after
+    try { await fetch('/api/jobs/' + encodeURIComponent(key) + '/status', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ status }) }); } catch (e) {}
+    this.openDesk('jobs', this.state.deskStage);
+  }
   async loadSched() {
     // the fixed-time jobs of the next 24 hours (master run_at runs + briefs) for the 24H TIMELINE; asked again every 10 minutes
     if (!this.schedTimer) this.schedTimer = setInterval(() => { if (this.state.liveUp && !this.dead) this.loadSched(); }, 600000);
@@ -2743,7 +2748,8 @@ class Component extends DCLogic {
             rows: (it.sub ? [{ a: it.sub, b: '', ac: '#C9C0AC', bc: '#EDE6D6' }] : []).concat((it.rows || []).map((r) => ({ a: r[0], b: String(r[1] == null ? '—' : r[1]), ac: '#C9C0AC', bc: '#EDE6D6' })))
               .concat(it.ts ? [{ a: 'When', b: (() => { const t = new Date(it.ts * 1000); return days[t.getDay()] + ' ' + t.getDate() + ' ' + mons[t.getMonth()] + ' · ' + pad(t.getHours()) + ':' + pad(t.getMinutes()); })(), ac: '#C9C0AC', bc: '#EDE6D6' }] : []),
             atts: (it.files || []).map((f2) => ({ label: f2.label, open: () => this.setState({ prev: { key, name: f2.label, src: f2.url, type: kindOf(f2.mime || ''), sandbox: f2.mime === 'text/html' && /^\/api\/files\/sites\//.test(f2.url) ? 'allow-scripts' : '' } }) }))
-              .concat((it.links || []).map((l) => ({ label: l.label + ' ↗', open: () => this.setState({ prev: { key, name: l.label + ' · ' + l.url, src: l.url, type: 'box', sandbox: 'allow-scripts' } }) }))),
+              .concat((it.links || []).map((l) => ({ label: l.label + ' ↗', open: /^https:\/\/drive\.google\.com\//.test(l.url) ? () => window.open(l.url, '_blank') : () => this.setState({ prev: { key, name: l.label + ' · ' + l.url, src: l.url, type: 'box', sandbox: 'allow-scripts' } }) })))
+              .concat((it.actions || []).map((a) => ({ label: a.label, open: () => this.jobSet(it.id, a.status) }))),
             say: (it.title || '') + '. ' + (it.body || it.sub || '') };
           if (s.prev && s.prev.key === key) Object.assign(c, { prevOpen: true, prevName: s.prev.name, prevSrc: s.prev.src, prevType: s.prev.type, prevSandbox: s.prev.sandbox });
           deck.push(c);
