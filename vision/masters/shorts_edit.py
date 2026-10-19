@@ -193,7 +193,7 @@ def segment(visual: dict | None, frames: int, out: Path, i: int, L: dict = UPRIG
         run(["ffmpeg", "-y", "-v", "error", "-loop", "1", "-framerate", str(FPS), "-i", visual["path"], "-vf", vf, *enc])
     else:
         f = speed(visual.get("duration") or probe(visual["path"]), dur)
-        if motion:     # slow centred push-in / pull-out; frames are scaled up 1.5x first so the crop stays sharp, d=1 keeps one frame out per frame in
+        if motion and not visual.get("diagram"):     # (an animated diagram moves by itself) slow centred push-in / pull-out; frames are scaled up 1.5x first so the crop stays sharp, d=1 keeps one frame out per frame in
             z = ("1+0.08*on/{n}", "1.08-0.08*on/{n}")[i % 2]
             vf = (f"setpts=PTS/{f},scale={W * 3 // 2}:{H * 3 // 2}:force_original_aspect_ratio=increase:out_range=limited,format=yuv420p,crop={W * 3 // 2}:{H * 3 // 2},fps={FPS},"
                   f"zoompan=z='{z}':x='iw/2-iw/zoom/2':y='ih/2-ih/zoom/2':d=1:s={W}x{H}:fps={FPS},setsar=1,setparams=range=limited").replace("{n}", str(max(frames, 1)))

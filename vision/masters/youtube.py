@@ -54,7 +54,7 @@ CHANNEL = {"id": "confessions", "name": "Confessions Everywhere", "director": "C
            "motion": True, "caption_styles": True, "sfx": True, "sfx_volume": 0.35, "quick": {},
            "double_down": True, "double_down_after": 12, "explore": 0.15, "trends": True, "trend_region": "US",
            "daily_mix": {}, "mix_auto": True, "mix_min_videos": 6, "mix_days": 28,
-           "keep_local": False, "backup_folder": "", "lessons": False, "lesson_shorts": False, "lesson_channels": [], "transcripts_per_day": 10, "lesson_model": "", "lesson_tamil_model": "qwen/qwen3.8-27b"}
+           "keep_local": False, "backup_folder": "", "diagrams": [], "lessons": False, "lesson_shorts": False, "lesson_channels": [], "transcripts_per_day": 10, "lesson_model": "", "lesson_tamil_model": "qwen/qwen3.8-27b"}
 # Original stories: a premise is built from one of each, so no two start from the same place (20 x 12 x 10 x 10 combinations).
 THEMES = ["a family secret", "a betrayal by a close friend", "a lie that grew too big", "a second chance that felt undeserved", "a debt never repaid",
           "an inheritance dispute", "a workplace mistake hidden for years", "a kindness kept secret", "a marriage on autopilot", "jealousy of a sibling",
@@ -449,7 +449,8 @@ def save_record(store, ch: dict, job: dict) -> None:
         "chapters": [{"t": round(sum(x["dur"] for x in job["beats"][:n])), "heading": b["heading"]} for n, b in enumerate(job["beats"]) if b.get("heading")],
         "screenplay": [{"text": b["text"], "seconds": round(b["dur"], 2), "query": b["query"], "footage": (b.get("visual") or {}).get("page", ""),
                         **({"cue": b["cue"]} if b.get("cue") else {})} for b in job["beats"]],
-        "credits": sorted({b["visual"]["credit"] for b in job["beats"] if b.get("visual")})})
+        "credits": sorted({b["visual"]["credit"] for b in job["beats"] if b.get("visual") and b["visual"].get("source") != "diagram"}),     # our own scenes need no credit
+        "diagrams": job.get("diagrams", [])})
     store.kv_put(SEEN, job["key"], {"state": "done"})
 
 
@@ -1521,17 +1522,65 @@ class FootageCollector(Crew):
 
 
 class FootageGenerator(Crew):
-    """Fills beats the stock libraries had nothing for, through an online AI provider (services/genmedia.py)."""
-    name, tier, note, blocking = "Footage Generator", "CLOUD", "AI image or clip for a beat with no footage", False
+    """Animated diagram scenes for some lines (scenes.py, channel option `diagrams`: the kinds that may have them), then fills
+    beats the stock libraries had nothing for, through an online AI provider (services/genmedia.py)."""
+    name, tier, note, blocking = "Footage Generator", "CLOUD", "animated diagrams; AI clip for a beat with no footage", False
+
+    async def _scenes(self, ctx: dict, job: dict) -> str:
+        """Asks the model which lines a diagram explains better than footage, keeps the scenes that pass scenes.check, renders
+        them in one go and puts each on its beat (`diagram` on the visual: the Editor gives it no zoom). Any trouble: footage stays."""
+        from . import scenes
+        from ..services import hyperframes
+        group = {"science": "science", "money": "money"}.get(kind(job), "story")
+        if group not in (self.ch.get("diagrams") or []) or job.get("format") == "long" or not ctx.get("llm"):
+            return ""
+        beats = [b for b in job["beats"] if b.get("kind") != "outro" and b.get("dur")]
+        if len(beats) < 3 or not hyperframes.ready():
+            return ""
+        most = 2 if group == "story" else max(1, round(len(beats) * 0.4))     # a story keeps its footage: a scene or two at most
+        try:
+            got = await ctx["llm"].json(scenes.ask([b["text"] for b in beats], {group}, most), tier="writer", max_tokens=1500)
+        except Exception:  # noqa: BLE001 - no answer: footage only
+            return ""
+        picked, used = [], set()
+        for raw in (got or {}).get("scenes", []) if isinstance(got, dict) else []:
+            i = raw.get("line") if isinstance(raw, dict) else None
+            if not isinstance(i, int) or not 0 < i < len(beats) or i in used or len(picked) >= most:
+                continue
+            sc = scenes.check(raw, beats[i]["text"], {group})
+            if sc and any(sc == x for _, x in picked):                  # the same scene twice says nothing new
+                continue
+            if sc and any(abs(i - j) == 1 and x["template"] == sc["template"] for j, x in picked):    # nor the same template back to back
+                continue
+            if sc:
+                picked.append((i, sc))
+                used.add(i)
+        if not picked:
+            return "no diagram fits"
+        picked.sort()
+        work = Path(job["dir"]) / "footage"
+        work.mkdir(parents=True, exist_ok=True)
+        try:
+            clips = await asyncio.to_thread(scenes.render_shots, [(sc, beats[i]["dur"]) for i, sc in picked], work)
+        except hyperframes.RenderFailed as e:
+            return f"diagrams not rendered: {e}"[:120]
+        for (i, sc), clip in zip(picked, clips):
+            beats[i]["visual"] = {"kind": "video", "path": str(clip), "duration": beats[i]["dur"], "credit": "Animated diagram (VISION)", "page": "",
+                                  "source": "diagram", "diagram": True}
+        job["diagrams"] = [{"line": i, "template": sc["template"]} for i, sc in picked]
+        return f"{len(picked)} animated diagram{'s' if len(picked) > 1 else ''} ({', '.join(sc['template'] for _, sc in picked)})"
 
     async def run(self, ctx: dict) -> AgentResult:
         job = ctx.get("job")
         if not job:
             return self.idle()
+        drawn = await self._scenes(ctx, job)
         missing = [b for b in job["beats"] if not b.get("visual")]
         spec = self.ch.get("generator") or {}
         if not genmedia.ready(spec):
-            return AgentResult("off", "OFF", f"No AI provider set; {len(missing)} beats reuse the footage beside them" if missing else "No AI provider set; not needed this time")
+            if job.get("diagrams"):
+                return AgentResult("done", "DIAGRAMS", drawn + (f"; {len(missing)} beats reuse the footage beside them" if missing else ""))
+            return AgentResult("off", "OFF", (drawn + "; " if drawn else "") + (f"No AI provider set; {len(missing)} beats reuse the footage beside them" if missing else "No AI provider set; not needed this time"))
         kind = spec.get("kind", "image")
         async with self.client() as c:
             for b in missing:

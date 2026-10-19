@@ -35,7 +35,7 @@ bash scripts/setup.sh                     # venv + deps + .env from template + c
 .venv/bin/python -m vision sfx            # add 3 sound effects per kind to assets/sfx/ (or: sfx whoosh 5)
 .venv/bin/python -m vision visa list      # Visa Watch accounts: add | list | update | pause | resume | remove | check <id>
 .venv/bin/python -m vision ebooks list    # E-books Manager: list | published <book> [ASIN] | redraw <book> <page>
-.venv/bin/python -m pytest -q             # 499 tests, all external services mocked
+.venv/bin/python -m pytest -q             # 511 tests, all external services mocked
 bash scripts/install_launchagent.sh       # auto-start at login + restart on crash
 tail -f logs/vision.log
 ```
@@ -434,6 +434,16 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   `mix_auto: true`: once a week `resplit` shares the same total by score, at least 1 each, a category with under `mix_min_videos` (6) measured
   Shorts keeps its slots; kept in kv `yt_state` `<channel>:mix`, a change is logged and sent to Telegram (a `reminder` event) with the figures.
   The report's "latest" is the last made (it followed the store's save order and flipped).
+  **Animated diagrams (Mani, 2026-10-18; `masters/scenes.py`, HyperFrames):** channel option `diagrams` (kinds: science, money, story; config [] until
+  Mani approves the samples). The Footage Generator asks the model which lines a diagram explains better than footage (at most 40 % of a Short's
+  lines, never line 0 or the outro; a story at most 2) and for a template + short labels as JSON, never HTML; `scenes.check` keeps a scene only if
+  the template is known for that kind, labels are short and every figure on it is one the spoken line says (finance: nothing matching `PROMISE` /
+  `TOLD_PROMISE`, a growth curve has no figures and always says "Illustration, not a promise", breakdown shares only when the line gives them all
+  and they make 100; story: chat messages are the line's own words, a quote is copied whole from the line; a flow with a bad step is refused,
+  never shortened). Templates: science orbit, compare, flow, cycle, number; money compare, number, growth, breakdown, myth, checklist; story chat,
+  quote, timejump, split. A Short's scenes render in one go (`render_shots`) and are cut per beat; the visual has `diagram` (the Editor adds no
+  zoom), source "diagram" (not in the footage credits); the record keeps `diagrams`. Any trouble = the beat keeps its stock footage.
+  `scripts/short_sample.py science|money|story` makes a Short with the real crew on a throwaway database (nothing counted or uploaded).
   **Quick Shorts** (`quick`, `QUICK`: 20-35 s, ends on its own outro, `per_day` 1, 0 = off): only an original story can be one (Scout sets
   `job["quick"]`), counted among the day's Shorts; `word_range(ch, quick=True)`; insights keep `views_by_length` (quick vs regular).
   **Double down** (`double_down`, `double_down_after` 12, `explore` 0.15): `choose(options, told, views, floor)` gives each option a floor share
@@ -534,6 +544,18 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   marks one without (`skip`: reason "no figures" + `parser`) and goes on, never an error (UNREADABLE only when none reads). **Retry rule:** a skip in kv `mm_done` made by an older parser
   (`nse.PARSER`, bump it when a parser change can turn "no figures" into figures; no `parser` key counts as old) is ignored (`market_crew.done_at`), so ICICIPRULI Q2 FY27 is filmed on the next
   run; the same goes for "too few ratios" analysis skips.
+  **Animated slides and presenter (HyperFrames, Mani 2026-10-18; `services/hyperframes.py`, `masters/slides_motion.py`):** channel option `animated`
+  (config false until Mani approves the samples). `slides.assemble(..., motion={"deck", channel, source, tag, top})` renders the whole slides track as
+  one HyperFrames page timed by each line's seconds: table rows come in on their line (cells fade only: a transformed `<tr>` breaks the table), the
+  spoken row is lit (rows already shown dimmed), this year's figure counts up from last year's in steps that end on the deck's own text exactly
+  (`steps`, keeps commas/Indian grouping, never a figure the deck lacks; "n/a" is shown, not counted), the change chip appears after, last year and this
+  year grow as bars below a table of four rows or fewer; facts count up; board cards pop; quotes slide in; cards rise and their doodles draw on; the
+  disclaimer only fades in. The presenter (Mani's six tiles, `own_faces`) is in the page: mouth on the voice's loudness (`mouths`), blinks, breathing,
+  a nod per line, an arm that points toward the row or card being spoken about (angle from its known place), a bounce at a good figure and a head
+  tilt at a bad one; with motion the ffmpeg face overlay is skipped. Captions are still laid on by ffmpeg. Any `RenderFailed` = the still pictures,
+  as before. Renderer rules: CLI pinned (`VERSION`), telemetry and update checks off, GSAP and fonts local (`python -m vision hyperframes` fetches GSAP
+  into assets/hyperframes/ and Baloo Thambi 2 + JetBrains Mono into assets/fonts/), 2 workers (~3.5 GB, about half real time).
+  Not done: real visemes (the tiles have 3 mouths; Rhubarb lip-sync is worth it only with 6-8 mouth drawings).
   **Pre-market and post-market Shorts (Mani, 2026-10-14; `services/world.py`, `market.report_deck/report_lines/report_react`, 1080x1920 slide kind `board`):** two
   Shorts on every NSE trading day (`world.trading_day`: Mon-Fri, not in NSE's `holiday-master` CM list, kept 7 days in kv `mm_hol`), **made from templates only, no
   model anywhere**. Pre-market is made at 07:00-08:15 IST (the run at `07:02 Asia/Kolkata`): how the US (S&P 500, Dow Jones, Nasdaq) and Europe (FTSE, DAX, CAC)
