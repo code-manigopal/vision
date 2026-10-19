@@ -272,7 +272,8 @@ GENRE_WRITE = {
               "- Tell it as a story with a beginning, a turn and an end, in plain words a twelve-year-old follows; explain any term you use.\n"
               "- No invented people or dialogue.\n"),
     "body": ("Write a true story about the human body or mind from the plan below",
-             "- Every statement must be established anatomy, physiology or well-replicated psychology, as a textbook would give it. If you are not certain of a number, leave it out.\n"
+             "- Every statement must be established anatomy, physiology or well-replicated psychology, as a textbook would give it. If you are not certain of a number, leave it out. "
+             "A finding from animal studies is said as such (\"in studies of mice\"), never as fact about people.\n"
              "- Never health advice, treatment, diets, supplements, diagnosis or 'hacks'; do not tell the viewer to do or take anything. Explain how it works, nothing more.\n"
              "- Tell it as a story with a beginning, a turn and an end, in plain words a twelve-year-old follows; explain any term you use.\n"
              "- No invented people or dialogue.\n"),
@@ -1288,7 +1289,9 @@ class StoryWriter(Crew):
         close = ("End on the one thing to remember or do." if job.get("genre") == "money" else "End on what it means for us, or the wonder of it." if science else ending)
         prompt = (f"{head}, narrated for {length}, {lo + pad}-{hi - pad} words.\n"
                   "- The first sentence is a hook that makes someone stop scrolling (never say \"stop scrolling\" or speak to the scrolling itself).\n"
-                  + shape + rules + "- It will be read aloud: no brackets, no labels such as \"Step 1:\"; say \"first\", \"then\", \"and the most useful one\".\n" +
+                  + shape + rules + ("- It will be read aloud: no brackets, no labels such as \"Step 1:\"; let the story flow from one point to the next.\n"
+                                     if job.get("genre") in ("space", "body", "geography") else
+                                     "- It will be read aloud: no brackets, no labels such as \"Step 1:\"; say \"first\", \"then\", \"and the most useful one\".\n") +
                   "- Short spoken sentences. " + close + " No call to subscribe.\n"
                   'Answer as {"title": "under 70 characters, no names", "story": "...", "hashtags": ["3 to 5 words, no #"], '
                   f'"mood": "the one word that fits the story best: {" | ".join(MOODS)}"}}.\n\n'
@@ -1485,7 +1488,7 @@ class SEOStrategist(Crew):
             + ("Being watched most on YouTube today and touching this video's subject (its angle may shape a tag or the title only if it truly "
                "connects; never force it, never name a channel or a person): " + "; ".join(watching) + "\n" if watching else "")
             + 'Answer as {"title": "...", "lead": "...", "tags": ["..."], "hashtags": ["..."]}.\n\n'
-            f"Working title: {before}\nKind: {kind(job)}\nHow it opens:\n{' '.join(job['script'].split()[:150])}", tier="writer", max_tokens=900, light=True)
+            f"Working title: {before}\nKind: {kind(job)}\nHow it opens:\n{' '.join(job['script'].split()[:150])}", tier="writer", max_tokens=900)
         if not isinstance(d, dict):
             return AgentResult("done", "KEPT", f"No packaging from the model; the writer's title stands: “{before}”")
         title = " ".join(str(d.get("title") or "").split()).strip("\"“” ")
@@ -2214,7 +2217,7 @@ class Lead(Director):
 class OwnWriter:
     """The LLM as a channel with its own Groq model sees it: a "writer" request without a model goes to `model` (each Groq model has its own
     daily allowance, so the new channels do not use up Know IDK Things' writer), counted against the channel's own share `cap` (tokens a UTC
-    day, services/groq_budget.py). With `light` ("local"), a small structured step (footage searches, sound cues, diagram picks, SEO tags:
+    day, services/groq_budget.py). With `light` ("local"), a small structured step (footage searches, sound cues, diagram picks:
     calls marked light=True) goes to the local model first and to Groq only if that fails (Mani, 2026-10-19: the hybrid). With `first`
     ("openrouter"), every other writer request (premises, scripts) goes to the free OpenRouter model (Nemotron) first and to Groq if that is
     busy, out of its free requests or down."""

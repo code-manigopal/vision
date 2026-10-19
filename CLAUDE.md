@@ -451,8 +451,8 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   tokens per model and per caller in `data/groq_usage.json` (one UTC day; tests point it at a temp file in conftest) and `llm.chat` refuses a writer request
   that would pass 95 % of `llm.groq_daily_tokens` (200,000) for that model, or a channel's `groq_daily_cap` (LLMUnavailable, a wait). A new channel's Scout
   starts no Short without ~15,000 tokens of room (label WRITER BUDGET). Caps: Cosmic Roadster and Know Body Things 60,000 each on gpt-oss-20b, Camping on
-  Satellites 50,000 on qwen (the rest stays for Mani Market's lessons). `light_tier: local`: the four small JSON steps (footage searches, sound cues, SEO tags,
-  diagram picks; calls marked `light=True`) go to LM Studio first and to Groq only if it is down or answers nothing. `script_writer: openrouter` (the three
+  Satellites 50,000 on qwen (the rest stays for Mani Market's lessons). `light_tier: local`: the three small JSON steps (footage searches, sound cues,
+  diagram picks; calls marked `light=True`; SEO went back to the strong writer: the local model wrote "Why venus hotter than mercury") go to LM Studio first and to Groq only if it is down or answers nothing. `script_writer: openrouter` (the three
   new channels): premises and scripts go first to NVIDIA Nemotron (`llm.openrouter_model`, free on OpenRouter, OPENROUTER_API_KEY; tier "openrouter" in
   `llm.chat`, +4,000 max_tokens for its thinking), at most `openrouter_daily_requests` (45; a free key allows ~50) a UTC day counted in the same ledger, then
   the channel's Groq model. Chosen after a test (2026-10-19): Nemotron wrote an accurate Uranus script, qwen's geography script had two factual errors,
