@@ -35,7 +35,7 @@ bash scripts/setup.sh                     # venv + deps + .env from template + c
 .venv/bin/python -m vision sfx            # add 3 sound effects per kind to assets/sfx/ (or: sfx whoosh 5)
 .venv/bin/python -m vision visa list      # Visa Watch accounts: add | list | update | pause | resume | remove | check <id>
 .venv/bin/python -m vision ebooks list    # E-books Manager: list | published <book> [ASIN] | redraw <book> <page>
-.venv/bin/python -m pytest -q             # 557 tests, all external services mocked
+.venv/bin/python -m pytest -q             # 560 tests, all external services mocked
 bash scripts/install_launchagent.sh       # auto-start at login + restart on crash
 tail -f logs/vision.log
 ```
@@ -476,6 +476,11 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   thing, since the model cannot name a mountain from orbit): NO = the file is dropped and the next candidate tried; YES is remembered (`checked` in the
   index); no Cloudflare = the title check alone. The Editor renders it (`_motion_cut`: the sentence files joined into one voice track); any
   failure = the stock-footage cut (Footage Collector still runs for that). The record keeps `style`, `scenes` and the pictures' credits.
+  **Each channel its own look (Mani, 2026-10-19):** `THEMES` per kind sets colours, a background `motif` (space: parallax stars with twinkling near ones;
+  body: drifting cells and a heartbeat trace; geography: a sliding topographic contour map with a lat/long grid), the `cut` (warp: blur-zoom in with a cool
+  flash; pulse: a ring spreads from the centre; pan: the old scene slides out left, the new one in from the right), the photo `frame` (glow: lit rim;
+  scan: rounded monitor with a sweeping scan line; postcard: white border, tilt, two pins, paper-label tags) and its faces (Orbitron, Fredoka, Alfa Slab One;
+  Orbitron and Fredoka fetched by `python -m vision fonts`, SIL OFL), `size` scales headline sizes for wide faces. No randomness in a page.
   `scripts/short_sample.py <kind> <channel> --motion` makes one.
   **No sexual content (Mani, 2026-10-18: "no more such contents"):** `SEXUAL` (sex, lust, fantasies, role-play, nude, one-night stand...) rejects a story
   from any source by rule before the model sees it; the screening prompt also rejects one where sex or sexual desire is any real part; a written script

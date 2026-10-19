@@ -156,3 +156,17 @@ def test_a_compare_shows_pictures_only_when_both_sides_have_one():
     two = motion.check({"type": "compare", "a": "Germany", "b": "France", "a_image": "flag of Germany", "b_image": "flag of France"}, line,
                        {"flag of Germany", "flag of France"}, set())
     assert one["a_image"] is None and two["b_image"] == "flag of France"
+
+
+def test_each_channel_kind_has_its_own_look(tmp_path):
+    looks = {k: (t["motif"], t["cut"], t["frame"], t["head"][0]) for k, t in motion.THEMES.items()}
+    assert len(set(looks.values())) == 3 and all(len({v[i] for v in looks.values()}) == 3 for i in range(4))   # nothing shared
+    pages = {}
+    for kind in motion.THEMES:
+        plan = motion.timeline([{"type": "text", "lines": ["Venus"], "beat": 0}, {"type": "text", "lines": ["everywhere"], "beat": 2},
+                                {"type": "outro", "text": "Follow", "beat": 3}], beats(), 10.4)
+        pages[kind], assets = motion.build(plan, [], kind=kind, seconds=10.4, images={}, icons={}, voice=tmp_path / "v.wav")
+        assert motion.THEMES[kind]["head"][1] in assets                       # the theme's own face goes with the page
+    assert "#topo" in pages["geography"] and "x: -1080" in pages["geography"]  # contour map, the old scene slides away
+    assert "#ecg" in pages["body"] and '"#ring"' in pages["body"]              # heartbeat trace, pulse ring on a cut
+    assert "#tw0" in pages["space"] and "blur(16px)" in pages["space"]         # twinkling stars, warp-in

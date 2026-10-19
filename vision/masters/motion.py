@@ -38,13 +38,21 @@ STAGE_H = 1240                     # scenes live above the captions (y < 1240); 
 MAX_SCENE = 3.2                    # seconds before the picture must change
 TYPES = ("hook", "photo", "text", "number", "compare", "orbit", "flow", "split", "icons", "map", "gauge", "outro")
 
+# Each channel's own look (Mani, 2026-10-19: "each channel will have its own animation style"): colours, a moving background motif,
+# how a new scene arrives (`cut`), how a photo is framed (`frame`) and its faces (head = big words, tag = callouts, cap = captions).
 THEMES = {
     "space": {"bg": "radial-gradient(1200px 900px at 50% 30%,#1b1446 0%,#0a0b24 45%,#03040c 100%)", "a": "#4cc9ff", "hot": "#ff8a1f", "dots": "#ffffff",
-              "neb": ("#6d28d955", "#0ea5e944")},
+              "neb": ("#6d28d955", "#0ea5e944"), "motif": "stars", "cut": "warp", "frame": "glow",
+              "head": ("Orbitron", "Orbitron.ttf", 900), "tag": ("Orbitron", "Orbitron.ttf", 700), "cap": ("Orbitron", "Orbitron.ttf", 900), "cap_px": 74,
+              "size": 0.72},
     "body": {"bg": "radial-gradient(1200px 900px at 50% 30%,#0b2a4a 0%,#06182c 50%,#020a14 100%)", "a": "#3ee0c9", "hot": "#ff4d6d", "dots": "#7fdcff",
-             "neb": ("#0ea5e955", "#14b8a644")},
+             "neb": ("#0ea5e955", "#14b8a644"), "motif": "cells", "cut": "pulse", "frame": "scan",
+             "head": ("Fredoka", "Fredoka.ttf", 700), "tag": ("Fredoka", "Fredoka.ttf", 600), "cap": ("Fredoka", "Fredoka.ttf", 700), "cap_px": 100,
+             "size": 0.92},
     "geography": {"bg": "radial-gradient(1200px 900px at 50% 30%,#123524 0%,#0a1f1a 50%,#030a08 100%)", "a": "#ffd23f", "hot": "#ff8a1f", "dots": "#c8f7c5",
-                  "neb": ("#16a34a44", "#0ea5e944")},
+                  "neb": ("#16a34a44", "#0ea5e944"), "motif": "contours", "cut": "pan", "frame": "postcard",
+                  "head": ("Alfa Slab One", "AlfaSlabOne-Regular.ttf", 400), "tag": ("Bebas Neue", "BebasNeue-Regular.ttf", 400),
+                  "cap": ("Alfa Slab One", "AlfaSlabOne-Regular.ttf", 400), "cap_px": 84, "size": 0.8},
 }
 
 CSS = """
@@ -66,6 +74,27 @@ CSS = """
 .box{position:absolute;display:flex;align-items:center;justify-content:center;text-align:center;border-radius:26px;background:#0b1030d9;border:4px solid var(--a);font-size:62px;line-height:1.02;padding:0 18px}
 .arrow{position:absolute;height:8px;background:var(--a);border-radius:4px;transform-origin:left center}
 """
+
+
+def look_css(t: dict) -> str:
+    """The theme's faces and photo frame, laid over CSS."""
+    head, tag, cap = t["head"], t["tag"], t["cap"]
+    out = (f'#root{{font-family:"{head[0]}",Anton,sans-serif;font-weight:{head[2]}}}.kin{{font-weight:{head[2]}}}'
+           f'.tag{{font-family:"{tag[0]}",Anton,sans-serif;font-weight:{tag[2]};font-size:{50 if tag[0] == "Orbitron" else 60}px}}'
+           f'.cw{{font-family:"{cap[0]}",Anton,sans-serif;font-weight:{cap[2]};font-size:{t["cap_px"]}px}}'
+           f'.box{{font-size:{52 if head[0] == "Orbitron" else 62}px}}')
+    if t["frame"] == "glow":                                    # a planet's rim lit by the accent
+        out += ".ph{border:4px solid var(--a);box-shadow:0 0 70px var(--a),0 0 160px #4cc9ff55,0 20px 80px #000a}"
+    elif t["frame"] == "scan":                                  # a lab monitor: rounded, a thin frame and a sweeping scan line
+        out += (".ph{border-radius:44px;border:5px solid var(--a);box-shadow:0 0 50px #3ee0c955,0 20px 80px #000a;overflow:hidden}"
+                ".scanl{position:absolute;left:0;right:0;height:90px;background:linear-gradient(transparent,#3ee0c955,#ffffffaa,#3ee0c955,transparent)}"
+                ".tag{border-radius:40px;background:#04202cdd}")
+    elif t["frame"] == "postcard":                              # a travel postcard: white border, a tilt, two pins, a paper label
+        out += (".ph{border:18px solid #f6f0e1;border-radius:6px;box-shadow:0 26px 60px #000c}"
+                ".pin{position:absolute;width:44px;height:44px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#ff9a8a,#d62828 60%,#7a0b0b);box-shadow:0 6px 10px #0008}"
+                ".tag{background:#f6f0e1;color:#1d2b1f;border:none;border-radius:4px;transform:rotate(-2deg);box-shadow:0 8px 20px #0008}"
+                ".tag.h{background:#ffd23f}")
+    return out
 
 
 # ---------- checking a plan ----------
@@ -211,9 +240,35 @@ class Comp:
         sid = f"m{n}"
         inner = getattr(self, "_" + sc["type"])(sc, sid, start, dur)
         self.body.append(f'<div id="{sid}" class="sc clip" data-start="{start:.3f}" data-duration="{dur + 0.25:.3f}">{inner}</div>')
-        self.tw(f"#{sid}", {"opacity": 0, "scale": 1.08}, {"opacity": 1, "scale": 1, "duration": 0.32, "ease": "power3.out"}, start)
-        if not first:
-            self.js.append(f'tl.fromTo("#flash", {{opacity: 0.45}}, {{opacity: 0, duration: 0.22, immediateRender: false}}, {start:.3f});')
+        cut, prev = self.t.get("cut", "flash"), getattr(self, "prev", None)
+        if cut == "warp" and not first:                     # space: the new scene rushes in out of a blur, a cool flash
+            self.tw(f"#{sid}", {"opacity": 0, "scale": 1.7, "filter": "blur(16px)"}, {"opacity": 1, "scale": 1, "filter": "blur(0px)", "duration": 0.42, "ease": "expo.out"}, start)
+            self.js.append(f'tl.fromTo("#flash", {{opacity: 0.35}}, {{opacity: 0, duration: 0.25, immediateRender: false}}, {start:.3f});')
+        elif cut == "pulse" and not first:                  # body: a heartbeat ring spreads from the centre, the scene swells in softly
+            self.tw(f"#{sid}", {"opacity": 0, "scale": 0.9}, {"opacity": 1, "scale": 1, "duration": 0.38, "ease": "back.out(1.6)"}, start)
+            self.js.append(f'tl.fromTo("#ring", {{scale: 0.15, opacity: 0.8}}, {{scale: 3.2, opacity: 0, duration: 0.65, ease: "power2.out", immediateRender: false}}, {start:.3f});')
+        elif cut == "pan" and not first and prev:           # geography: the map moves on, the old scene slides away left, the new one in from the right
+            self.tw(f"#{sid}", {"x": 1080, "opacity": 1}, {"x": 0, "duration": 0.5, "ease": "power3.inOut"}, start)
+            self.js.append(f'tl.to("#{prev}", {{x: -1080, duration: 0.5, ease: "power3.inOut"}}, {start:.3f});')
+        else:
+            self.tw(f"#{sid}", {"opacity": 0, "scale": 1.08}, {"opacity": 1, "scale": 1, "duration": 0.32, "ease": "power3.out"}, start)
+            if not first:
+                self.js.append(f'tl.fromTo("#flash", {{opacity: 0.45}}, {{opacity: 0, duration: 0.22, immediateRender: false}}, {start:.3f});')
+        self.prev = sid
+
+    def framed(self, pid: str, s: float, d: float) -> str:
+        """What the theme's frame adds around a photo: a scan line sweeping a body picture, two pins on a postcard."""
+        f = self.t.get("frame")
+        if f == "scan":
+            self.js.append(f'tl.fromTo("#{pid}s", {{top: "-12%"}}, {{top: "105%", duration: 1.4, ease: "none", repeat: {max(0, int(d / 1.4))}}}, {s + 0.3:.3f});')
+            return f'<div id="{pid}s" class="scanl"></div>'
+        if f == "postcard":
+            return '<div class="pin" style="left:24px;top:-34px"></div><div class="pin" style="right:24px;top:-34px"></div>'
+        return ""
+
+    def fs(self, px: float) -> int:
+        """A headline size in this theme's face (Orbitron runs much wider than Anton)."""
+        return int(px * self.t.get("size", 1.0))
 
     # each scene type: returns inner html, adds its tweens
     def _hook(self, sc, sid, s, d):
@@ -222,8 +277,14 @@ class Comp:
         hot = (sc.get("hot") or "").upper()
         if hot and hot in title:
             title = title.replace(H.escape(hot), f'<span style="color:var(--hot)">{H.escape(hot)}</span>', 1)
-        out = (f'<div id="{sid}p" class="ph round" style="left:140px;top:120px;width:800px;height:800px;background-image:url({img});box-shadow:0 0 140px var(--hot)"></div>' if img else "")
-        out += f'<div id="{sid}k" class="kin" style="top:{940 if img else 420}px;font-size:{140 if len(title) < 40 else 112}px">{title}</div>'
+        if not img:
+            out = ""
+        elif self.t.get("frame") in ("postcard", "scan"):           # a place or a body part is not a planet: a card, not a disc
+            out = (f'<div id="{sid}p" class="ph" style="left:110px;top:130px;width:860px;height:760px;background-image:url({img})">{self.framed(sid + "p", s, d)}</div>'
+                   )
+        else:
+            out = f'<div id="{sid}p" class="ph round" style="left:140px;top:120px;width:800px;height:800px;background-image:url({img});box-shadow:0 0 140px var(--hot)"></div>'
+        out += f'<div id="{sid}k" class="kin" style="top:{940 if img else 420}px;font-size:{self.fs(140 if len(title) < 40 else 112)}px">{title}</div>'
         if img:
             self.tw(f"#{sid}p", {"scale": 2.4, "rotation": -8}, {"scale": 1, "rotation": 0, "duration": 0.9, "ease": "power4.out"}, s)
             self.to(f"#{sid}p", {"scale": 1.08, "duration": max(0.5, d - 0.9), "ease": "none"}, s + 0.9)
@@ -232,16 +293,18 @@ class Comp:
 
     def _photo(self, sc, sid, s, d):
         img = self.img(sc["image"])
-        if sc.get("round"):
-            out = f'<div id="{sid}p" class="ph round" style="left:190px;top:170px;width:700px;height:700px;background-image:url({img})"></div>'
+        card = self.t.get("frame") == "postcard"
+        if sc.get("round") and not card:
+            out = f'<div id="{sid}p" class="ph round" style="left:190px;top:170px;width:700px;height:700px;background-image:url({img})">{self.framed(sid + "p", s, d)}</div>'
         else:
-            out = f'<div id="{sid}p" class="ph" style="left:70px;top:150px;width:940px;height:760px;background-image:url({img})"></div>'
+            out = (f'<div id="{sid}p" class="ph" style="left:70px;top:150px;width:940px;height:760px;background-image:url({img})">{self.framed(sid + "p", s, d)}</div>'
+                   )
         for k, (key, x) in enumerate((("tag", 90), ("tag2", 560))):
             if sc.get(key):
                 out += f'<div id="{sid}t{k}" class="tag{" h" if k else ""}" style="left:{x}px;top:{960 + k * 110}px">{H.escape(sc[key].upper())}</div>'
                 self.tw(f"#{sid}t{k}", {"opacity": 0, "y": 40}, {"opacity": 1, "y": 0, "duration": 0.32, "ease": "back.out(2)"}, s + 0.5 + k * 0.5)
         self.tw(f"#{sid}p", {"x": -420, "rotation": -12, "opacity": 0}, {"x": 0, "rotation": 0, "opacity": 1, "duration": 0.55, "ease": "power3.out"}, s)
-        self.to(f"#{sid}p", {"scale": 1.12, "rotation": 3 if sc.get("round") else 0, "duration": max(0.5, d - 0.5), "ease": "none"}, s + 0.55)
+        self.to(f"#{sid}p", {"scale": 1.12, "rotation": -2.5 if card else 3 if sc.get("round") else 0, "duration": max(0.5, d - 0.5), "ease": "none"}, s + 0.55)
         return out
 
     def _text(self, sc, sid, s, d):
@@ -251,7 +314,7 @@ class Comp:
             t = H.escape(line.upper())
             if hot and hot in line.upper():
                 t = t.replace(H.escape(hot), f'<span style="color:var(--a)">{H.escape(hot)}</span>', 1)
-            rows.append(f'<div id="{sid}l{k}" class="kin" style="top:{420 + k * 230 - (115 if len(sc["lines"]) == 1 else 0)}px;font-size:{180 if len(line) <= 10 else 140 if len(line) <= 16 else 110}px">{t}</div>')
+            rows.append(f'<div id="{sid}l{k}" class="kin" style="top:{420 + k * 230 - (115 if len(sc["lines"]) == 1 else 0)}px;font-size:{self.fs(180 if len(line) <= 10 else 140 if len(line) <= 16 else 110)}px">{t}</div>')
             self.tw(f"#{sid}l{k}", {"opacity": 0, "y": 100, "scale": 0.8}, {"opacity": 1, "y": 0, "scale": 1, "duration": 0.4, "ease": "back.out(2)"}, s + 0.15 + k * 0.35)
         self.to(f"#{sid} .kin", {"scale": 1.06, "duration": max(0.4, d - 0.8), "ease": "none"}, s + 0.8)
         return "".join(rows)
@@ -269,8 +332,8 @@ class Comp:
             self.js.append(f'tl.set({json.dumps(sel)}, {{textContent: {json.dumps(pre + txt + post if k < 22 else value)}}}, {s + over * k / 22:.3f});')
 
     def _number(self, sc, sid, s, d):
-        out = (f'<div id="{sid}n" class="kin" style="top:330px;font-size:{300 if len(sc["value"]) <= 5 else 220}px;color:var(--hot)">0</div>'
-               + (f'<div id="{sid}b" class="kin" style="top:760px;font-size:84px">{H.escape(sc["label"].upper())}</div>' if sc.get("label") else ""))
+        out = (f'<div id="{sid}n" class="kin" style="top:330px;font-size:{self.fs(300 if len(sc["value"]) <= 5 else 220)}px;color:var(--hot)">0</div>'
+               + (f'<div id="{sid}b" class="kin" style="top:760px;font-size:{self.fs(84)}px">{H.escape(sc["label"].upper())}</div>' if sc.get("label") else ""))
         self._count(f"#{sid}n", sc["value"], s + 0.15, min(1.3, d * 0.5))
         self.js.append(f'tl.fromTo("#{sid}n", {{scale: 1}}, {{scale: 1.16, duration: 0.18, yoyo: true, repeat: 1}}, {s + 0.15 + min(1.3, d * 0.5):.3f});')
         if sc.get("label"):
@@ -280,8 +343,8 @@ class Comp:
     def _gauge(self, sc, sid, s, d):
         out = (f'<div style="position:absolute;left:150px;top:180px;width:110px;height:820px;border-radius:55px;border:8px solid #fff;background:#0b1030">'
                f'<div id="{sid}f" style="position:absolute;left:10px;right:10px;bottom:10px;height:60px;border-radius:40px;background:linear-gradient(var(--hot),#ffd23f)"></div></div>'
-               f'<div id="{sid}n" class="kin" style="left:300px;top:380px;font-size:230px;color:var(--hot);text-align:left">0</div>'
-               + (f'<div id="{sid}b" class="kin" style="left:300px;top:640px;font-size:76px;text-align:left">{H.escape(sc["label"].upper())}</div>' if sc.get("label") else ""))
+               f'<div id="{sid}n" class="kin" style="left:300px;top:380px;font-size:{self.fs(230)}px;color:var(--hot);text-align:left">0</div>'
+               + (f'<div id="{sid}b" class="kin" style="left:300px;top:640px;font-size:{self.fs(76)}px;text-align:left">{H.escape(sc["label"].upper())}</div>' if sc.get("label") else ""))
         over = min(1.6, d * 0.6)
         self.tw(f"#{sid}f", {"height": 60}, {"height": 780, "duration": over, "ease": "power1.in"}, s + 0.2)
         self._count(f"#{sid}n", sc["value"], s + 0.2, over)
@@ -297,13 +360,13 @@ class Comp:
             out += (f'<div id="{sid}{side}" style="position:absolute;left:{x}px;top:180px;width:440px;height:900px">'
                     + (f'<div class="ph round" style="left:20px;top:0;width:400px;height:400px;background-image:url({img})"></div>' if img else
                        f'<div class="box" style="left:20px;top:100px;width:400px;height:200px">{H.escape(sc[side].upper())}</div>')
-                    + f'<div class="kin" style="left:0;right:0;top:440px;font-size:76px">{H.escape(sc[side].upper())}</div>'
-                    + (f'<div id="{sid}{side}v" class="kin" style="left:0;right:0;top:560px;font-size:110px;color:{"var(--a)" if k == 0 else "var(--hot)"}">{H.escape(sc[f"{side}_value"])}</div>' if sc.get(f"{side}_value") else "")
+                    + f'<div class="kin" style="left:0;right:0;top:440px;font-size:{self.fs(76)}px">{H.escape(sc[side].upper())}</div>'
+                    + (f'<div id="{sid}{side}v" class="kin" style="left:0;right:0;top:560px;font-size:{self.fs(110)}px;color:{"var(--a)" if k == 0 else "var(--hot)"}">{H.escape(sc[f"{side}_value"])}</div>' if sc.get(f"{side}_value") else "")
                     + "</div>")
             self.tw(f"#{sid}{side}", {"opacity": 0, "x": -300 if k == 0 else 300}, {"opacity": 1, "x": 0, "duration": 0.45, "ease": "power3.out"}, s + k * 0.35)
             if sc.get(f"{side}_value"):
                 self.tw(f"#{sid}{side}v", {"opacity": 0, "scale": 2}, {"opacity": 1, "scale": 1, "duration": 0.35, "ease": "back.out(2)"}, s + 0.9 + k * 0.3)
-        out += f'<div id="{sid}vs" class="kin" style="top:330px;font-size:120px;color:#ffd23f">VS</div>'
+        out += f'<div id="{sid}vs" class="kin" style="top:330px;font-size:{self.fs(120)}px;color:#ffd23f">VS</div>'
         self.tw(f"#{sid}vs", {"opacity": 0, "scale": 0}, {"opacity": 1, "scale": 1, "duration": 0.3, "ease": "back.out(2.5)"}, s + 0.6)
         return out
 
@@ -326,7 +389,7 @@ class Comp:
         for k, (step, ic) in enumerate(zip(sc["steps"], sc["icons"])):
             y = 140 + k * gap
             out += (f'<div id="{sid}s{k}" style="position:absolute;left:110px;top:{y:.0f}px;width:860px;height:{gap - 60:.0f}px;display:flex;align-items:center;gap:40px;'
-                    f'border-radius:28px;background:#0b1030d9;border:4px solid var(--a);padding:0 40px;font-size:{78 if k_ <= 3 else 64}px">'
+                    f'border-radius:28px;background:#0b1030d9;border:4px solid var(--a);padding:0 40px;font-size:{self.fs(78 if k_ <= 3 else 64)}px">'
                     f'{self.icon(ic, int(min(140, gap - 100)), "#fff") if ic else ""}<span>{H.escape(step.upper())}</span></div>')
             each = min(1.0, (d - 0.3) / k_)
             self.tw(f"#{sid}s{k}", {"opacity": 0, "x": -200}, {"opacity": 1, "x": 0, "duration": 0.35, "ease": "back.out(1.6)"}, s + 0.1 + k * each)
@@ -358,7 +421,7 @@ class Comp:
             x = 70 + k * col
             out += (f'<div id="{sid}i{k}" style="position:absolute;left:{x:.0f}px;top:330px;width:{col:.0f}px;text-align:center">'
                     f'<div style="display:inline-block">{self.icon(ic, int(min(260, col - 30)), self.t["a"] if k % 2 == 0 else self.t["hot"])}</div>'
-                    f'<div style="font-size:64px;margin-top:20px">{H.escape(lab.upper())}</div></div>')
+                    f'<div style="font-size:{self.fs(64)}px;margin-top:20px">{H.escape(lab.upper())}</div></div>')
             self.tw(f"#{sid}i{k}", {"opacity": 0, "scale": 0, "rotation": -25}, {"opacity": 1, "scale": 1, "rotation": 0, "duration": 0.38, "ease": "back.out(2.4)"}, s + 0.15 + k * min(0.45, d / (k_ + 1)))
         self.js.append(f'tl.to("#{sid} [id^={sid}i]", {{y: -18, duration: 0.35, yoyo: true, repeat: {max(1, int(d / 0.7))}, ease: "sine.inOut", stagger: 0.1}}, {s + 1.0:.3f});')
         return out
@@ -368,7 +431,7 @@ class Comp:
         svg = maps.svg(sc["highlight"], 940, 760, focus=True)
         out = (f'<div style="position:absolute;left:70px;top:130px;width:940px;height:760px;border-radius:28px;overflow:hidden;border:3px solid #2e4566;background:#06101f">'
                f'<div id="{sid}mp" style="width:940px;height:760px">{svg}</div></div>'
-               + (f'<div id="{sid}lb" class="kin" style="top:930px;font-size:80px">{H.escape(sc["label"].upper())}</div>' if sc.get("label") else ""))
+               + (f'<div id="{sid}lb" class="kin" style="top:930px;font-size:{self.fs(80)}px">{H.escape(sc["label"].upper())}</div>' if sc.get("label") else ""))
         self.js.append(f'document.querySelectorAll("#{sid} .land").forEach(function (p) {{ p.setAttribute("fill", "#1c2a3f"); p.setAttribute("stroke", "#2e4566"); }});')
         self.tw(f"#{sid}mp", {"scale": 0.55}, {"scale": 1, "duration": 0.9, "ease": "power3.out"}, s)
         self.js.append(f'tl.to("#{sid} .hl", {{fill: "#ffd23f", duration: 0.35, stagger: 0.3}}, {s + 0.6:.3f});')
@@ -378,7 +441,7 @@ class Comp:
 
     def _outro(self, sc, sid, s, d):
         out = (f'<img id="{sid}g" src="assets/logo.png" style="position:absolute;left:240px;top:200px;width:600px;height:600px">'
-               f'<div id="{sid}k" class="kin" style="top:860px;font-size:92px">{H.escape(sc.get("text", "").upper())}</div>')
+               f'<div id="{sid}k" class="kin" style="top:860px;font-size:{self.fs(92)}px">{H.escape(sc.get("text", "").upper())}</div>')
         self.tw(f"#{sid}g", {"scale": 0, "rotation": -90}, {"scale": 1, "rotation": 0, "duration": 0.7, "ease": "back.out(1.6)"}, s)
         self.tw(f"#{sid}k", {"opacity": 0, "y": 50}, {"opacity": 1, "y": 0, "duration": 0.4}, s + 0.5)
         return out
@@ -398,16 +461,47 @@ def captions(comp: Comp, chunks: list) -> str:
 
 
 def background(theme: dict, seconds: float) -> tuple[str, list[str]]:
-    dots = "".join(f'<circle cx="{(i * 397) % 1080}" cy="{(i * 641) % 2200}" r="{0.8 + (i % 4) * 0.6}" opacity="{0.25 + (i % 5) * 0.12}"/>' for i in range(220))
+    """The theme's moving backdrop (no randomness, so every render of a page is the same): stars, cells or a contour map."""
     a, b = theme["neb"]
+    glow = (f'<div class="neb" id="nb1" style="left:-200px;top:200px;width:900px;height:900px;background:radial-gradient(circle,{a},transparent 65%)"></div>'
+            f'<div class="neb" id="nb2" style="right:-300px;top:900px;width:1000px;height:1000px;background:radial-gradient(circle,{b},transparent 65%)"></div>')
+    js = [f'tl.fromTo("#nb1", {{x: 0, y: 0}}, {{x: 200, y: -150, duration: {seconds:.2f}, ease: "sine.inOut"}}, 0);',
+          f'tl.fromTo("#nb2", {{x: 0}}, {{x: -220, duration: {seconds:.2f}, ease: "sine.inOut"}}, 0);']
+    motif = theme.get("motif", "stars")
+    if motif == "cells":                       # body: soft cells drifting up through fluid, a heartbeat trace along the bottom of the stage
+        cells = "".join(f'<div class="cell" id="c{i}" style="left:{(i * 233) % 1040 - 60}px;top:{(i * 419) % 1900}px;width:{60 + (i * 37) % 140}px;'
+                        f'height:{60 + (i * 37) % 140}px;opacity:{0.10 + (i % 4) * 0.05}"></div>' for i in range(22))
+        beat = "M0,40 " + " ".join(f"L{x + 60},40 L{x + 80},10 L{x + 95},75 L{x + 110},0 L{x + 125},40" for x in range(0, 1080, 270)) + " L1080,40"
+        html = (glow + cells + f'<svg class="layer" style="top:1180px;height:90px" width="1080" height="90"><path id="ecg" d="{beat}" fill="none" '
+                f'stroke="{theme["a"]}" stroke-opacity=".55" stroke-width="5" stroke-dasharray="1400" stroke-dashoffset="1400"/></svg>')
+        css_cell = ""
+        for i in range(22):
+            js.append(f'tl.fromTo("#c{i}", {{y: 0, x: 0}}, {{y: -{220 + (i * 53) % 260}, x: {((i * 71) % 120) - 60}, duration: {seconds:.2f}, ease: "none"}}, 0);')
+        js.append(f'tl.fromTo("#ecg", {{strokeDashoffset: 1400}}, {{strokeDashoffset: 0, duration: 1.6, ease: "none", repeat: {max(0, int(seconds / 1.6))}}}, 0);')
+        return html + css_cell, js
+    if motif == "contours":                    # geography: a topographic map slowly sliding past, with a faint lat/long grid
+        rings = []
+        for cx, cy, base in ((260, 520, 90), (820, 1250, 110), (700, 260, 70), (180, 1650, 100)):
+            for k in range(7):
+                r = base + k * 58
+                pts = " ".join(f"{cx + (r + 16 * math.sin(3 * t + k) + 10 * math.cos(5 * t + cx)) * math.cos(t):.0f},"
+                               f"{cy + (r * 0.8 + 14 * math.sin(4 * t + cy)) * math.sin(t):.0f}" for t in [i * math.pi / 30 for i in range(61)])
+                rings.append(f'<polyline points="{pts}" fill="none" stroke="{theme["dots"]}" stroke-opacity="{0.10 + 0.03 * (k % 3)}" stroke-width="3"/>')
+        grid = "".join(f'<line x1="{x}" y1="0" x2="{x}" y2="2300" stroke="{theme["a"]}" stroke-opacity=".07" stroke-width="2"/>' for x in range(0, 1300, 180))
+        grid += "".join(f'<line x1="0" y1="{y}" x2="1300" y2="{y}" stroke="{theme["a"]}" stroke-opacity=".07" stroke-width="2"/>' for y in range(0, 2300, 180))
+        html = glow + f'<svg class="layer" id="topo" width="1300" height="2300" style="left:-110px;top:-190px">{grid}{"".join(rings)}</svg>'
+        js.append(f'tl.fromTo("#topo", {{x: 0, y: 0, rotation: 0}}, {{x: -90, y: -160, rotation: 2, duration: {seconds:.2f}, ease: "none"}}, 0);')
+        return html, js
+    dots = "".join(f'<circle cx="{(i * 397) % 1080}" cy="{(i * 641) % 2200}" r="{0.8 + (i % 4) * 0.6}" opacity="{0.25 + (i % 5) * 0.12}"/>' for i in range(220))
+    near = "".join(f'<circle id="tw{i}" cx="{(i * 577) % 1080}" cy="{(i * 911) % 1900}" r="{3 + i % 3}" fill="#fff"/>' for i in range(14))
     html = (f'<svg class="layer" id="st1" width="1080" height="2200" fill="{theme["dots"]}">{dots}</svg>'
             f'<svg class="layer" id="st2" width="1080" height="2200" fill="{theme["dots"]}" style="opacity:.5;transform:scale(1.4)">{dots}</svg>'
-            f'<div class="neb" id="nb1" style="left:-200px;top:200px;width:900px;height:900px;background:radial-gradient(circle,{a},transparent 65%)"></div>'
-            f'<div class="neb" id="nb2" style="right:-300px;top:900px;width:1000px;height:1000px;background:radial-gradient(circle,{b},transparent 65%)"></div>')
-    js = [f'tl.fromTo("#st1", {{y: 0}}, {{y: -260, duration: {seconds:.2f}, ease: "none"}}, 0);',
-          f'tl.fromTo("#st2", {{y: 0}}, {{y: -520, duration: {seconds:.2f}, ease: "none"}}, 0);',
-          f'tl.fromTo("#nb1", {{x: 0, y: 0}}, {{x: 200, y: -150, duration: {seconds:.2f}, ease: "sine.inOut"}}, 0);',
-          f'tl.fromTo("#nb2", {{x: 0}}, {{x: -220, duration: {seconds:.2f}, ease: "sine.inOut"}}, 0);']
+            f'<svg class="layer" id="st3" width="1080" height="2200">{near}</svg>' + glow)
+    js += [f'tl.fromTo("#st1", {{y: 0}}, {{y: -260, duration: {seconds:.2f}, ease: "none"}}, 0);',
+           f'tl.fromTo("#st2", {{y: 0}}, {{y: -520, duration: {seconds:.2f}, ease: "none"}}, 0);',
+           f'tl.fromTo("#st3", {{y: 0}}, {{y: -900, duration: {seconds:.2f}, ease: "none"}}, 0);']
+    js += [f'tl.fromTo("#tw{i}", {{opacity: 0.2}}, {{opacity: 1, duration: {0.6 + (i % 4) * 0.3:.1f}, yoyo: true, repeat: {int(seconds)}, ease: "sine.inOut"}}, {i * 0.37:.2f});'
+           for i in range(14)]
     return html, js
 
 
@@ -432,11 +526,14 @@ def build(plan: list[dict], chunks: list, *, kind: str, seconds: float, images: 
     for n, (name, at, vol) in enumerate(fx):
         audio.append(f'<audio id="fx{n}" src="assets/{name}{Path(sfx[name]).suffix}" data-start="{max(0.0, at):.2f}" data-duration="2.5" data-volume="{vol}"></audio>')
     wm = '<img id="wm" src="assets/logo.png">' if logo else ""
+    faces = {"Anton": "Anton-Regular.ttf", "Bebas Neue": "BebasNeue-Regular.ttf"} | {f[0]: f[1] for f in (theme["head"], theme["tag"], theme["cap"])}
     css = (f":root{{--a:{theme['a']};--hot:{theme['hot']}}}#root{{background:{theme['bg']}}}" + CSS
-           + hf.font_face("Anton", "Anton-Regular.ttf", "400") + hf.font_face("Bebas Neue", "BebasNeue-Regular.ttf", "400"))
-    page = hf.page(bg + "".join(comp.body) + caps + wm + '<div id="flash"></div>' + "".join(audio), "\n".join(bjs + comp.js),
+           + ".cell{position:absolute;border-radius:50%;border:3px solid var(--a);background:radial-gradient(circle at 35% 30%,#ffffff22,transparent 60%)}"
+           + "#ring{position:absolute;left:240px;top:320px;width:600px;height:600px;border-radius:50%;border:10px solid var(--a);opacity:0}"
+           + "".join(hf.font_face(n, f, "100 900" if f in ("Orbitron.ttf", "Fredoka.ttf") else "400") for n, f in faces.items()) + look_css(theme))
+    page = hf.page(bg + "".join(comp.body) + caps + wm + '<div id="ring"></div><div id="flash"></div>' + "".join(audio), "\n".join(bjs + comp.js),
                    width=W, height=HGT, seconds=seconds, css=css)
-    assets = {"Anton-Regular.ttf": hf.FONTS / "Anton-Regular.ttf", "BebasNeue-Regular.ttf": hf.FONTS / "BebasNeue-Regular.ttf", "voice.wav": voice}
+    assets = {f: hf.FONTS / f for f in faces.values()} | {"voice.wav": voice}
     assets.update({f"img-{re.sub(r'[^a-z0-9]+', '-', k.lower())}.jpg": Path(v) for k, v in images.items()})
     if music:
         assets[f"music{Path(music).suffix}"] = Path(music)

@@ -34,7 +34,10 @@ FONTS = [{"name": n, "file": f, "url": f"{BASE}{p}/{f}", "license": lic} for n, 
 UI = [{"name": "Nunito Sans", "file": "NunitoSans.ttf", "url": BASE + "ofl/nunitosans/NunitoSans%5BYTLC,opsz,wdth,wght%5D.ttf", "license": "SIL OFL 1.1"},
       # the slides' faces, as files for HyperFrames pages (which load nothing from the internet)
       {"name": "Baloo Thambi 2", "file": "BalooThambi2.ttf", "url": BASE + "ofl/baloothambi2/BalooThambi2%5Bwght%5D.ttf", "license": "SIL OFL 1.1"},
-      {"name": "JetBrains Mono", "file": "JetBrainsMono.ttf", "url": BASE + "ofl/jetbrainsmono/JetBrainsMono%5Bwght%5D.ttf", "license": "SIL OFL 1.1"}]
+      {"name": "JetBrains Mono", "file": "JetBrainsMono.ttf", "url": BASE + "ofl/jetbrainsmono/JetBrainsMono%5Bwght%5D.ttf", "license": "SIL OFL 1.1"},
+      # the animated Shorts' channel looks (masters/motion.py THEMES): Cosmic Roadster's wide sci-fi face, Know Body Things' rounded one
+      {"name": "Orbitron", "file": "Orbitron.ttf", "url": BASE + "ofl/orbitron/Orbitron%5Bwght%5D.ttf", "license": "SIL OFL 1.1"},
+      {"name": "Fredoka", "file": "Fredoka.ttf", "url": BASE + "ofl/fredoka/Fredoka%5Bwdth,wght%5D.ttf", "license": "SIL OFL 1.1"}]
 ALL = FONTS + UI
 
 _L = lambda font, fill, highlight: {"font": font, "fill": fill, "highlight": highlight}
