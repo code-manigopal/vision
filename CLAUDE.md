@@ -35,7 +35,7 @@ bash scripts/setup.sh                     # venv + deps + .env from template + c
 .venv/bin/python -m vision sfx            # add 3 sound effects per kind to assets/sfx/ (or: sfx whoosh 5)
 .venv/bin/python -m vision visa list      # Visa Watch accounts: add | list | update | pause | resume | remove | check <id>
 .venv/bin/python -m vision ebooks list    # E-books Manager: list | published <book> [ASIN] | redraw <book> <page>
-.venv/bin/python -m pytest -q             # 530 tests, all external services mocked
+.venv/bin/python -m pytest -q             # 533 tests, all external services mocked
 bash scripts/install_launchagent.sh       # auto-start at login + restart on crash
 tail -f logs/vision.log
 ```
@@ -452,7 +452,11 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   that would pass 95 % of `llm.groq_daily_tokens` (200,000) for that model, or a channel's `groq_daily_cap` (LLMUnavailable, a wait). A new channel's Scout
   starts no Short without ~15,000 tokens of room (label WRITER BUDGET). Caps: Cosmic Roadster and Know Body Things 60,000 each on gpt-oss-20b, Camping on
   Satellites 50,000 on qwen (the rest stays for Mani Market's lessons). `light_tier: local`: the four small JSON steps (footage searches, sound cues, SEO tags,
-  diagram picks; calls marked `light=True`) go to LM Studio first and to Groq only if it is down or answers nothing; scripts and premises always use Groq.
+  diagram picks; calls marked `light=True`) go to LM Studio first and to Groq only if it is down or answers nothing. `script_writer: openrouter` (the three
+  new channels): premises and scripts go first to NVIDIA Nemotron (`llm.openrouter_model`, free on OpenRouter, OPENROUTER_API_KEY; tier "openrouter" in
+  `llm.chat`, +4,000 max_tokens for its thinking), at most `openrouter_daily_requests` (45; a free key allows ~50) a UTC day counted in the same ledger, then
+  the channel's Groq model. Chosen after a test (2026-10-19): Nemotron wrote an accurate Uranus script, qwen's geography script had two factual errors,
+  the local 8B model wrote 83 choppy words with a wrong fact.
   **No sexual content (Mani, 2026-10-18: "no more such contents"):** `SEXUAL` (sex, lust, fantasies, role-play, nude, one-night stand...) rejects a story
   from any source by rule before the model sees it; the screening prompt also rejects one where sex or sexual desire is any real part; a written script
   that matches is sent back to be rewritten. Strict on purpose (a harmless "aroused from sleep" also stops a story).

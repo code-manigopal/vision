@@ -128,7 +128,7 @@ BODY = {
 }
 GEOGRAPHY = {
     "countries": ["the country with the most time zones", "countries that have no rivers", "the smallest country in the world", "countries inside other countries",
-                  "the country that spans two continents", "why Chile is so long and thin", "the country with the most neighbours", "countries that have changed their names",
+                  "the country that spans two continents", "why Chile is so long and thin", "the country with the most neighbours",
                   "the only country with a non-rectangular flag", "the most visited countries in the world"],
     "borders": ["the strangest borders on Earth", "where four countries meet at one point", "a town split between two countries", "the longest border in the world",
                 "borders drawn along rivers", "why some borders are perfectly straight lines"],
@@ -2215,10 +2215,12 @@ class OwnWriter:
     """The LLM as a channel with its own Groq model sees it: a "writer" request without a model goes to `model` (each Groq model has its own
     daily allowance, so the new channels do not use up Know IDK Things' writer), counted against the channel's own share `cap` (tokens a UTC
     day, services/groq_budget.py). With `light` ("local"), a small structured step (footage searches, sound cues, diagram picks, SEO tags:
-    calls marked light=True) goes to the local model first and to Groq only if that fails (Mani, 2026-10-19: the hybrid)."""
+    calls marked light=True) goes to the local model first and to Groq only if that fails (Mani, 2026-10-19: the hybrid). With `first`
+    ("openrouter"), every other writer request (premises, scripts) goes to the free OpenRouter model (Nemotron) first and to Groq if that is
+    busy, out of its free requests or down."""
 
-    def __init__(self, llm, model: str, who: str = "", cap: int = 0, light: str = "") -> None:
-        self._llm, self._model, self._who, self._cap, self._light = llm, model, who, cap, light
+    def __init__(self, llm, model: str, who: str = "", cap: int = 0, light: str = "", first: str = "") -> None:
+        self._llm, self._model, self._who, self._cap, self._light, self._first = llm, model, who, cap, light, first
 
     def __getattr__(self, name):
         return getattr(self._llm, name)
@@ -2240,23 +2242,37 @@ class OwnWriter:
                         return got
             except Exception:  # noqa: BLE001 - the local model is a convenience: Groq answers instead
                 pass
+        if self._first == "openrouter" and kw.get("tier") == "writer" and not kw.get("model"):     # scripts and premises: the better free writer first
+            try:
+                got = await self._llm.json(prompt, **{**kw, "tier": "openrouter", "who": self._who})
+                if got not in (None, [], {}):
+                    return got
+            except Exception:  # noqa: BLE001 - busy, out of free requests or down: Groq writes it
+                pass
         return await self._llm.json(prompt, **self._kw(kw))
 
     async def complete(self, prompt: str, **kw):
         kw.pop("light", None)
+        if self._first == "openrouter" and kw.get("tier") == "writer" and not kw.get("model"):
+            try:
+                got = await self._llm.complete(prompt, **{**kw, "tier": "openrouter", "who": self._who})
+                if got:
+                    return got
+            except Exception:  # noqa: BLE001
+                pass
         return await self._llm.complete(prompt, **self._kw(kw))
 
 
 class ChannelDirector(Director):
     """A Director whose crew writes with the channel's own Groq model (`writer_model`)."""
 
-    def __init__(self, name: str, writer_model: str = "", who: str = "", cap: int = 0, light: str = "", **kw) -> None:
+    def __init__(self, name: str, writer_model: str = "", who: str = "", cap: int = 0, light: str = "", first: str = "", **kw) -> None:
         super().__init__(name, **kw)
-        self.writer_model, self.who, self.cap, self.light = writer_model, who, cap, light
+        self.writer_model, self.who, self.cap, self.light, self.first = writer_model, who, cap, light, first
 
     async def run(self, ctx: dict) -> AgentResult:
         if self.writer_model and ctx.get("llm"):
-            ctx = {**ctx, "llm": OwnWriter(ctx["llm"], self.writer_model, self.who, self.cap, self.light)}
+            ctx = {**ctx, "llm": OwnWriter(ctx["llm"], self.writer_model, self.who, self.cap, self.light, self.first)}
         return await super().run(ctx)
 
 
@@ -2271,7 +2287,7 @@ def build_agents(options: dict, cfg) -> dict[str, SubAgent]:
             d = dict(crew=crew(ch), reporter="Analytics Manager", again=more_today(ch))
         out[ch["director"]] = (Lead(ch["director"], peers=chs[1:], note=f"runs {ch['name']}", **d) if n == 0 and len(chs) > 1
                                else ChannelDirector(ch["director"], writer_model=ch.get("writer_model") or "", who=ch["id"], cap=int(ch.get("groq_daily_cap") or 0),
-                                                    light=ch.get("light_tier") or "", note=f"runs {ch['name']}", **d) if ch.get("writer_model")
+                                                    light=ch.get("light_tier") or "", first=ch.get("script_writer") or "", note=f"runs {ch['name']}", **d) if ch.get("writer_model")
                                else Director(ch["director"], note=f"runs {ch['name']}", **d))
     return out
 

@@ -77,3 +77,43 @@ def test_light_steps_go_local_first_and_fall_back_to_groq():
     w = youtube.OwnWriter(LLM(False), "openai/gpt-oss-20b", "cosmicroadster", 60_000, "local")
     assert asyncio.run(w.json("x", tier="writer", light=True)) == ["g"] and calls[-1] == ("writer", "openai/gpt-oss-20b", "cosmicroadster")
     assert asyncio.run(w.json("x", tier="writer")) == ["g"]                    # a script is never sent to the local model
+
+
+def test_scripts_go_to_nemotron_first_then_groq_and_small_steps_stay_local():
+    calls = []
+
+    class LLM:
+        def __init__(self, router_ok):
+            self.router_ok = router_ok
+
+        async def local_available(self):
+            return True
+
+        async def json(self, prompt, **kw):
+            calls.append(kw.get("tier"))
+            if kw["tier"] == "openrouter" and not self.router_ok:
+                from vision.services.llm import LLMUnavailable
+                raise LLMUnavailable("free requests used")
+            return {"from": kw["tier"]}
+
+    w = youtube.OwnWriter(LLM(True), "openai/gpt-oss-20b", "cosmicroadster", 60_000, "local", "openrouter")
+    assert asyncio.run(w.json("script", tier="writer")) == {"from": "openrouter"}
+    assert asyncio.run(w.json("keywords", tier="writer", light=True)) == {"from": "local"}
+    w = youtube.OwnWriter(LLM(False), "openai/gpt-oss-20b", "cosmicroadster", 60_000, "local", "openrouter")
+    assert asyncio.run(w.json("script", tier="writer")) == {"from": "writer"}                   # out of free requests: Groq writes it
+
+
+def test_openrouter_stops_at_its_daily_requests(monkeypatch):
+    from vision.config import Config
+    from vision.services import groq_budget
+    from vision.services.llm import LLM, LLMUnavailable
+    monkeypatch.setenv("OPENROUTER_API_KEY", "k")
+    cfg = Config()
+    for _ in range(cfg.llm.openrouter_daily_requests):
+        groq_budget.record(cfg.llm.openrouter_model, 100)
+    try:
+        asyncio.run(LLM(cfg).json("x", tier="openrouter"))
+    except LLMUnavailable as e:
+        assert "free requests" in str(e)
+    else:
+        raise AssertionError("should stop at the daily requests")

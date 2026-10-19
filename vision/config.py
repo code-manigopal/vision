@@ -45,6 +45,9 @@ class LLMConfig(BaseModel):
     writer_base_url: str = "https://api.groq.com/openai/v1"
     writer_model: str = ""
     groq_daily_tokens: int = 200000   # Groq's free tokens a day per model; VISION stops at 95 % of it (services/groq_budget.py)
+    openrouter_base_url: str = "https://openrouter.ai/api/v1"
+    openrouter_model: str = "nvidia/nemotron-3-ultra-550b-a55b:free"   # a free model; OPENROUTER_API_KEY in .env
+    openrouter_daily_requests: int = 45   # a free key allows about 50 requests a day across free models; VISION stops here
     writer_reasoning: str = ""      # low | medium | high for a hosted reasoning model; blank = not sent
 
 

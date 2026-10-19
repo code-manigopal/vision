@@ -92,6 +92,15 @@ class LLM:
     async def chat(self, messages: list[dict], *, system: str = "", tools: list[dict] | None = None, tier: str = "local",
                    max_tokens: int = 800, temperature: float = 0.3, model: str | None = None, who: str = "", cap: int = 0) -> dict:
         """`model` names another model on the hosted writer tier (Groq keeps a separate daily allowance per model). Returns {"text": str, "tool_calls": [{"id", "name", "args"}], "raw_assistant": message to append}."""
+        if tier == "openrouter":                         # the free OpenRouter model (Nemotron), counted by requests a day
+            name = model or self.cfg.llm.openrouter_model
+            if not secret("OPENROUTER_API_KEY"):
+                raise LLMUnavailable("no OPENROUTER_API_KEY in .env")
+            if groq_budget.requests(name) >= self.cfg.llm.openrouter_daily_requests:
+                raise LLMUnavailable(f"OpenRouter's free requests for today are used ({self.cfg.llm.openrouter_daily_requests}); back after 00:00 UTC")
+            # it thinks before it answers: room for that on top of the answer itself
+            return await self._openai(messages, system, tools, max_tokens + 4000, temperature, base=self.cfg.llm.openrouter_base_url,
+                                      model=name, key=secret("OPENROUTER_API_KEY"))      # counted by requests, never against a channel's Groq share
         which = await self.pick(tier)
         if which == "local":
             return await self._openai(messages, system, tools, max_tokens, temperature)

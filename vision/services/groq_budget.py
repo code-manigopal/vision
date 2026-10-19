@@ -31,13 +31,14 @@ def _load(path: Path | None = None) -> dict:
     except (OSError, ValueError):
         d = {}
     if d.get("day") != _today():                       # a new UTC day: the allowance is back
-        d = {"day": _today(), "models": {}, "who": {}}
+        d = {"day": _today(), "models": {}, "who": {}, "requests": {}}
     return d
 
 
 def record(model: str, tokens: int, who: str = "", path: Path | None = None) -> None:
     d = _load(path)
     d["models"][model] = d["models"].get(model, 0) + int(tokens)
+    d.setdefault("requests", {})[model] = d.get("requests", {}).get(model, 0) + 1
     if who:
         d["who"][who] = d["who"].get(who, 0) + int(tokens)
     p = path or FILE
@@ -47,6 +48,11 @@ def record(model: str, tokens: int, who: str = "", path: Path | None = None) -> 
 
 def used(model: str, path: Path | None = None) -> int:
     return _load(path)["models"].get(model, 0)
+
+
+def requests(model: str, path: Path | None = None) -> int:
+    """Requests sent today to `model` (OpenRouter's free models are limited by requests a day, not tokens)."""
+    return _load(path).get("requests", {}).get(model, 0)
 
 
 def used_by(who: str, path: Path | None = None) -> int:

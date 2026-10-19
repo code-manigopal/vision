@@ -37,7 +37,8 @@ async def main(kind: str, channel_id: str = "knowidk") -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     db = OUT / "sample.db"
     db.unlink(missing_ok=True)
-    llm = youtube.OwnWriter(LLM(cfg), ch["writer_model"]) if ch.get("writer_model") else LLM(cfg)     # the channel's own Groq model, as its Director does
+    llm = (youtube.OwnWriter(LLM(cfg), ch["writer_model"], ch["id"], int(ch.get("groq_daily_cap") or 0), ch.get("light_tier") or "", ch.get("script_writer") or "")
+           if ch.get("writer_model") else LLM(cfg))                       # writes exactly as the channel's Director does
     ctx = {"store": Store(db), "bus": EventBus(), "cfg": cfg, "llm": llm, "options": {}, "results": {}, "master": "youtube"}
     for stage in youtube.crew(ch)[:-2]:                 # everything up to the Editor: no upload, no analytics
         for agent in stage.agents:
