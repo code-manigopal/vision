@@ -545,7 +545,7 @@ def ask(beats: list[dict], kind: str, icon_names: list[str]) -> str:
             '{"line": 1, "scenes": [...]}, ...]}.\n\nLines:\n' + listing)
 
 
-LOOK_Q = ("A short {kind} video will show this picture while the narrator talks about \"{subject}\". Is it a fitting picture of {subject}: a real "
+LOOK_Q = ("A short {kind} video will show this picture while the narrator talks about \"{subject}\". Is {subject} itself the main thing in it: a real "
           "photo{or_drawing} of the right kind of thing? You cannot always recognise the exact place or object, so judge the kind, not the name. Answer NO if "
           "it mainly shows people, soldiers or a historical event, a logo, text or a poster, a map or a chart, machinery or buildings that are not {subject}, or a different kind of thing "
           "(for example stars or a galaxy for a place on Earth, a rocket for a body part). Answer YES or NO first, then at most ten words.")

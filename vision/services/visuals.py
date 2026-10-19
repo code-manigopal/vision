@@ -235,7 +235,8 @@ LANG = re.compile(r"[-_ ](fa|ar|et|zh|ru|de|fr|es|it|ja|ko|pl|pt|tr|uk|he|hi|bn|
 PLACE_LIKE = ("view", "panorama", "aerial", "landscape", "from above", "skyline", "winter", "summer")
 PLACE_UNLIKE = ("map", "flag", "coat of arms", "logo", "locator", "location", "stamp", "painting", "drawing", "diagram", "chart", "plan", "sign", "poster",
                 "postcard", "museum", "interior", "portrait", "selfie", "people", "crowd", "festival", "election", "protest", "army", "military", "war",
-                "troops", "soldier", "navy", "marines", "battle", "bomb", "invasion", "wwi", "wwii", "world war", "refugee", "crossing")
+                "troops", "soldier", "navy", "marines", "battle", "bomb", "invasion", "wwi", "wwii", "world war", "refugee", "crossing",
+                "process", "factory", "plant", "canning", "cannery", "machine", "equipment", "food", "dish", "cooked", "recipe", "market", "sale", "product")
 
 
 def title_score(title: str, subject: str, kind: str = "body") -> float | None:
