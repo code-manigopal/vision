@@ -201,8 +201,8 @@ masters:
             warm:     { engine: kokoro, voice: af_bella,  speed: 0.95, pause: 0.32 }
             light:    { engine: kokoro, voice: am_puck,   speed: 1.00, pause: 0.25 }
             dramatic: { engine: kokoro, voice: am_fenrir, speed: 0.95, pause: 0.35 }
-          outro: "Subscribe to Know IDK Things, and learn something new every day."   # spoken at the end of every Short
-          cta: "What's something you never knew? Ask in the comments. It could be our next video."            # in every description, and posted as the channel's comment
+          outro: "Have a story to share? Drop it in the comments, it could be our next video. Subscribe to Know IDK Things."   # spoken at the end of every Short
+          cta: "Have a story to share? Drop it in the comments. It could be our next video."            # in every description, and posted as the channel's comment
           viewer_comments: true          # long comments under the channel's own Shorts become stories (screened like any other), ahead of everything else
           classics: [2776, 2518, 269, 38025]   # Project Gutenberg book ids: O. Henry, Tagore, Saki, Tolstoy (public domain); each story is retold once, with its citation
           classics_per_day: 1

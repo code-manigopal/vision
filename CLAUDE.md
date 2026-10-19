@@ -424,7 +424,8 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   notification; only kinds the library holds) or "none", most lines none; `sfx_plan` places each at its line, keeps them at
   least 4 s apart and about one per 8 s, and never adds any on its own (`sfx`, `sfx_volume`). No model answer = no effects. The record keeps `caption` and `sfx`; both show on the desk.
   **Renamed (Mani, 2026-10-18): Confessions Everywhere is now Know IDK Things** (the channel covers science, money and stories, and will grow). Only the
-  display name, Director name, outro and comment invitation changed; the id stays `confessions` (sign-in `youtube-confessions`, kv keys, inbox folder,
+  display name, Director name, outro and comment invitation changed (both ask "Have a story to share? Drop it in the comments", Mani's wording, so
+  viewers' stories keep coming for `viewer_comments`); the id stays `confessions` (sign-in `youtube-confessions`, kv keys, inbox folder,
   `backup_folder`), and its Drive folder was renamed in place to Vision/YouTube/Know IDK Things. Mani renames the channel and handle in YouTube Studio.
   **No sexual content (Mani, 2026-10-18: "no more such contents"):** `SEXUAL` (sex, lust, fantasies, role-play, nude, one-night stand...) rejects a story
   from any source by rule before the model sees it; the screening prompt also rejects one where sex or sexual desire is any real part; a written script
