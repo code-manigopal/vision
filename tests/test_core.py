@@ -296,3 +296,15 @@ def test_api_schedule(monkeypatch):
         assert live["standby"] is False and live["items"]
         c.post("/api/shutdown")
         assert c.get("/api/schedule").json() == {"standby": True, "items": []}
+
+
+def test_a_channel_with_its_own_google_project_signs_in_with_it(monkeypatch):
+    from vision.services import oauth
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "shared-id")
+    monkeypatch.setenv("GOOGLE_CLIENT_SECRET", "shared-secret")
+    monkeypatch.setenv("KNOWBODYTHINGS_GOOGLE_CLIENT_ID", "kbt-id")
+    monkeypatch.setenv("KNOWBODYTHINGS_GOOGLE_CLIENT_SECRET", "kbt-secret")
+    assert oauth.app_keys("youtube", "youtube-knowbodythings") == ("kbt-id", "kbt-secret")
+    assert oauth.app_keys("youtube", "youtube-knowidk") == ("shared-id", "shared-secret")          # no own project: the shared app
+    assert "client_id=kbt-id" in oauth.login_url("youtube", "youtube-knowbodythings", 8765)
+    assert oauth.configured("youtube", "youtube-knowbodythings") and oauth.configured("youtube")

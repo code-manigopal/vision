@@ -8,6 +8,9 @@ effects are added by the Editor as always, so the scenes keep clear of the capti
 
 Templates by kind (channel option `diagrams`: the kinds that may use them):
   science  orbit, compare, flow, cycle, number
+  space    the same as science
+  body     compare, flow, cycle, number, myth, checklist (human body and mind; no label may give health advice: BODY_ADVICE)
+  geography compare, number, flow, map (the world with 1-6 countries lit one after another; each named in the line; needs assets/maps)
   money    compare, number, growth (a curve's shape only, never figures, always "Illustration, not a promise"), breakdown,
            myth (a belief struck through, then what is true), checklist; no label may promise money (youtube.PROMISE, TOLD_PROMISE)
   story    chat (messages appearing; their words come from the line), quote (words taken whole from the line), timejump
@@ -34,6 +37,21 @@ TEMPLATES = {
         "cycle": 'a loop of 3-5 stages: {"template": "cycle", "steps": ["Evaporation", "Clouds", "Rain", "Rivers"]}',
         "number": 'one striking figure the line says: {"template": "number", "value": "59%", "label": "of the Moon seen from Earth"}',
     },
+    "space": {},
+    "body": {
+        "compare": 'two things side by side: {"template": "compare", "a": "Left brain", "b": "Right brain"} (values only if the line says them)',
+        "flow": 'a process in 2-4 steps: {"template": "flow", "steps": ["Food", "Stomach", "Intestine", "Blood"]}',
+        "cycle": 'a loop of 3-5 stages: {"template": "cycle", "steps": ["Wake", "Light sleep", "Deep sleep", "REM"]}',
+        "number": 'one striking figure the line says: {"template": "number", "value": "206", "label": "bones in an adult body"}',
+        "myth": 'a common belief, then what is true: {"template": "myth", "myth": "We only use 10% of our brain", "fact": "We use virtually all of it"}',
+        "checklist": 'facts or parts to name, 2-4: {"template": "checklist", "items": ["Heart", "Lungs", "Brain"]}',
+    },
+    "geography": {
+        "compare": 'two places or things side by side: {"template": "compare", "a": "Nile", "b": "Amazon"} (add "a_value"/"b_value" only if the line says them)',
+        "number": 'one figure the line says: {"template": "number", "value": "195", "label": "countries in the world"}',
+        "flow": 'a route or chain in 2-4 steps: {"template": "flow", "steps": ["Source", "Delta", "Sea"]}',
+        "map": 'the world map with countries lit up, 1-6, each named in the line: {"template": "map", "highlight": ["Brazil", "Peru"], "label": "Where the Amazon flows"}',
+    },
     "money": {
         "compare": 'two options side by side: {"template": "compare", "a": "Fixed deposit", "b": "Recurring deposit"} (add "a_value"/"b_value" only if the line says them)',
         "number": 'one figure the line says: {"template": "number", "value": "50%", "label": "of income for needs"}',
@@ -51,6 +69,8 @@ TEMPLATES = {
         "split": 'when the person faced a choice: {"template": "split", "a": "Tell the truth", "b": "Stay silent"}',
     },
 }
+TEMPLATES["space"] = dict(TEMPLATES["science"])
+BODY_ADVICE = re.compile(r"\b(cure[sd]?|treat(?:s|ed|ing|ment|ments)?|dose|dosage|supplements?|should take|diagnos\w*|detox\w*|weight loss|prescri\w*|medicine|remed(?:y|ies))\b", re.I)
 CSS = """
 #root{background:#05070d;font-family:Anton,Impact,sans-serif;color:#fff}
 .scene{position:absolute;inset:0}
@@ -91,6 +111,8 @@ def check(scene: dict, line: str, kinds: set[str]) -> dict | None:
     def lab(key, words=4, chars=30):
         v = _short(scene.get(key), words, chars)
         return v if v and _figures_ok(v, line) and not _promise(v) else None
+    if "body" in kinds and BODY_ADVICE.search(json.dumps(scene)):     # body: facts only, never health advice or treatment
+        return None
     if "money" in kinds and _promise(json.dumps(scene)):            # finance: nothing on screen may promise money
         return None
     if t == "orbit":
@@ -112,6 +134,24 @@ def check(scene: dict, line: str, kinds: set[str]) -> dict | None:
     if t == "number":
         v, l = _short(scene.get("value"), 2, 10), lab("label", 6, 36)
         return {"template": t, "value": v, "label": l} if v and l and re.search(r"\d", v) and _figures_ok(v, line) else None
+    if t == "map":
+        from . import maps
+        hl = scene.get("highlight")
+        if not isinstance(hl, list) or not 1 <= len(hl) <= 6 or not maps.available():
+            return None
+        low, out = line.lower(), []
+        for h in hl:
+            canon = maps.known(h)
+            if not canon:
+                return None
+            if not any(re.search(rf"(?<![a-z]){re.escape(a)}(?![a-z])", low) for a in {canon.lower(), str(h).lower(), *maps.aliases_of(canon)}):
+                return None
+            if canon not in out:
+                out.append(canon)
+        l = lab("label", 6, 36) if scene.get("label") else ""
+        if scene.get("label") and not l:
+            return None
+        return {"template": t, "highlight": out, "label": l or ""}
     if t == "growth":
         shape, l = scene.get("shape"), lab("label", 6, 36)
         return {"template": t, "shape": shape, "label": l} if shape in ("compound", "inflation") and l and not re.search(r"\d", l) else None
@@ -239,6 +279,30 @@ def scene_html(n: int, sc: dict, start: float, dur: float) -> tuple[str, list[st
             js.append(f'tl.to("#{sid}s{i}", {{color: "#ffffff", duration: 0.25}}, {T(dur * (i + 1) / k)});')
         js.append(f'tl.fromTo("#{sid}a", {{rotation: 0}}, {{rotation: 360, duration: {dur:.2f}, ease: "none"}}, {T(0)});')
         inner = "".join(parts)
+    elif t == "map":
+        from . import maps
+        MW, MH, MT = 1000, 700, 100                       # the map's frame: clear of the captions' band
+        full, focus = maps.viewbox(sc["highlight"], MW, MH, False), maps.viewbox(sc["highlight"], MW, MH, True)
+        vx, vy, vw, vh = (float(x) for x in focus.split())
+        k = len(sc["highlight"])
+        tags = []
+        for i, name in enumerate(sc["highlight"]):
+            pt = maps.label_point(name)
+            if pt:
+                px = min(max((pt[0] - vx) / vw * MW, 80), MW - 80)
+                py = min(max((pt[1] - vy) / vh * MH, 30), MH - 30)
+                tags.append(f'<div id="{sid}t{i}" style="position:absolute;left:{px - 100:.0f}px;top:{py - 18:.0f}px;width:200px;text-align:center;font-size:30px;'
+                            f'line-height:1;color:#FBCA03;background:#05070dd9;border:2px solid #FBCA03;border-radius:10px;padding:5px 0;opacity:0">{_e(name).upper()}</div>')
+        inner = (f'<div style="position:absolute;left:40px;top:{MT}px;width:{MW}px;height:{MH}px;border-radius:26px;overflow:hidden;border:3px solid #2e4566;background:#0a1220">'
+                 f'<div style="filter:drop-shadow(0 0 10px #FBCA0399)">{maps.svg(sc["highlight"], MW, MH, True).replace(focus, full, 1)}</div>{"".join(tags)}</div>'
+                 + (f'<div id="{sid}l" class="lbl" style="top:830px;font-size:64px;line-height:1.05;padding:0 70px">{_e(sc["label"]).upper()}</div>' if sc["label"] else ""))
+        cam = min(1.0, dur * 0.3)
+        gap = max(0.3, min(0.9, (dur - cam - 0.4) / k))
+        js += [f'tl.fromTo("#{sid} #worldmap", {{attr: {{viewBox: "{full}"}}}}, {{attr: {{viewBox: "{focus}"}}, duration: {cam:.2f}, ease: "power2.inOut"}}, {T(0.15)});',
+               f'tl.fromTo("#{sid} .hl", {{opacity: 0}}, {{opacity: 1, duration: 0.4, stagger: {gap:.2f}}}, {T(0.15 + cam * 0.6)});']
+        js += [f'tl.fromTo("#{sid}t{i}", {{opacity: 0, y: 12}}, {{opacity: 1, y: 0, duration: 0.3}}, {T(0.15 + cam * 0.6 + i * gap + 0.15)});' for i in range(len(tags))]
+        if sc["label"]:
+            js.append(f'tl.fromTo("#{sid}l", {{opacity: 0, y: 30}}, {{opacity: 1, y: 0, duration: 0.4}}, {T(0.3)});')
     elif t == "growth":
         if sc["shape"] == "compound":                  # slow, then steeper: the shape of growth on growth
             d = "M140 820 C 420 810, 640 740, 940 300"

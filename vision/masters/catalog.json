@@ -1022,6 +1022,375 @@
       ]
      ],
      "crew_reporter": "Market Analytics"
+    },
+    {
+     "name": "Cosmic Roadster Director",
+     "status": "idle",
+     "label": "QUEUED",
+     "tier": "DEEP",
+     "note": "runs Cosmic Roadster: space Shorts, NASA footage first",
+     "crew": [
+      {
+       "name": "Story Scout",
+       "tier": "API",
+       "note": "plans today's subjects"
+      },
+      {
+       "name": "Story Writer",
+       "tier": "CLOUD",
+       "note": "retells it with a hook"
+      },
+      {
+       "name": "Screenplay Writer",
+       "tier": "QUICK",
+       "note": "splits the story into timed beats"
+      },
+      {
+       "name": "Keyword Generator",
+       "tier": "CLOUD",
+       "note": "one footage search per beat"
+      },
+      {
+       "name": "Voice Artist",
+       "tier": "API",
+       "note": "narrates each beat"
+      },
+      {
+       "name": "SEO Strategist",
+       "tier": "CLOUD",
+       "note": "title, description and tags from real searches"
+      },
+      {
+       "name": "Footage Collector",
+       "tier": "API",
+       "note": "free stock clips and photos"
+      },
+      {
+       "name": "Footage Generator",
+       "tier": "CLOUD",
+       "note": "AI footage for gaps (off)"
+      },
+      {
+       "name": "Editor",
+       "tier": "LOCAL",
+       "note": "cuts, captions, watermark"
+      },
+      {
+       "name": "Uploader",
+       "tier": "API",
+       "note": "uploads and schedules each Short"
+      },
+      {
+       "name": "Analytics Manager",
+       "tier": "API",
+       "note": "follows each Short, reports the channel"
+      }
+     ],
+     "crew_stages": [
+      [
+       "SOURCE",
+       [
+        "Story Scout"
+       ]
+      ],
+      [
+       "STORY",
+       [
+        "Story Writer"
+       ]
+      ],
+      [
+       "SCREENPLAY",
+       [
+        "Screenplay Writer"
+       ]
+      ],
+      [
+       "PREP",
+       [
+        "Keyword Generator",
+        "Voice Artist",
+        "SEO Strategist"
+       ]
+      ],
+      [
+       "FOOTAGE",
+       [
+        "Footage Collector"
+       ]
+      ],
+      [
+       "GENERATE",
+       [
+        "Footage Generator"
+       ]
+      ],
+      [
+       "EDIT",
+       [
+        "Editor"
+       ]
+      ],
+      [
+       "UPLOAD",
+       [
+        "Uploader"
+       ]
+      ],
+      [
+       "REPORT",
+       [
+        "Analytics Manager"
+       ]
+      ]
+     ],
+     "crew_reporter": "Analytics Manager"
+    },
+    {
+     "name": "Know Body Things Director",
+     "status": "idle",
+     "label": "QUEUED",
+     "tier": "DEEP",
+     "note": "runs Know Body Things: body and mind Shorts",
+     "crew": [
+      {
+       "name": "Story Scout",
+       "tier": "API",
+       "note": "plans today's subjects"
+      },
+      {
+       "name": "Story Writer",
+       "tier": "CLOUD",
+       "note": "retells it with a hook"
+      },
+      {
+       "name": "Screenplay Writer",
+       "tier": "QUICK",
+       "note": "splits the story into timed beats"
+      },
+      {
+       "name": "Keyword Generator",
+       "tier": "CLOUD",
+       "note": "one footage search per beat"
+      },
+      {
+       "name": "Voice Artist",
+       "tier": "API",
+       "note": "narrates each beat"
+      },
+      {
+       "name": "SEO Strategist",
+       "tier": "CLOUD",
+       "note": "title, description and tags from real searches"
+      },
+      {
+       "name": "Footage Collector",
+       "tier": "API",
+       "note": "free stock clips and photos"
+      },
+      {
+       "name": "Footage Generator",
+       "tier": "CLOUD",
+       "note": "AI footage for gaps (off)"
+      },
+      {
+       "name": "Editor",
+       "tier": "LOCAL",
+       "note": "cuts, captions, watermark"
+      },
+      {
+       "name": "Uploader",
+       "tier": "API",
+       "note": "uploads and schedules each Short"
+      },
+      {
+       "name": "Analytics Manager",
+       "tier": "API",
+       "note": "follows each Short, reports the channel"
+      }
+     ],
+     "crew_stages": [
+      [
+       "SOURCE",
+       [
+        "Story Scout"
+       ]
+      ],
+      [
+       "STORY",
+       [
+        "Story Writer"
+       ]
+      ],
+      [
+       "SCREENPLAY",
+       [
+        "Screenplay Writer"
+       ]
+      ],
+      [
+       "PREP",
+       [
+        "Keyword Generator",
+        "Voice Artist",
+        "SEO Strategist"
+       ]
+      ],
+      [
+       "FOOTAGE",
+       [
+        "Footage Collector"
+       ]
+      ],
+      [
+       "GENERATE",
+       [
+        "Footage Generator"
+       ]
+      ],
+      [
+       "EDIT",
+       [
+        "Editor"
+       ]
+      ],
+      [
+       "UPLOAD",
+       [
+        "Uploader"
+       ]
+      ],
+      [
+       "REPORT",
+       [
+        "Analytics Manager"
+       ]
+      ]
+     ],
+     "crew_reporter": "Analytics Manager"
+    },
+    {
+     "name": "Camping on Satellites Director",
+     "status": "idle",
+     "label": "QUEUED",
+     "tier": "DEEP",
+     "note": "runs Camping on Satellites: geography and maps Shorts",
+     "crew": [
+      {
+       "name": "Story Scout",
+       "tier": "API",
+       "note": "plans today's subjects"
+      },
+      {
+       "name": "Story Writer",
+       "tier": "CLOUD",
+       "note": "retells it with a hook"
+      },
+      {
+       "name": "Screenplay Writer",
+       "tier": "QUICK",
+       "note": "splits the story into timed beats"
+      },
+      {
+       "name": "Keyword Generator",
+       "tier": "CLOUD",
+       "note": "one footage search per beat"
+      },
+      {
+       "name": "Voice Artist",
+       "tier": "API",
+       "note": "narrates each beat"
+      },
+      {
+       "name": "SEO Strategist",
+       "tier": "CLOUD",
+       "note": "title, description and tags from real searches"
+      },
+      {
+       "name": "Footage Collector",
+       "tier": "API",
+       "note": "free stock clips and photos"
+      },
+      {
+       "name": "Footage Generator",
+       "tier": "CLOUD",
+       "note": "AI footage for gaps (off)"
+      },
+      {
+       "name": "Editor",
+       "tier": "LOCAL",
+       "note": "cuts, captions, watermark"
+      },
+      {
+       "name": "Uploader",
+       "tier": "API",
+       "note": "uploads and schedules each Short"
+      },
+      {
+       "name": "Analytics Manager",
+       "tier": "API",
+       "note": "follows each Short, reports the channel"
+      }
+     ],
+     "crew_stages": [
+      [
+       "SOURCE",
+       [
+        "Story Scout"
+       ]
+      ],
+      [
+       "STORY",
+       [
+        "Story Writer"
+       ]
+      ],
+      [
+       "SCREENPLAY",
+       [
+        "Screenplay Writer"
+       ]
+      ],
+      [
+       "PREP",
+       [
+        "Keyword Generator",
+        "Voice Artist",
+        "SEO Strategist"
+       ]
+      ],
+      [
+       "FOOTAGE",
+       [
+        "Footage Collector"
+       ]
+      ],
+      [
+       "GENERATE",
+       [
+        "Footage Generator"
+       ]
+      ],
+      [
+       "EDIT",
+       [
+        "Editor"
+       ]
+      ],
+      [
+       "UPLOAD",
+       [
+        "Uploader"
+       ]
+      ],
+      [
+       "REPORT",
+       [
+        "Analytics Manager"
+       ]
+      ]
+     ],
+     "crew_reporter": "Analytics Manager"
     }
    ],
    "stages": [
@@ -1029,7 +1398,10 @@
      "title": "CHANNELS",
      "agents": [
       "Know IDK Things Director",
-      "Mani Market Tamil Director"
+      "Mani Market Tamil Director",
+      "Cosmic Roadster Director",
+      "Know Body Things Director",
+      "Camping on Satellites Director"
      ],
      "parallel": true
     }

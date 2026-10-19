@@ -35,7 +35,7 @@ bash scripts/setup.sh                     # venv + deps + .env from template + c
 .venv/bin/python -m vision sfx            # add 3 sound effects per kind to assets/sfx/ (or: sfx whoosh 5)
 .venv/bin/python -m vision visa list      # Visa Watch accounts: add | list | update | pause | resume | remove | check <id>
 .venv/bin/python -m vision ebooks list    # E-books Manager: list | published <book> [ASIN] | redraw <book> <page>
-.venv/bin/python -m pytest -q             # 513 tests, all external services mocked
+.venv/bin/python -m pytest -q             # 528 tests, all external services mocked
 bash scripts/install_launchagent.sh       # auto-start at login + restart on crash
 tail -f logs/vision.log
 ```
@@ -432,6 +432,21 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   anywhere in VISION. Its Drive backups are in Vision/YouTube/Know IDK Things. Its logo (`assets/brand/`: the sticker
   cut from its baked-in checkerboard as know-idk-things.png, plus Mani's round logo, banner and the original) is the watermark (`logo`, top right,
   150 px at 80 %; a logo path is taken from the repo root). A copy of all four is in Drive, Vision/YouTube/Know IDK Things/Brand (2026-10-18). Mani renames the channel and handle in YouTube Studio.
+  **Three new English channels (Mani, 2026-10-19; Know IDK Things is NOT changed by any of this):** **Cosmic Roadster** (`cosmicroadster`, kind `space`),
+  **Know Body Things** (`knowbodythings`, kind `body`: body and mind) and **Camping on Satellites** (`campingonsatellites`, kind `geography`), on the same crew as
+  Know IDK Things. Each: Shorts only, `daily_mix {<kind>: 2}`, released 02:00 and 14:00 UTC (`timezone: UTC`), made in the 06:35 run (`create_after 06:30`),
+  its own Kokoro voice, its own logo watermark (`assets/brand/<channel>/watermark.png`, cut round from Mani's logo), its own Drive folder, analytics and
+  **its own Google Cloud project**: `oauth.app_keys` uses `<CHANNEL>_GOOGLE_CLIENT_ID/SECRET` from .env for account `youtube-<channel>` (else the shared app),
+  sign in at `/auth/youtube/login?account=youtube-<channel>`. **Own Groq writer** (`writer_model`, `ChannelDirector` wraps the LLM in `OwnWriter` for
+  tier "writer"): Cosmic Roadster and Know Body Things on `openai/gpt-oss-20b`, Camping on Satellites on `qwen/qwen3.8-27b` (the key has no other writers).
+  Subject banks `SPACE`, `BODY`, `GEOGRAPHY` (`BANKS`, `LEARN_KINDS`), writing rules in `GENRE_ASK`/`GENRE_WRITE` (space: established astronomy, "what if" said
+  as a thought experiment; body: textbook anatomy and well-replicated psychology, never health advice, treatment, diet, supplements or diagnosis; geography:
+  atlas facts, no politics, no disputed borders, no ranking peoples). `avoid_others: true` (new channels only): a subject sharing two telling words with
+  another channel's title or used premise of the last 90 days is skipped (`others_recent`, `told_elsewhere`). Cosmic Roadster's footage: NASA's public-domain
+  library first (`services/nasa_media.py`, no key, third-party-credited items skipped; `footage_first: [nasa]`). Diagrams (`scenes.py`): space = the science
+  templates; body = compare, flow, cycle, number, myth, checklist (`BODY_ADVICE` refuses advice words); geography = compare, number, flow and `map`
+  (`masters/maps.py`: Natural Earth 1:110m countries, public domain, in `assets/maps/` (git-ignored, `maps.fetch`); highlighted countries must be named in the
+  spoken line; the camera eases to them, they turn gold with name tags). Their Gmail inboxes go into the Email Manager only after all channels are made.
   **No sexual content (Mani, 2026-10-18: "no more such contents"):** `SEXUAL` (sex, lust, fantasies, role-play, nude, one-night stand...) rejects a story
   from any source by rule before the model sees it; the screening prompt also rejects one where sex or sexual desire is any real part; a written script
   that matches is sent back to be rewritten. Strict on purpose (a harmless "aroused from sleep" also stops a story).

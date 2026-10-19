@@ -84,6 +84,67 @@ SCIENCE = {
     "oceans": ["what happens when a whale dies and sinks", "life around deep-sea vents", "how coral reefs are built", "the great ocean currents", "why some sea creatures glow",
                "what causes the tides", "why the sea is salty", "the midnight zone of the deep sea", "how sea turtles find their way home", "how tiny plankton make the air we breathe",
                "the hidden forests of kelp", "how an octopus thinks and hides"]}
+# The new channels' subject banks (Mani, 2026-10-19: Cosmic Roadster = space, Know Body Things = body and mind, Camping on Satellites =
+# geography and maps). Each subject is planned once while others are unused, like SCIENCE.
+SPACE = {
+    "planets": ["why Jupiter has a storm bigger than Earth", "why Uranus spins on its side", "what it would be like to stand on Titan", "why Mercury is not the hottest planet",
+                "how Saturn could float in water", "why Mars has the tallest volcano", "what is inside Jupiter", "why Neptune has the fastest winds",
+                "how we found Neptune with maths", "why Venus spins backwards", "what makes Earth's Moon unusual", "why Pluto stopped being a planet"],
+    "moons": ["Europa's hidden ocean", "Io, the most volcanic world", "why the Moon is drifting away from Earth", "Enceladus and its ice geysers",
+              "how the Moon was probably formed", "why we have tides", "Phobos, the moon that will fall", "how many moons Saturn has and why it keeps changing"],
+    "stars": ["how big the biggest stars are", "what a neutron star is", "why stars twinkle but planets do not", "what a supernova leaves behind",
+              "why the Sun is white, not yellow", "how long sunlight takes to reach us", "what a red dwarf is", "how stars make the elements in our bodies",
+              "what a pulsar is", "why some stars are double"],
+    "black holes": ["what happens at a black hole's event horizon", "how the first black hole image was made", "spaghettification explained",
+                    "the black hole at the centre of our galaxy", "why black holes are not cosmic vacuum cleaners", "how black holes are found when they give no light"],
+    "galaxies and the universe": ["how big the Milky Way is", "the Andromeda galaxy coming toward us", "what the cosmic microwave background is",
+                                  "why the night sky is dark", "how we measure distances to stars", "what dark matter is thought to be", "how old the universe is and how we know",
+                                  "what a light-year really is", "why the universe is expanding"],
+    "missions": ["the Apollo 11 landing step by step", "the Voyager Golden Record", "how the James Webb telescope unfolded", "the Mars rovers and what they found",
+                 "the Hubble telescope's blurry start", "how the Rosetta probe landed on a comet", "the New Horizons flyby of Pluto", "how the International Space Station was built",
+                 "the Apollo 13 rescue", "how a rocket gets to orbit"],
+    "life in space": ["what happens to the human body in space", "why astronauts grow taller in orbit", "how astronauts go to the toilet in space", "what space smells like",
+                      "why you cannot cry properly in space", "how a spacesuit keeps someone alive", "what astronauts eat", "how sleep works on the ISS"],
+    "what if": ["what if the Sun disappeared", "what if Earth had rings like Saturn", "what if you fell into Jupiter", "what if the Moon vanished",
+                "what if Earth stopped spinning", "what if you could see all of light", "what if a black hole passed by the Solar System", "what if we lived on Mars"],
+}
+BODY = {
+    "heart and blood": ["how the heart beats without being told", "the journey of one red blood cell", "why blood is red but veins look blue", "how blood clots seal a cut",
+                        "how far your blood travels in a day", "what blood pressure actually measures"],
+    "lungs and breath": ["what happens in one breath", "why we yawn", "why we hiccup", "how the lungs pass oxygen into blood", "why you cannot hold your breath until you faint"],
+    "gut": ["the journey of food through the gut", "why the stomach does not digest itself", "how the gut bacteria help us", "why your stomach growls",
+            "how the liver cleans the blood", "what the appendix may be for"],
+    "brain": ["how a memory is made", "why we dream", "what happens when you learn something new", "why we forget names", "how the brain sees colours that do not exist",
+              "why time feels faster as we get older", "what deja vu is thought to be", "how the brain fills in the blind spot", "why we cannot tickle ourselves"],
+    "mind": ["why habits are hard to break", "how fear works in the body", "why we remember embarrassing moments", "what the placebo effect is",
+             "why we feel phantom phone vibrations", "how attention works", "why yawns are contagious", "why music gives us chills", "what flow state is"],
+    "senses": ["how the eye focuses", "how the ear turns sound into signals", "why food tastes different with a cold", "how smell triggers memories",
+               "how many senses we really have", "why we see optical illusions", "how balance works in the inner ear"],
+    "bones and muscles": ["why bones are stronger than steel for their weight", "how many bones a baby has", "how muscles grow", "why muscles get sore",
+                          "the strongest muscle in the body", "how joints move without wearing out", "why we get goosebumps"],
+    "cells and DNA": ["how long DNA is if stretched out", "how cells copy themselves", "why we age", "how the immune system remembers", "what a fever does",
+                      "how skin heals a wound", "why fingerprints are unique"],
+    "sleep": ["what happens in each stage of sleep", "why we need sleep at all", "why we twitch as we fall asleep", "what sleep paralysis is"],
+}
+GEOGRAPHY = {
+    "countries": ["the country with the most time zones", "countries that have no rivers", "the smallest country in the world", "countries inside other countries",
+                  "the country that spans two continents", "why Chile is so long and thin", "the country with the most neighbours", "countries that have changed their names",
+                  "the only country with a non-rectangular flag", "the most visited countries in the world"],
+    "borders": ["the strangest borders on Earth", "where four countries meet at one point", "a town split between two countries", "the longest border in the world",
+                "borders drawn along rivers", "why some borders are perfectly straight lines"],
+    "rivers and lakes": ["the Amazon, the river with the most water", "why the Nile flows north", "the deepest lake on Earth", "rivers that flow backwards",
+                         "where the Amazon begins", "the river that crosses ten countries"],
+    "mountains and land": ["why Everest keeps growing", "the tallest mountain from base to peak", "the Sahara was once green", "the driest place on Earth",
+                           "the lowest point on land", "how islands are born", "the largest island in the world", "the Ring of Fire"],
+    "oceans and seas": ["the deepest point in the ocean", "the sea with no coast", "why the Dead Sea is so salty", "the ocean that is shrinking",
+                        "the place furthest from land", "where two oceans meet and seem not to mix"],
+    "maps and earth": ["why maps make Greenland look huge", "the true size of Africa", "how the continents were once joined", "where the equator crosses land",
+                       "the North Pole and the South Pole compared", "why time zones zigzag", "the centre of the world's population"],
+    "cities and people": ["the highest capital city", "cities on two continents", "the most crowded places on Earth", "the coldest inhabited town",
+                          "capitals that moved", "why most people live near water"],
+}
+LEARN_KINDS = ("science", "money", "space", "body", "geography")      # learning videos: patterns, lesson hooks, their own banks
+BANKS = {"science": SCIENCE, "space": SPACE, "body": BODY, "geography": GEOGRAPHY}
 MONEY = ["how compound interest really grows money", "why an emergency fund comes before investing", "what an index fund is", "how a credit score is built",
          "what a credit card's minimum payment really costs", "the 50/30/20 budget", "paying off debt: smallest balance first or highest interest first",
          "what passive income costs before it pays", "how creators actually get paid for ads", "what it takes for a channel to be monetised",
@@ -172,7 +233,16 @@ GENRE_ASK = {
               "the question it answers, then the 3-4 established points it will make, in order, ending on the most useful one"),
     "science": ("Plan short science stories that teach one thing well. One plan per numbered line below, on that line's subject and told the way it says. Use only "
                 "well-established facts of the kind found in a school textbook or an encyclopedia; no numbers or dates unless they are famous and certain; nothing "
-                "speculative.", "the question it answers, then the 3-4 established facts it will tell, in order")}
+                "speculative.", "the question it answers, then the 3-4 established facts it will tell, in order"),
+    "space": ("Plan short space stories that teach one thing well. One plan per numbered line below, on that line's subject and told the way it says. Use only "
+              "well-established astronomy of the kind found in a textbook, NASA or ESA; a 'what if' is a thought experiment built on real physics and must say so; "
+              "no numbers or dates unless famous and certain; nothing speculative presented as fact.", "the question it answers, then the 3-4 established facts it will tell, in order"),
+    "body": ("Plan short stories about how the human body and mind work, each teaching one thing well. One plan per numbered line below, on that line's subject. Use only "
+             "well-established anatomy, physiology and well-replicated psychology of the kind found in a textbook; never health advice, treatment, diets, supplements or "
+             "diagnosis; no numbers unless famous and certain.", "the question it answers, then the 3-4 established facts it will tell, in order"),
+    "geography": ("Plan short stories about the world's geography that teach one thing well. One plan per numbered line below, on that line's subject. Use only "
+                  "well-established facts of the kind an atlas or encyclopedia gives; no politics, no disputed borders or territories, no ranking of peoples, "
+                  "religions or countries as better or worse; no numbers unless certain.", "the question it answers, then the 3-4 established facts it will tell, in order")}
 GENRE_WRITE = {
     "life": ("Write an original, fictional true-to-life story from the premise below",
                    "- Third person, told like something a person carried for years and finally let out (\"she\", \"he\", \"they\"). Do not claim it is real "
@@ -195,7 +265,23 @@ GENRE_WRITE = {
                 "- Every statement must be established science, as a good encyclopedia would give it. If you are not certain of a number or a date, leave it out. "
                 "Nothing speculative, no myths presented as fact.\n"
                 "- Tell it as a story with a beginning, a turn and an end, in plain words a twelve-year-old follows; explain any term you use.\n"
-                "- No invented people or dialogue.\n")}
+                "- No invented people or dialogue.\n"),
+    "space": ("Write a true space story from the plan below",
+              "- Every statement must be established astronomy, as NASA, ESA or a good encyclopedia would give it. If you are not certain of a number or a date, leave it out. "
+              "A 'what if' is told as a thought experiment from real physics and says so; nothing speculative presented as fact.\n"
+              "- Tell it as a story with a beginning, a turn and an end, in plain words a twelve-year-old follows; explain any term you use.\n"
+              "- No invented people or dialogue.\n"),
+    "body": ("Write a true story about the human body or mind from the plan below",
+             "- Every statement must be established anatomy, physiology or well-replicated psychology, as a textbook would give it. If you are not certain of a number, leave it out.\n"
+             "- Never health advice, treatment, diets, supplements, diagnosis or 'hacks'; do not tell the viewer to do or take anything. Explain how it works, nothing more.\n"
+             "- Tell it as a story with a beginning, a turn and an end, in plain words a twelve-year-old follows; explain any term you use.\n"
+             "- No invented people or dialogue.\n"),
+    "geography": ("Write a true story about the world's geography from the plan below",
+                  "- Every statement must be established geography, as an atlas or a good encyclopedia would give it. If you are not certain of a number, leave it out.\n"
+                  "- No politics, no disputed borders or territories, nothing that ranks peoples, religions or countries as better or worse.\n"
+                  "- Name the countries, rivers and places it is about, so the map can show them.\n"
+                  "- Tell it as a story with a beginning, a turn and an end, in plain words a twelve-year-old follows.\n"
+                  "- No invented people or dialogue.\n")}
 TURNS = ["a message sent to the wrong person", "an old letter found by accident", "an overheard phone call", "a stranger who knew the truth",
          "a photograph that should not exist", "a bank statement left open", "a child's innocent question", "a secret told at the worst possible moment",
          "a reunion after ten years", "a diary returned by mistake"]
@@ -436,7 +522,7 @@ def can_manage(ctx: dict, ch: dict) -> bool:
 def kind(job: dict) -> str:
     """classic (a public-domain story), original / motivational / science (written from a premise), viewer (a comment on the channel) or real."""
     if job.get("original"):
-        return job["genre"] if job.get("genre") in ("motivational", "science", "money") else "original"
+        return job["genre"] if job.get("genre") in ("motivational", *LEARN_KINDS) else "original"
     return "classic" if job.get("classic") else "viewer" if job["source"].get("from") == "viewer comment" else "real"
 
 
@@ -682,13 +768,32 @@ def made_today(store, ch: dict, fmt: str | None = None, quick: bool = False) -> 
 
 # The day's mix (Mani, 2026-10-18: "daily two videos are of science, one from stories and one for finance"): the day's Shorts
 # are slots per category; the Analytics Manager re-splits them once a week by how the categories are really watched.
-MIX_CATS = ("science", "story", "money")
+MIX_CATS = ("science", "story", "money", "space", "body", "geography")      # the first three are Know IDK Things'; the rest the new channels' 
 SUB_WEIGHT = 50                      # a subscriber gained counts as much as 50 fully watched views
+
+
+def others_recent(store, ch: dict, days: int = 90) -> list[set[str]]:
+    """The telling words of what the OTHER channels made or planned in the last `days`: a new channel does not tell the same subject
+    within that time (Mani, 2026-10-19; switched on by `avoid_others`, so Know IDK Things is unchanged)."""
+    since, out = time.time() - days * 86400, []
+    for v in store.kv_list(LOG, since=since, limit=5000):
+        if v.get("channel") != ch["id"] and v.get("title"):
+            out.append(set(re.findall(r"[a-z]{4,}", v["title"].lower())) - STOP)
+    for p in store.kv_list(PREMISES, since=since, limit=5000):
+        if p.get("channel") != ch["id"] and p.get("used"):
+            out.append(set(re.findall(r"[a-z]{4,}", (p.get("title") or "").lower())) - STOP)
+    return [w for w in out if w]
+
+
+def told_elsewhere(subject: str, others: list[set[str]]) -> bool:
+    """A subject shares two or more telling words with something another channel told recently."""
+    mine = set(re.findall(r"[a-z]{4,}", subject.lower())) - STOP
+    return any(len(mine & o) >= 2 for o in others)
 
 
 def category(k: str | None) -> str:
     """A Short's category for the mix: science, money (finance), or story (real, viewer, classic, original, motivational)."""
-    return k if k in ("science", "money") else "story"
+    return k if k in LEARN_KINDS else "story"
 
 
 def mix_of(store, ch: dict) -> dict[str, int]:
@@ -884,7 +989,7 @@ class StoryScout(Crew):
         await self._trends(ctx)
         mix = mix_of(store, ch)
         cat = next_category(mix, made_by_category(store, ch)) if mix else None
-        if cat in ("science", "money"):
+        if cat in LEARN_KINDS:
             p = await self._original(ctx, cat)
             if p:
                 return AgentResult("done", "INVENTED", f"Today's {mix_text({cat: 1}).split(' ', 1)[1]} slot" + (" (a quick one)" if ctx["job"].get("quick") else "")
@@ -1011,9 +1116,10 @@ class StoryScout(Crew):
 
     def _mixes(self, genre: str, bank: list[dict], rng) -> list[tuple[str, str]]:
         """Eight (seed, ingredient line) pairs for a genre. A science subject is not taken twice while others are still unused."""
-        if genre == "science":
+        if genre in BANKS:
             taken = {p.get("seed") for p in bank}
-            subjects = [(d, t) for d, ts in SCIENCE.items() for t in ts]
+            subjects = [(d, t) for d, ts in BANKS[genre].items() for t in ts]
+            subjects = [x for x in subjects if not told_elsewhere(x[1], self._elsewhere)] or subjects     # (new channels only: see told_elsewhere)
             pool = [x for x in subjects if f"{x[0]}: {x[1]}" not in taken] or subjects
             hot = [x for x in pool if trend_score(x[1], self._hot) > 0][:3]
             rest = [x for x in pool if x not in hot]
@@ -1031,6 +1137,7 @@ class StoryScout(Crew):
     async def _premises(self, ctx: dict, bank: list[dict], genre: str) -> list[dict]:
         """Ask the model for a batch of new premises, each from its own mix of ingredients; keep the ones unlike any before."""
         ch, store = self.ch, ctx["store"]
+        self._elsewhere = others_recent(store, ch) if ch.get("avoid_others") else []
         mixes = self._mixes(genre, bank, self.opts.get("rng") or random)
         ask, shape = GENRE_ASK[genre]
         listing = "\n".join(f"{n + 1}. {line}" for n, (_, line) in enumerate(mixes))
@@ -1087,12 +1194,12 @@ class StoryScout(Crew):
         work.mkdir(parents=True, exist_ok=True)
         ctx["job"] = {"id": f"{ch['id']}-orig-{tail}", "key": f"{ch['id']}:orig-{tail}", "channel": ch["id"], "dir": str(work), "raw": p["premise"],
                       "original": True, "genre": genre, "source": {"url": "", "title": p["title"], "from": f"original ({genre})", "score": None}}
-        if genre in ("money", "science"):            # a learning video follows one of the watch-to-the-end patterns, the least used so far
+        if genre in LEARN_KINDS:                     # a learning video follows one of the watch-to-the-end patterns, the least used so far
             used = [v.get("structure") for v in log]
             shapes = list(STRUCTURES)
             ctx["job"]["structure"] = (self._lean(shapes, {k: used.count(k) for k in shapes}, insights.get("views_by_structure") or {})
                                        if learned else min(shapes, key=used.count))
-        group = "lesson" if genre in ("money", "science") else "story"      # and an opening shape, likewise the least used (or the best performing)
+        group = "lesson" if genre in LEARN_KINDS else "story"      # and an opening shape, likewise the least used (or the best performing)
         told_h = [v.get("hook") for v in log]
         keys = list(HOOKS[group])
         ctx["job"]["hook"] = (self._lean(keys, {k: told_h.count(k) for k in keys}, {k: x for k, x in (insights.get("views_by_hook") or {}).items() if k in keys})
@@ -1168,7 +1275,7 @@ class StoryWriter(Crew):
         length = f"a {'-'.join(str(x) for x in quick_of(self.ch)['seconds'])} second video" if quick else "a 1-2 minute video"
         ending = ENDINGS.get(self.ch["ending"], ENDINGS["plain"])
         head, rules = GENRE_WRITE.get(job.get("genre") or "life", GENRE_WRITE["life"])
-        science, learning = job.get("genre") == "science", job.get("structure") in STRUCTURES
+        science, learning = job.get("genre") in ("science", "space", "body", "geography"), job.get("structure") in STRUCTURES
         shape = f"- Build it exactly like this: {STRUCTURES[job['structure']]}\n- {HOLD_BACK}\n" if learning else f"- {RETAIN_STORY}\n"
         opener = HOOKS["story"].get(job.get("hook") or "")
         if opener and not learning:                 # a story opens in its shape; a lesson's first line belongs to its pattern
@@ -1328,13 +1435,13 @@ class SEOStrategist(Crew):
     name, tier, note, blocking = "SEO Strategist", "CLOUD", "title, description and tags from real searches", False
 
     def seeds(self, job: dict) -> list[str]:
-        what = {"science": "science explained", "money": "personal finance tips", "motivational": "motivational story", "classic": "short story", "viewer": "true-to-life story",
+        what = {"science": "science explained", "money": "personal finance tips", "space": "space facts", "body": "human body facts", "geography": "geography facts", "motivational": "motivational story", "classic": "short story", "viewer": "true-to-life story",
                 "real": "true-to-life story", "original": "true-to-life story"}[kind(job)]
         mine = " ".join(w for w in re.findall(r"[A-Za-z]{4,}", job.get("title", "")) if w.lower() not in STOP)
         out = [what, " ".join(mine.split()[:3])]
         if job.get("classic"):
             out.append(f"{job['classic']['title']} {job['classic']['author']}")
-        if job.get("genre") in ("science", "money"):
+        if job.get("genre") in LEARN_KINDS:
             out.append(" ".join(job["source"]["title"].split()[:4]))
         return [x for x in dict.fromkeys(out) if x.strip()]
 
@@ -1516,7 +1623,11 @@ class FootageCollector(Crew):
                     b["visual"] = shots[sid]
                     continue
                 b["visual"] = shots[sid] = None
-                hit = await stock_video.find(c, b["query"], used, wide=wide) or await stock_video.find(c, fallback_query(b["text"]), used, wide=wide)
+                hit = None
+                if "nasa" in (self.ch.get("footage_first") or []):        # a space channel: NASA's own public-domain media first (services/nasa_media.py)
+                    from ..services import nasa_media
+                    hit = await nasa_media.find(c, b["query"], used, wide=wide)
+                hit = hit or await stock_video.find(c, b["query"], used, wide=wide) or await stock_video.find(c, fallback_query(b["text"]), used, wide=wide)
                 if not hit:
                     continue
                 path = folder / f"shot{sid:03d}.{'mp4' if hit['kind'] == 'video' else 'jpg'}"
@@ -1540,7 +1651,7 @@ class FootageGenerator(Crew):
         them in one go and puts each on its beat (`diagram` on the visual: the Editor gives it no zoom). Any trouble: footage stays."""
         from . import scenes
         from ..services import hyperframes
-        group = {"science": "science", "money": "money"}.get(kind(job), "story")
+        group = kind(job) if kind(job) in LEARN_KINDS else "story"
         if group not in (self.ch.get("diagrams") or []) or job.get("format") == "long" or not ctx.get("llm"):
             return ""
         beats = [b for b in job["beats"] if b.get("kind") != "outro" and b.get("dur")]
@@ -2095,6 +2206,40 @@ class Lead(Director):
         return AgentResult(res.status, res.label, " | ".join([res.summary, *more]), {**res.data, "channels": more})
 
 
+class OwnWriter:
+    """The LLM as a channel with its own Groq model sees it: a "writer" request without a model goes to `model` (each Groq model has its own
+    daily allowance, so the new channels do not use up Know IDK Things' writer). Everything else passes through."""
+
+    def __init__(self, llm, model: str) -> None:
+        self._llm, self._model = llm, model
+
+    def __getattr__(self, name):
+        return getattr(self._llm, name)
+
+    async def json(self, prompt: str, **kw):
+        if kw.get("tier") == "writer" and not kw.get("model"):
+            kw["model"] = self._model
+        return await self._llm.json(prompt, **kw)
+
+    async def complete(self, prompt: str, **kw):
+        if kw.get("tier") == "writer" and not kw.get("model"):
+            kw["model"] = self._model
+        return await self._llm.complete(prompt, **kw)
+
+
+class ChannelDirector(Director):
+    """A Director whose crew writes with the channel's own Groq model (`writer_model`)."""
+
+    def __init__(self, name: str, writer_model: str = "", **kw) -> None:
+        super().__init__(name, **kw)
+        self.writer_model = writer_model
+
+    async def run(self, ctx: dict) -> AgentResult:
+        if self.writer_model and ctx.get("llm"):
+            ctx = {**ctx, "llm": OwnWriter(ctx["llm"], self.writer_model)}
+        return await super().run(ctx)
+
+
 def build_agents(options: dict, cfg) -> dict[str, SubAgent]:
     out: dict[str, SubAgent] = {}
     chs = [channel(raw) for raw in options.get("channels") or [{}]]
@@ -2105,6 +2250,7 @@ def build_agents(options: dict, cfg) -> dict[str, SubAgent]:
         else:
             d = dict(crew=crew(ch), reporter="Analytics Manager", again=more_today(ch))
         out[ch["director"]] = (Lead(ch["director"], peers=chs[1:], note=f"runs {ch['name']}", **d) if n == 0 and len(chs) > 1
+                               else ChannelDirector(ch["director"], writer_model=ch.get("writer_model") or "", note=f"runs {ch['name']}", **d) if ch.get("writer_model")
                                else Director(ch["director"], note=f"runs {ch['name']}", **d))
     return out
 

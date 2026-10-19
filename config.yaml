@@ -174,7 +174,7 @@ masters:
     trust: ACT             # makes Shorts and uploads them as unlisted; you make them public (or delete them) on YouTube
     mode: live
     cycle_minutes: 360     # every six hours: follows up on published Shorts and reads new comments
-    run_at: ["23:00 | Mani Market long video | manimarket", "01:00 | Mani Market long video (second try) | manimarket", "03:00 | Know IDK Things long video | knowidk", "05:00 | Know IDK Things Shorts | knowidk", "07:02 Asia/Kolkata | Mani Market pre-market Short | manimarket", "18:02 Asia/Kolkata | Mani Market post-market Short | manimarket"]   # 23:00 starts Mani Market Tamil's night (a result video, about an hour of voice); 03:00 makes the day's long video, 05:00 the day's Shorts; each is uploaded and scheduled for release. A time followed by a zone is that zone's clock (India has no daylight saving; the Mac's Toronto does): 07:02 and 18:02 IST make Mani Market Tamil's pre-market and post-market Shorts
+    run_at: ["23:00 | Mani Market long video | manimarket", "01:00 | Mani Market long video (second try) | manimarket", "03:00 | Know IDK Things long video | knowidk", "05:00 | Know IDK Things Shorts | knowidk", "06:35 | New channels' Shorts | both", "07:02 Asia/Kolkata | Mani Market pre-market Short | manimarket", "18:02 Asia/Kolkata | Mani Market post-market Short | manimarket"]   # 23:00 starts Mani Market Tamil's night (a result video, about an hour of voice); 03:00 makes the day's long video, 05:00 the day's Shorts; each is uploaded and scheduled for release. A time followed by a zone is that zone's clock (India has no daylight saving; the Mac's Toronto does): 07:02 and 18:02 IST make Mani Market Tamil's pre-market and post-market Shorts
     options:
       channels:            # one Director (with its own crew) per channel; the director's name must match catalog.json
         - id: knowidk
@@ -229,6 +229,106 @@ masters:
           publish_times: ["06:00", "12:00", "18:00", "00:00"]   # local time; one Short per slot (6 AM, noon, 6 PM, midnight)
           create_after: "05:00"          # the day's Shorts are not started before this hour (a run earlier in the night only follows up)
           generator: {}                  # AI footage for beats with no stock match, e.g. { provider: name, kind: image, key_env: NAME_API_KEY } (see vision/services/genmedia.py)
+        - id: cosmicroadster                      # Mani, 2026-10-19: a new English channel, its own Google Cloud project (COSMICROADSTER_GOOGLE_CLIENT_ID/SECRET in .env)
+          name: Cosmic Roadster
+          director: Cosmic Roadster Director
+          writer_model: openai/gpt-oss-20b       # its own Groq model (own daily allowance)
+          daily_mix: {space: 2}           # Shorts only, 2 a day to start
+          mix_auto: false
+          originals: true
+          original_genres: [space]
+          avoid_others: true             # never a subject another channel told in the last 90 days
+          diagrams: [space]
+          privacy: scheduled
+          timezone: UTC
+          publish_times: ["02:00", "14:00"]   # UTC: US evening / Asia morning, and Europe afternoon / India evening / US morning
+          create_after: "06:30"
+          voice_engine: kokoro
+          voice: am_michael
+          voice_speed: 1.0
+          pause: 0.28
+          voices: {}
+          seconds: [45, 90]
+          outro: "Follow Cosmic Roadster for one more wonder of the universe, every day."
+          cta: ""
+          viewer_comments: false
+          subreddits: []
+          classics: []
+          drive_folder: ""
+          long: {enabled: false}
+          quick: {per_day: 0}
+          trends: true
+          trend_region: US
+          backup: true
+          logo: assets/brand/cosmic-roadster/watermark.png
+          playlists: {space: "Space Facts"}
+          footage_first: [nasa]          # NASA's public-domain photos and video before stock footage
+        - id: knowbodythings                      # Mani, 2026-10-19: a new English channel, its own Google Cloud project (KNOWBODYTHINGS_GOOGLE_CLIENT_ID/SECRET in .env)
+          name: Know Body Things
+          director: Know Body Things Director
+          writer_model: openai/gpt-oss-20b       # its own Groq model (own daily allowance)
+          daily_mix: {body: 2}           # Shorts only, 2 a day to start
+          mix_auto: false
+          originals: true
+          original_genres: [body]
+          avoid_others: true             # never a subject another channel told in the last 90 days
+          diagrams: [body]
+          privacy: scheduled
+          timezone: UTC
+          publish_times: ["02:00", "14:00"]   # UTC: US evening / Asia morning, and Europe afternoon / India evening / US morning
+          create_after: "06:30"
+          voice_engine: kokoro
+          voice: bf_emma
+          voice_speed: 1.0
+          pause: 0.28
+          voices: {}
+          seconds: [45, 90]
+          outro: "Follow Know Body Things to learn one more thing about your body, every day."
+          cta: ""
+          viewer_comments: false
+          subreddits: []
+          classics: []
+          drive_folder: ""
+          long: {enabled: false}
+          quick: {per_day: 0}
+          trends: true
+          trend_region: US
+          backup: true
+          logo: assets/brand/know-body-things/watermark.png
+          playlists: {body: "Body Facts"}
+        - id: campingonsatellites                      # Mani, 2026-10-19: a new English channel, its own Google Cloud project (CAMPINGONSATELLITES_GOOGLE_CLIENT_ID/SECRET in .env)
+          name: Camping on Satellites
+          director: Camping on Satellites Director
+          writer_model: qwen/qwen3.8-27b       # its own Groq model (own daily allowance)
+          daily_mix: {geography: 2}           # Shorts only, 2 a day to start
+          mix_auto: false
+          originals: true
+          original_genres: [geography]
+          avoid_others: true             # never a subject another channel told in the last 90 days
+          diagrams: [geography]
+          privacy: scheduled
+          timezone: UTC
+          publish_times: ["02:00", "14:00"]   # UTC: US evening / Asia morning, and Europe afternoon / India evening / US morning
+          create_after: "06:30"
+          voice_engine: kokoro
+          voice: bm_george
+          voice_speed: 1.0
+          pause: 0.28
+          voices: {}
+          seconds: [45, 90]
+          outro: "Follow Camping on Satellites to see one more corner of the world, every day."
+          cta: ""
+          viewer_comments: false
+          subreddits: []
+          classics: []
+          drive_folder: ""
+          long: {enabled: false}
+          quick: {per_day: 0}
+          trends: true
+          trend_region: US
+          backup: true
+          logo: assets/brand/camping-on-satellites/watermark.png
+          playlists: {geography: "World Facts"}
         - id: manimarket
           name: Mani Market Tamil
           backup_folder: mani_market_yt   # on: each posted video (and its cover) is copied to Drive, Vision/YouTube/<channel name>/Shorts or /Videos (this older top-level folder is moved in there once), checked, then removed from the Mac; sign in once at /auth/gdrive/login?account=drive-backup

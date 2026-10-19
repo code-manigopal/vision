@@ -16,6 +16,7 @@ Setup (once):
 from __future__ import annotations
 
 import json
+import re
 import secrets as pysecrets
 import time
 from urllib.parse import urlencode
@@ -87,9 +88,21 @@ def _save(account: str, tok: dict) -> None:
     TOKENS.chmod(0o600)
 
 
-def configured(provider: str) -> bool:
+def app_keys(provider: str, account: str = "") -> tuple[str | None, str | None]:
+    """The Google app a sign-in uses: a channel with its own Google Cloud project has <CHANNEL>_GOOGLE_CLIENT_ID / _SECRET in .env
+    (account "youtube-knowbodythings" -> KNOWBODYTHINGS_...; Mani, 2026-10-19: one project per channel for its own upload quota),
+    else the shared app (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET, or the provider's own)."""
     p = PROVIDERS[provider]
-    return bool(secret(p["id"]) and secret(p["secret"]))
+    if provider in ("youtube", "google", "gdrive") and account:
+        own = re.sub(r"[^A-Z0-9]", "", account.upper().removeprefix("YOUTUBE-"))
+        cid, sec = secret(f"{own}_GOOGLE_CLIENT_ID"), secret(f"{own}_GOOGLE_CLIENT_SECRET")
+        if cid and sec:
+            return cid, sec
+    return secret(p["id"]), secret(p["secret"])
+
+
+def configured(provider: str, account: str = "") -> bool:
+    return all(app_keys(provider, account))
 
 
 def redirect_uri(provider: str, port: int) -> str:
@@ -100,7 +113,7 @@ def login_url(provider: str, account: str, port: int) -> str:
     p = PROVIDERS[provider]
     state = pysecrets.token_urlsafe(16)
     _pending_state[state] = (provider, account)
-    q = {"client_id": secret(p["id"]), "redirect_uri": redirect_uri(provider, port), "response_type": "code",
+    q = {"client_id": app_keys(provider, account)[0], "redirect_uri": redirect_uri(provider, port), "response_type": "code",
          "scope": " ".join(p["scopes"]), "state": state, **p["extra"]}
     return f"{p['auth']}?{urlencode(q)}"
 
@@ -111,7 +124,8 @@ def pop_state(state: str) -> tuple[str, str] | None:
 
 async def exchange(provider: str, account: str, code: str, port: int, client: httpx.AsyncClient | None = None) -> None:
     p = PROVIDERS[provider]
-    data = {"client_id": secret(p["id"]), "client_secret": secret(p["secret"]), "code": code, "grant_type": "authorization_code",
+    cid, sec = app_keys(provider, account)
+    data = {"client_id": cid, "client_secret": sec, "code": code, "grant_type": "authorization_code",
             "redirect_uri": redirect_uri(provider, port)}
     if provider == "microsoft":
         data["scope"] = " ".join(p["scopes"])
@@ -138,7 +152,8 @@ async def access_token(account: str, provider: str, client: httpx.AsyncClient | 
     if not tok.get("refresh_token"):
         raise AuthNeeded(account, provider)
     p = PROVIDERS[provider]
-    data = {"client_id": secret(p["id"]), "client_secret": secret(p["secret"]), "refresh_token": tok["refresh_token"], "grant_type": "refresh_token"}
+    cid, sec = app_keys(provider, account)
+    data = {"client_id": cid, "client_secret": sec, "refresh_token": tok["refresh_token"], "grant_type": "refresh_token"}
     if provider == "microsoft":
         data["scope"] = " ".join(p["scopes"])
     async with (client or httpx.AsyncClient(timeout=20)) as c:
