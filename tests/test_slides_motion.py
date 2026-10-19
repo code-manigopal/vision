@@ -73,3 +73,11 @@ def test_render_refuses_without_setup(tmp_path, monkeypatch):
         assert "not set up" in str(e)
     else:
         raise AssertionError("should refuse")
+
+
+def test_the_presenter_is_in_the_page_with_his_mouth_on_the_voice_and_his_gestures(tmp_path):
+    faces = {(m, e): tmp_path / f"f{m}{e}.png" for m in range(3) for e in range(2)}
+    html = slides_motion.build(DECK, LINES, [6.0, 4.0, 3.0, 3.0, 4.0], channel="M", faces=faces, states=[0, 0, 1, 2, 2, 0])
+    assert html.count('<img id="fc') == 6 and 'tl.set("#fc10", {opacity: 1}, 0.167);' in html and 'tl.set("#fc20", {opacity: 1}, 0.250);' in html
+    assert html.count("point(") >= 3 and "rotation: -6" in html and "y: -14" in html          # points at rows; tilts at a bad figure, bounces at a good one
+    assert 'id="pres" style="left:1580px;top:780px"' in html

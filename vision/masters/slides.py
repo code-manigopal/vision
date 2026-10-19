@@ -522,13 +522,14 @@ def assemble(work: Path, pngs: list[Path], lines: list[dict], spoken: list[Path]
         from ..services.hyperframes import RenderFailed
         from . import slides_motion
         try:
-            moving = slides_motion.render(motion["deck"], lines, secs, work / "motion.mp4", tall=size == TALL,
-                                          **{k: v for k, v in motion.items() if k in ("channel", "source", "tag", "top")})
+            moving = slides_motion.render(motion["deck"], lines, secs, work / "motion.mp4", tall=size == TALL, faces=faces,
+                                          states=mouths(voice) if faces else None, **{k: v for k, v in motion.items() if k in ("channel", "source", "tag", "top")})
         except RenderFailed as e:
             print(f"animated slides not used: {e}")
     if moving:
         args += ["-i", str(moving)]
         v_in = 1
+        faces = None                                        # the presenter is in the animated page already
     else:
         v_in = n
         for i, png in enumerate(pngs):                      # each picture stays for its line, plus the wipe into the next

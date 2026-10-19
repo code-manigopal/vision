@@ -10,6 +10,9 @@ first shows it (`show` > its index), animated by the slide's kind:
   quotes  each sentence slides in behind its chip
   points / cards, cover   each card rises in and its drawing is drawn on
   notice  (the disclaimer) fades in and stays still, to be read
+The presenter (Mani's own six face tiles, slides.own_faces, or the drawn stand-in) is part of the page: his mouth follows
+the voice's loudness as before, he blinks, breathes, nods as each line starts, points his arm at the row or card being
+spoken about, bounces a little at a good figure and tilts his head at a bad one.
 A count-up shows only steps between the two figures and always ends on the deck's own text, exactly: nothing on screen is a
 figure the deck does not have. The presenter, the captions and the audio are laid on top by slides.assemble, as before.
 """
@@ -18,6 +21,7 @@ from __future__ import annotations
 
 import html
 import json
+import math
 import re
 from pathlib import Path
 
@@ -94,13 +98,68 @@ def _num(s: str) -> float | None:
     return float(m.group(2).replace(",", "")) if m else None
 
 
-def build(deck: list[dict], lines: list[dict], secs: list[float], *, tall: bool = False, channel: str = "", tag: str = "", source: str = "", top: str = "") -> str:
+# the pointing arm: a sleeve in the shirt's green and a hand, drawn pointing right from the shoulder (its left end), rotated to aim
+ARM = """<svg viewBox="0 0 190 64" width="190" height="64"><path d="M4 18 L120 22 L122 46 L6 50 Q-4 34 4 18 Z" fill="#1c3a2b" stroke="#111" stroke-width="4" stroke-linejoin="round"/>
+<path d="M118 20 Q140 14 150 24 L184 26 Q190 30 184 34 L152 36 Q150 46 136 48 Q120 50 118 44 Z" fill="#c98a5a" stroke="#111" stroke-width="4" stroke-linejoin="round"/>
+<path d="M134 36 Q142 38 150 36" fill="none" stroke="#111" stroke-width="3" stroke-linecap="round"/></svg>"""
+PRES_CSS = """
+#pres{position:absolute;width:300px;height:300px}#presin{position:absolute;inset:0;transform-origin:50% 90%}
+#presin img{position:absolute;inset:0;width:300px;height:300px;opacity:0}
+#arm{position:absolute;width:190px;height:64px;transform-origin:4px 34px;opacity:0}
+"""
+
+
+def presenter(faces: dict, states: list[int], cues: list[tuple], total: float, size: tuple[int, int]) -> tuple[str, list[str], dict]:
+    """The presenter's layer: (html, timeline lines, assets). `faces` = {(mouth, eyes shut): png}; `states` = slides.mouths of the
+    voice; `cues` = [(time, kind, selector or tone)]: "point" at an element, "good"/"bad" a reaction, "nod" a small nod."""
+    w, h = size
+    x0, y0 = w - slides.FACE - 40, h - slides.FACE
+    imgs = "".join(f'<img id="fc{m}{e}" src="assets/face-{m}{e}.png">' for (m, e) in sorted(faces))
+    html_ = f'<div id="pres" style="left:{x0}px;top:{y0}px"><div id="presin">{imgs}</div></div><div id="arm" style="left:{x0 + 62}px;top:{y0 + 196}px">{ARM}</div>'
+    js, fps = [], slides.MOUTH_FPS
+    seq = [(m, 1 if int(i / fps / 3.7) != int((i + 2) / fps / 3.7) else 0) for i, m in enumerate(states)] or [(0, 0)]
+    last = None
+    for i, st in enumerate(seq):                       # only the changes: the face shown is swapped
+        if st != last and st in faces:
+            if last is not None:
+                js.append(f'tl.set("#fc{last[0]}{last[1]}", {{opacity: 0}}, {i / fps:.3f});')
+            js.append(f'tl.set("#fc{st[0]}{st[1]}", {{opacity: 1}}, {i / fps:.3f});')
+            last = st
+    js.append(f'tl.fromTo("#presin", {{y: 0}}, {{y: -4, duration: 1.9, ease: "sine.inOut", yoyo: true, repeat: {max(1, int(total / 1.9))}}}, 0);')
+    busy = -1.0
+    for t, kind, arg in sorted(cues):
+        if kind == "nod":
+            js.append(f'tl.to("#presin", {{rotation: 2.5, duration: 0.18, yoyo: true, repeat: 1, ease: "sine.inOut"}}, {t:.3f});')
+        elif kind == "good":
+            js.append(f'tl.to("#presin", {{y: -14, duration: 0.16, yoyo: true, repeat: 3, ease: "power1.out"}}, {t:.3f});')
+        elif kind == "bad":
+            js.append(f'tl.to("#presin", {{rotation: -6, duration: 0.35, ease: "sine.out"}}, {t:.3f});')
+            js.append(f'tl.to("#presin", {{rotation: 0, duration: 0.5, ease: "sine.inOut"}}, {t + 1.6:.3f});')
+        elif kind == "point" and t > busy:
+            tx, ty = arg                                # where the item sits on the slide (roughly: a gesture, not a laser)
+            sx, sy = x0 + 66, y0 + 230
+            js.append(f"point({math.degrees(math.atan2(ty - sy, tx - sx)):.1f}, {t:.3f});")
+            busy = t + 2.6
+    return html_, js, {f"face-{m}{e}.png": p for (m, e), p in faces.items()}
+
+
+POINT_JS = """function point(ang, at) {
+  var arm = document.getElementById("arm");
+  tl.fromTo(arm, {opacity: 0, rotation: 100}, {opacity: 1, rotation: ang, duration: 0.45, ease: "back.out(1.4)"}, at);
+  tl.to(arm, {rotation: ang + 4, duration: 0.3, yoyo: true, repeat: 3, ease: "sine.inOut"}, at + 0.5);
+  tl.to(arm, {opacity: 0, rotation: 100, duration: 0.4, ease: "power1.in"}, at + 2.2);
+}
+"""
+
+
+def build(deck: list[dict], lines: list[dict], secs: list[float], *, tall: bool = False, channel: str = "", tag: str = "", source: str = "", top: str = "",
+          faces: dict | None = None, states: list[int] | None = None) -> str:
     """The whole slides track as one HyperFrames page, timed by each line's seconds (`secs`, the voice with its pauses)."""
     w, h = slides.TALL if tall else (slides.W, slides.H)
     starts, total = times(secs), round(sum(secs), 3)
     frame = ("" if tall else f'<div class="tag">{html.escape(tag)}</div>' if tag else f'<div class="src">{html.escape(source)}</div>' if source else "") \
         + f'<div class="mark">{html.escape(channel)}</div>' + (f'<div class="top">{html.escape(top)}</div>' if tall and top else "")
-    body, js = [], []
+    body, js, cues = [], [], [(starts[i] + 0.05, "nod", "") for i in range(len(lines))]
     order = []                                         # slides in the order they are spoken
     for i, ln in enumerate(lines):
         if not order or order[-1][0] != ln["slide"]:
@@ -170,15 +229,24 @@ def build(deck: list[dict], lines: list[dict], secs: list[float], *, tall: bool 
                 texts = steps(r.get("was") if kind == "table" else None, r["now"] if kind == "table" else r["value"])
                 over = 1.1
                 js += _count(cell, texts, at2 + 0.3, over)
+                cues.append((at2 + 0.2, "point", (1150, (330 if kind == "table" else 320) + it * (114 if kind == "table" else 104))))
+                if r.get("tone") in ("good", "bad") and texts:
+                    cues.append((at2 + 0.3 + over, r["tone"], ""))
                 if kind == "table":
                     js.append(_tween(f"{sel} td:nth-child(4)", {"opacity": 0}, {"opacity": 1, "duration": 0.3}, at2 + 0.3 + over))
             elif kind == "board":
                 js.append(_tween(sel, {"opacity": 0, "scale": 0.92, "y": 30}, {"opacity": 1, "scale": 1, "y": 0, "duration": 0.4, "ease": "back.out(1.6)"}, at2))
                 js.append(_tween(f"{sel} .r", {"opacity": 0, "x": 30}, {"opacity": 1, "x": 0, "duration": 0.3, "stagger": 0.15}, at2 + 0.25))
             elif kind == "quotes":
+                cues.append((at2 + 0.1, "point", (1100, 300 + it * 110)))
                 js.append(_tween(sel, {"opacity": 0, "x": -60}, {"opacity": 1, "x": 0, "duration": 0.45, "ease": "power2.out"}, at2))
                 js.append(_tween(f"{sel} b", {"scale": 0.6}, {"scale": 1, "duration": 0.35, "ease": "back.out(2)"}, at2 + 0.2))
             else:                                       # cover icons, cards
+                if kind != "cover":
+                    n_c = len(items)
+                    cues.append((at2 + 0.1, "point", ((110 + (it + 0.5) * 1700 / n_c) if not tall else 500, 520 if not tall else 360 + it * 230)))
+                    if items[it].get("tone") in ("good", "bad"):
+                        cues.append((at2 + 0.6, items[it]["tone"], ""))
                 js.append(_tween(sel, {"opacity": 0, "y": 40, "scale": 0.9}, {"opacity": 1, "y": 0, "scale": 1, "duration": 0.45, "ease": "back.out(1.7)"}, at2))
                 js.append(f"draw({json.dumps(sel)}, {at2 + 0.1:.3f});")
         # the items not shown yet are hidden from the slide's start
@@ -222,15 +290,24 @@ def build(deck: list[dict], lines: list[dict], secs: list[float], *, tall: bool 
   });
 }
 """
+    if faces:
+        p_html, p_js, _ = presenter(faces, states or [], cues, total, (w, h))
+        body.append(p_html)
+        js += p_js
+        css += PRES_CSS
+        helpers += POINT_JS
     return hf.page("".join(body), helpers + "\n".join(js), width=w, height=h, seconds=total, css=css)
 
 
-def render(deck: list[dict], lines: list[dict], secs: list[float], out: Path, *, tall: bool = False, **frame) -> Path:
-    """The slides track as an MP4 (silent), or hf.RenderFailed."""
+def render(deck: list[dict], lines: list[dict], secs: list[float], out: Path, *, tall: bool = False, faces: dict | None = None,
+           states: list[int] | None = None, **frame) -> Path:
+    """The slides track as an MP4 (silent), with the presenter when `faces` are given, or hf.RenderFailed."""
     from ..services import fonts
     assets = {f: hf.FONTS / f for f in ("BalooThambi2.ttf", "JetBrainsMono.ttf") if (hf.FONTS / f).is_file()}
     if len(assets) < 2:
         raise hf.RenderFailed("the slide fonts are missing (python -m vision hyperframes)")
     if fonts.path("Nunito Sans"):
         assets["NunitoSans.ttf"] = Path(fonts.path("Nunito Sans"))
-    return hf.render(build(deck, lines, secs, tall=tall, **frame), out, assets=assets)
+    if faces:
+        assets.update({f"face-{m}{e}.png": Path(p) for (m, e), p in faces.items()})
+    return hf.render(build(deck, lines, secs, tall=tall, faces=faces, states=states, **frame), out, assets=assets)
