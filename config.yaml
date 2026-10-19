@@ -178,9 +178,9 @@ masters:
     options:
       channels:            # one Director (with its own crew) per channel; the director's name must match catalog.json
         - id: confessions
-          name: Confessions Everywhere
+          name: Know IDK Things
           backup_folder: confessions_everywhere_yt   # on: each posted video (and its cover) is copied to Drive, Vision/YouTube/<channel name>/Shorts or /Videos (this older top-level folder is moved in there once), checked, then removed from the Mac; sign in once at /auth/gdrive/login?account=drive-backup
-          director: Confessions Everywhere Director
+          director: Know IDK Things Director
           shorts_per_day: 4              # a run keeps making Shorts, one after another, until the day's number is reached or the stories run out
           diagrams: [science, money, story]   # kinds whose Shorts may have animated diagram scenes (HyperFrames); approved by Mani 2026-10-18
           daily_mix: {science: 2, story: 1, money: 1}   # Mani, 2026-10-18: the day's Shorts by category (story = real, classic or original confession; money = finance); replaces shorts_per_day
@@ -201,8 +201,8 @@ masters:
             warm:     { engine: kokoro, voice: af_bella,  speed: 0.95, pause: 0.32 }
             light:    { engine: kokoro, voice: am_puck,   speed: 1.00, pause: 0.25 }
             dramatic: { engine: kokoro, voice: am_fenrir, speed: 0.95, pause: 0.35 }
-          outro: "Got a confession? Drop it in the comments, it could be our next story. Subscribe for more."   # spoken at the end of every Short
-          cta: "Got a confession of your own? Leave it in the comments. It could be our next story."            # in every description, and posted as the channel's comment
+          outro: "Subscribe to Know IDK Things, and learn something new every day."   # spoken at the end of every Short
+          cta: "What's something you never knew? Ask in the comments. It could be our next video."            # in every description, and posted as the channel's comment
           viewer_comments: true          # long comments under the channel's own Shorts become stories (screened like any other), ahead of everything else
           classics: [2776, 2518, 269, 38025]   # Project Gutenberg book ids: O. Henry, Tagore, Saki, Tolstoy (public domain); each story is retold once, with its citation
           classics_per_day: 1

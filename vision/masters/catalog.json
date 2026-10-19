@@ -812,11 +812,11 @@
    "name": "YOUTUBE MANAGER",
    "agents": [
     {
-     "name": "Confessions Everywhere Director",
+     "name": "Know IDK Things Director",
      "status": "work",
      "label": "DIRECTING",
      "tier": "DEEP",
-     "note": "runs Confessions Everywhere",
+     "note": "runs Know IDK Things",
      "crew": [
       {
        "name": "Story Scout",
@@ -1028,14 +1028,14 @@
     {
      "title": "CHANNELS",
      "agents": [
-      "Confessions Everywhere Director",
+      "Know IDK Things Director",
       "Mani Market Tamil Director"
      ],
      "parallel": true
     }
    ],
-   "reporter": "Confessions Everywhere Director",
-   "demo_report": "Confessions Everywhere: 1 unlisted for your review | Mani Market Tamil: 1 awaiting your approval",
+   "reporter": "Know IDK Things Director",
+   "demo_report": "Know IDK Things: 1 unlisted for your review | Mani Market Tamil: 1 awaiting your approval",
    "loop": true
   },
   "visa": {

@@ -1147,10 +1147,10 @@ def test_a_posted_video_is_copied_to_drive_checked_and_only_then_removed_from_th
     day = __import__("time").strftime("%Y-%m-%d", __import__("time").localtime(1))
     assert names == [f"{day} long1 [v2] cover.jpg", f"{day} long1 [v2].mp4", f"{day} short1 [v1] cover.jpg", f"{day} short1 [v1].mp4"]
     folders = {v["name"] for v in drive["folders"].values()}
-    assert folders == {"Vision", "YouTube", "Confessions Everywhere", "Shorts", "Videos"}                 # Mani, 2026-10-18: all under Vision/
+    assert folders == {"Vision", "YouTube", "Know IDK Things", "Shorts", "Videos"}                 # Mani, 2026-10-18: all under Vision/
     recs = {v["_key"]: v for v in store.kv_list(youtube.LOG)}
-    assert recs["long1"]["drive"]["folder"] == "Vision/YouTube/Confessions Everywhere/Videos"
-    assert recs["short1"]["drive"]["folder"] == "Vision/YouTube/Confessions Everywhere/Shorts"
+    assert recs["long1"]["drive"]["folder"] == "Vision/YouTube/Know IDK Things/Videos"
+    assert recs["short1"]["drive"]["folder"] == "Vision/YouTube/Know IDK Things/Shorts"
 
 
 def test_on_the_first_run_of_a_month_last_months_drive_backups_go_to_the_trash(tmp_path, monkeypatch):

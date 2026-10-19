@@ -145,12 +145,12 @@ def test_youtube_backups_move_the_old_top_level_folder_under_vision(tmp_path, mo
 
     async def go():
         async with client() as c:
-            return await gdrive.vision_path(c, "tok", "YouTube", "Confessions Everywhere", legacy="confessions_everywhere_yt"), \
-                   await gdrive.vision_path(c, "tok", "YouTube", "Confessions Everywhere", legacy="confessions_everywhere_yt")
+            return await gdrive.vision_path(c, "tok", "YouTube", "Know IDK Things", legacy="confessions_everywhere_yt"), \
+                   await gdrive.vision_path(c, "tok", "YouTube", "Know IDK Things", legacy="confessions_everywhere_yt")
 
     first, again = asyncio.run(go())
     assert first == again == "old" and drive["moved"] == ["old"]                   # moved and renamed once, with its Shorts inside
-    assert drive["folders"]["old"]["name"] == "Confessions Everywhere"
+    assert drive["folders"]["old"]["name"] == "Know IDK Things"
     yt = drive["folders"]["old"]["parents"][0]
     assert drive["folders"][yt]["name"] == "YouTube" and drive["folders"][drive["folders"][yt]["parents"][0]]["name"] == "Vision"
 

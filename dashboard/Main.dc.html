@@ -1445,7 +1445,7 @@ class Component extends DCLogic {
   // Preview: rule-based intent parser. Real build: the local LLM router (LM Studio, tool calling)
   // returns the same {kind, ...entities} list, and the same plan UI runs on the real agent results.
   static REPORTERS = { email: 'Summarizer', calendar: 'Scheduler', trading: 'Portfolio Manager', invest: 'Daily P&L Reporter',
-    web: 'Proposal Drafter', jobs: 'Application Tracker', world: 'News Summarizer', ebooks: 'Shelf Manager', youtube: 'Confessions Everywhere Director', visa: 'Slot Watcher' };
+    web: 'Proposal Drafter', jobs: 'Application Tracker', world: 'News Summarizer', ebooks: 'Shelf Manager', youtube: 'Know IDK Things Director', visa: 'Slot Watcher' };
   static HOLD = null;   // a master kept on hold (greyed out, skipped at boot); none right now
   titleCase(x) { return x.trim().replace(/\s+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()); }
   parseDay(q) {
@@ -2111,7 +2111,7 @@ class Component extends DCLogic {
 
     const data = {
       youtube: { name: 'YOUTUBE MANAGER', dot: 'd-work', agents: [   // a Director per channel, then its crew (4th value = the crew's director)
-        ['Confessions Everywhere Director','work','DIRECTING'],
+        ['Know IDK Things Director','work','DIRECTING'],
         ['Story Scout','done','FOUND','d'],['Story Writer','done','WRITTEN','d'],['Screenplay Writer','done','TIMED','d'],
         ['Keyword Generator','done','DONE','d'],['Voice Artist','work','RECORDING','d'],['SEO Strategist','done','PACKAGED','d'],['Footage Collector','work','COLLECTING','d'],
         ['Footage Generator','off','OFF','d'],['Editor','idle','QUEUED','d'],['Uploader','idle','QUEUED','d'],['Analytics Manager','idle','QUEUED','d'],
@@ -2268,7 +2268,7 @@ class Component extends DCLogic {
     const f = (n) => n.toFixed(1);
     // ---- VISION Mind: knowledge graph (Obsidian-style) ----
     const tree = [
-      ['youtube', 'YouTube Manager', -90, [['Director', 'Confessions Everywhere'], ['Story Writer', 'Next script'], ['Editor', 'Shorts cut'], ['Uploader', 'Unlisted queue']]],
+      ['youtube', 'YouTube Manager', -90, [['Director', 'Know IDK Things'], ['Story Writer', 'Next script'], ['Editor', 'Shorts cut'], ['Uploader', 'Unlisted queue']]],
       ['trading', 'Trading Desk', -54, [['Market Analyst', 'EUR/USD log'], ['Bull vs Bear', 'Debate notes'], ['Trader', 'Trade plans'], ['Portfolio Mgr', 'Decision log']]],
       ['jobs', 'Job Hunt', -18, [['Job Scout', 'Windsor roles'], ['Resume Tailor', 'Resume v7'], ['Outreach', 'Contacts'], ['Tracker', 'Applications']]],
       ['web', 'Web Designer', 18, [['Business Finder', 'Local leads'], ['Competitor Analyst', 'Competitor notes'], ['Website Builder', 'Demo sites'], ['Proposal Drafter', 'Proposals']]],
@@ -2324,7 +2324,7 @@ class Component extends DCLogic {
     // ---- Agent graph: stage columns, stacked cards, debates (reference layout) ----
     const flows = {
       youtube: { loop: true, stages: [['SOURCE',['Story Scout']],['WRITE',['Story Writer','Screenplay Writer']],['PREP',['Keyword Generator','Voice Artist','SEO Strategist']],
-        ['FOOTAGE',['Footage Collector','Footage Generator']],['EDIT',['Editor']],['UPLOAD',['Uploader']],['REPORT',['Analytics Manager']],['DIRECTOR',['Confessions Everywhere Director']]] },
+        ['FOOTAGE',['Footage Collector','Footage Generator']],['EDIT',['Editor']],['UPLOAD',['Uploader']],['REPORT',['Analytics Manager']],['DIRECTOR',['Know IDK Things Director']]] },
       trading: { loop: false, stages: [
         ['ANALYSTS',['Market Analyst','Sentiment Analyst','News Analyst','Macro Analyst']],
         ['RESEARCH DEBATE',['Bull Researcher','Bear Researcher'],'debate'],
@@ -2345,7 +2345,7 @@ class Component extends DCLogic {
       web: { loop: false, stages: [['FIND',['Business Finder']],['RESEARCH',['Information Collector','Competitor Analyst']],['ASSETS',['Images Downloader','Color Theme Decider']],['BUILD',['Website Builder']],['DEPLOY',['Cloudflare Deployer']],['PITCH',['Proposal Drafter']],['APPROVAL',['YOU']]] }
     };
     const meta = {
-      'Confessions Everywhere Director': ['DEEP','runs the channel crew'], 'Story Scout': ['API','Drive folder · inbox'], 'Story Writer': ['CLOUD','last: 201 words'],
+      'Know IDK Things Director': ['DEEP','runs the channel crew'], 'Story Scout': ['API','Drive folder · inbox'], 'Story Writer': ['CLOUD','last: 201 words'],
       'Screenplay Writer': ['QUICK','last: 19 beats'], 'Keyword Generator': ['CLOUD','one search per beat'], 'Voice Artist': ['API','sentence by sentence'], 'SEO Strategist': ['CLOUD','titles from real searches'],
       'Footage Collector': ['API','Pexels · Pixabay'], 'Footage Generator': ['CLOUD','no AI provider set'], 'Editor': ['LOCAL','captions · watermark'],
       'Uploader': ['API','uploads as unlisted'], 'Analytics Manager': ['API','views · likes · status'],

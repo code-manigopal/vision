@@ -77,7 +77,7 @@ tests/             test_core, test_telegram, test_phase34, test_phase567
    `AgentResult.summary` (+ `data`) becomes the master report. Briefs use master reports only.
    Reporters: email=Summarizer, calendar=Scheduler, trading=Portfolio Manager, invest=Daily P&L Reporter,
    web=Proposal Drafter, jobs=Application Tracker, world=News Summarizer (news, weather, flights, traffic),
-   visa=Slot Watcher, ebooks=Shelf Manager, youtube=Confessions Everywhere Director (its crew reports to it through Analytics Manager; it also adds Mani Market Tamil's line, whose own crew reports through Market Analytics).
+   visa=Slot Watcher, ebooks=Shelf Manager, youtube=Know IDK Things Director (its crew reports to it through Analytics Manager; it also adds Mani Market Tamil's line, whose own crew reports through Market Analytics).
 2. **Errors skip the chain**: a failing agent turns red, alerts the master log (Telegram once/30 min),
    and blocks later stages — unless the agent sets `blocking = False` (sync/data agents do).
 3. **Side effects need approval** (the YOU gate): sending email, booking meetings, job packages,
@@ -334,9 +334,9 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   `_refresh` now asks videos.list in batches of 50, so every video is followed (it used to look at the first 50 only).
 - YouTube Manager (`masters/youtube.py`, took the Film Studio slot) has three levels: master → one Director per channel
   (`options.channels`) → that channel's crew. `Director` (agents.py) runs its crew like a master runs sub-agents; crew
-  agent events carry `director`. Crew for Confessions Everywhere: Story Scout → Story Writer → Screenplay Writer →
+  agent events carry `director`. Crew for Know IDK Things: Story Scout → Story Writer → Screenplay Writer →
   Keyword Generator + Voice Artist + SEO Strategist → Footage Collector → Footage Generator → Editor → Uploader → Analytics Manager.
-  **Mani's choice (2026-10-06): no review at all for Confessions Everywhere.** `privacy: scheduled` uploads each Short as
+  **Mani's choice (2026-10-06): no review at all for Know IDK Things.** `privacy: scheduled` uploads each Short as
   private with a publishing time: the first `publish_times` slot after the last release already scheduled (`next_slot`;
   the releases are one queue in upload order, never filled into an earlier gap; the Uploader first refreshes every
   video's `publishAt` so Mani's hand-set times count), and YouTube makes it public by
@@ -423,6 +423,9 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   asks the model, line by line, for one cue from `CUES` (riser, impact, heartbeat, drone, tick, ding, whoosh, pop, coin,
   notification; only kinds the library holds) or "none", most lines none; `sfx_plan` places each at its line, keeps them at
   least 4 s apart and about one per 8 s, and never adds any on its own (`sfx`, `sfx_volume`). No model answer = no effects. The record keeps `caption` and `sfx`; both show on the desk.
+  **Renamed (Mani, 2026-10-18): Confessions Everywhere is now Know IDK Things** (the channel covers science, money and stories, and will grow). Only the
+  display name, Director name, outro and comment invitation changed; the id stays `confessions` (sign-in `youtube-confessions`, kv keys, inbox folder,
+  `backup_folder`), and its Drive folder was renamed in place to Vision/YouTube/Know IDK Things. Mani renames the channel and handle in YouTube Studio.
   **No sexual content (Mani, 2026-10-18: "no more such contents"):** `SEXUAL` (sex, lust, fantasies, role-play, nude, one-night stand...) rejects a story
   from any source by rule before the model sees it; the screening prompt also rejects one where sex or sexual desire is any real part; a written script
   that matches is sent back to be rewritten. Strict on purpose (a harmless "aroused from sleep" also stops a story).
@@ -582,7 +585,7 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   by approval); post-market 21:00 IST that day if still ahead, else 15 minutes on while still that Indian date, else stale. Reports never take a slot from
   `next_slot`, so the long video's 10:00 stays free.
   **Zoned `run_at`:** a master's `run_at` entry may carry a zone, `"07:02 Asia/Kolkata"` (`orchestrator.run_time`; a bare `"05:00"` is still the Mac's clock). The
-  youtube master runs ALL its channels at those times (Confessions Everywhere's own limits, `create_after` and per-day counts, still apply).
+  youtube master runs ALL its channels at those times (Know IDK Things's own limits, `create_after` and per-day counts, still apply).
   **Wording fixed, English captions, sign-offs (Mani, 2026-10-14; he approved the HDFC video's Tanglish by ear):** the template wording is final, so the Tanglish
   Writer calls `market.reword` only when the channel option `reword` is true (default and config: false; the model still writes the verified reasons and headline gists, which
   are `fixed`). **Every video and Short has English translated captions burned in** (channel option `captions`, config true): code writes them, no model. Each

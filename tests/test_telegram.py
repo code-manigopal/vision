@@ -130,7 +130,7 @@ def test_a_long_report_is_split_into_short_lines_with_icons():
     assert world == ["🌍 <b>World Watch</b>", "  📰 4 topics updated", "  🌤 Leamington 14°C cloudy", "  ✈️ 9,725 in the air · showing 60 · 13 near home",
                      "  🚦 Leamington 6 incidents, a closure on County Rd-20", "  🚦 Windsor 174 incidents, major delay 27 min on I-94 E"]
     assert report_lines(N(id="email", name="EMAIL MANAGER"), "23 new · 6 need you · 5 drafts") == ["📧 <b>Email Manager</b>: 23 new · 6 need you · 5 drafts"]
-    yt = report_lines(N(id="youtube", name="YOUTUBE MANAGER"), "Confessions Everywhere: 57 made | Mani Market Tamil: 2 public")
-    assert yt == ["🎬 <b>YouTube Manager</b>", "  ▸ Confessions Everywhere: 57 made", "  ▸ Mani Market Tamil: 2 public"]
+    yt = report_lines(N(id="youtube", name="YOUTUBE MANAGER"), "Know IDK Things: 57 made | Mani Market Tamil: 2 public")
+    assert yt == ["🎬 <b>YouTube Manager</b>", "  ▸ Know IDK Things: 57 made", "  ▸ Mani Market Tamil: 2 public"]
     money = report_lines(N(id="invest", name="INVESTMENTS"), "Portfolio +C$2 · Fyers −₹2,072 · WS TFSA +C$32 · NIFTY +1.21% · BTC +0.89% · Consider: a <b> & c")
     assert money[2:] == ["  🏦 Fyers −₹2,072 · WS TFSA +C$32", "  🌐 NIFTY +1.21% · BTC +0.89%", "  💡 Consider: a &lt;b&gt; &amp; c"]

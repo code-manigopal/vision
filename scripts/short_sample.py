@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""A Confessions Everywhere Short made by the real crew (Scout -> Editor), for Mani to judge a look before it goes live.
+"""A Know IDK Things Short made by the real crew (Scout -> Editor), for Mani to judge a look before it goes live.
 
     .venv/bin/python scripts/short_sample.py science        ->  data/shorts/_sample/short-science.mp4
     .venv/bin/python scripts/short_sample.py money

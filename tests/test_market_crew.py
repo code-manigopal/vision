@@ -332,17 +332,17 @@ def test_catalog_matches_the_market_crew_and_the_master_reports_both_channels(en
     assert [a.name for a in d.members] == [c["name"] for c in spec["crew"]] and d.reporter == spec["crew_reporter"] == "Market Analytics"
     assert [[s.title, [a.name for a in s.agents]] for s in d.crew] == spec["crew_stages"]
     assert "Mani Market Tamil Director" in CATALOG["masters"]["youtube"]["stages"][0]["agents"]
-    lead = agents["Confessions Everywhere Director"]
+    lead = agents["Know IDK Things Director"]
     assert isinstance(lead, youtube.Lead) and not isinstance(d, youtube.Lead)
 
     class Say(SubAgent):
         async def run(self, ctx):
-            return AgentResult(summary="Confessions Everywhere: 2 public")
+            return AgentResult(summary="Know IDK Things: 2 public")
     env["store"].kv_put(youtube.LOG, "a", {"channel": "manimarket", "status": "awaiting"})
     env["store"].kv_put(youtube.LOG, "b", {"channel": "manimarket", "status": "scheduled"})
     small = youtube.Lead("Lead", [Stage("X", [Say(name="Say")])], reporter="Say", peers=[env["ch"]])
     res = asyncio.run(small.run({"store": env["store"], "bus": env["bus"], "master": "youtube"}))
-    assert res.summary == "Confessions Everywhere: 2 public | Mani Market Tamil: 1 awaiting your approval, 1 scheduled"
+    assert res.summary == "Know IDK Things: 2 public | Mani Market Tamil: 1 awaiting your approval, 1 scheduled"
 
 
 def test_a_channel_with_a_timezone_gets_that_zones_slots_and_one_without_keeps_the_old_ones(tmp_path):
