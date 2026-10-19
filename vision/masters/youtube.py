@@ -1284,7 +1284,11 @@ class StoryWriter(Crew):
         ending = ENDINGS.get(self.ch["ending"], ENDINGS["plain"])
         head, rules = GENRE_WRITE.get(job.get("genre") or "life", GENRE_WRITE["life"])
         science, learning = job.get("genre") in ("science", "space", "body", "geography"), job.get("structure") in STRUCTURES
-        shape = f"- Build it exactly like this: {STRUCTURES[job['structure']]}\n- {HOLD_BACK}\n" if learning else f"- {RETAIN_STORY}\n"
+        built = STRUCTURES.get(job.get("structure") or "", "")
+        if job.get("genre") in ("space", "body", "geography") and job.get("structure") == "result_first":     # a lesson's "most useful step comes last" reads oddly here
+            built = ("Open with the end result in one sentence. Then tell how it comes about, point by point, and keep the most surprising point for last, "
+                     "without announcing steps or saying that the best comes last.")
+        shape = f"- Build it exactly like this: {built}\n- {HOLD_BACK}\n" if learning else f"- {RETAIN_STORY}\n"
         opener = HOOKS["story"].get(job.get("hook") or "")
         if opener and not learning:                 # a story opens in its shape; a lesson's first line belongs to its pattern
             shape += f"- Shape the first sentence like this one, fitted to this story and in the third person: “{opener}”\n"

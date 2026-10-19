@@ -569,6 +569,8 @@ async def plan_short(llm, beats: list[dict], kind: str, outro: str, client) -> d
         if re.search(r"\bflags?\b", subj, re.I):                        # a flag is the country's own flag from Commons, never a search hit
             country = _country(subj)
             rec = await visuals.flag(client, country) if country else None
+        elif kind == "geography" and not (_country(subj) or re.search(r"\b[A-Z][a-z]+", subj)):
+            rec = None                                                  # "home" or "town" searched in NASA's library gives a star cluster: places by name only
         else:
             rec = await visuals.picture(client, kind, subj)
         if rec:
