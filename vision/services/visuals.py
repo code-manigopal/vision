@@ -152,7 +152,19 @@ def curated(subject: str) -> str | None:
     return next((nid for name, nid in CURATED.items() if name in mine), None)
 
 
-async def _nasa(c: httpx.AsyncClient, kind: str, subject: str, queries: list[str]) -> dict | None:
+async def _passes(judge, rec: dict, subject: str) -> bool:
+    """The vision check (`judge(rec, subject)` -> True / False / None for "could not look"); a NO drops the file and the next candidate is tried."""
+    if not judge:
+        return True
+    ok = await judge(rec, subject)
+    rec["checked"] = ok is True
+    if ok is False:
+        Path(rec["path"]).unlink(missing_ok=True)
+        return False
+    return True
+
+
+async def _nasa(c: httpx.AsyncClient, kind: str, subject: str, queries: list[str], judge=None) -> dict | None:
     pool = [(1e9, {"nasa_id": curated(subject), "title": subject})] if curated(subject) else []
     for q in queries:
         pool += await _nasa_candidates(c, q)
@@ -175,7 +187,7 @@ async def _nasa(c: httpx.AsyncClient, kind: str, subject: str, queries: list[str
             ext = url.rsplit(".", 1)[-1].lower()
             rec = await asyncio.to_thread(_store, kind, subject, data, ext, credit="NASA", page=f"https://images.nasa.gov/details/{nid}",
                                           source="NASA", license="Public domain (NASA)", title=plain(d.get("title")))
-            if rec and min(rec["w"], rec["h"]) >= MIN_SIDE:
+            if rec and min(rec["w"], rec["h"]) >= MIN_SIDE and await _passes(judge, rec, subject):
                 return rec
     return None
 
@@ -210,22 +222,32 @@ UNLIKE = ("autopsy", "model", "wellcome", "veterinary", "canid", "porpoise", "fr
 LANG = re.compile(r"[-_ ](fa|ar|et|zh|ru|de|fr|es|it|ja|ko|pl|pt|tr|uk|he|hi|bn|sv|nl|cs|id|vi|th)\.(svg|png|jpg)$", re.I)
 
 
-def title_score(title: str, subject: str) -> float | None:
+PLACE_LIKE = ("view", "panorama", "aerial", "landscape", "from above", "skyline", "winter", "summer")
+PLACE_UNLIKE = ("map", "flag", "coat of arms", "logo", "locator", "location", "stamp", "painting", "drawing", "diagram", "chart", "plan", "sign", "poster",
+                "postcard", "museum", "interior", "portrait", "selfie", "people", "crowd", "festival", "election", "protest", "army", "military", "war")
+
+
+def title_score(title: str, subject: str, kind: str = "body") -> float | None:
     t = title.lower()
-    if t.rsplit(".", 1)[-1] not in ("svg", "png", "jpg", "jpeg") or NO_PERSON.search(t) or LANG.search(t):
+    ext = t.rsplit(".", 1)[-1]
+    if ext not in ("svg", "png", "jpg", "jpeg") or NO_PERSON.search(t) or LANG.search(t):
         return None
-    if not all(w in t for w in words(subject)):
+    if not all(re.search(rf"\b{re.escape(w)}", t) for w in words(subject)):
         return None
+    if kind == "geography":                                       # a place: a real photo of it, never a map, flag, crowd or painting
+        if ext not in ("jpg", "jpeg") or any(re.search(rf"\b{re.escape(k)}", t) for k in PLACE_UNLIKE):
+            return None
+        return sum(2 for k in PLACE_LIKE if k in t) - len(t) / 400
     return sum(2 for k in LIKE if k in t) - sum(3 for k in UNLIKE if re.search(rf"\b{re.escape(k.strip())}", t))
 
 
-async def _from_commons(c, kind: str, name: str, queries: list[str], subject: str, width: int = 1080) -> dict | None:
+async def _from_commons(c, kind: str, name: str, queries: list[str], subject: str, width: int = 1080, judge=None) -> dict | None:
     last = [0.0]
     pool: dict[str, float] = {}
     for q in queries:
         d = await _commons(c, {"action": "query", "list": "search", "srsearch": q, "srnamespace": 6, "srlimit": 12}, last)
         for i, s in enumerate((d.get("query") or {}).get("search", [])):
-            sc = title_score(s["title"], subject)
+            sc = title_score(s["title"], subject, kind)
             if sc is not None and s["title"] not in pool:
                 pool[s["title"]] = sc - i * 0.05
     order = sorted(pool, key=lambda t: -pool[t])[:8]
@@ -246,24 +268,31 @@ async def _from_commons(c, kind: str, name: str, queries: list[str], subject: st
         artist = plain((meta.get("Artist") or {}).get("value")) or "Unknown author"
         rec = await asyncio.to_thread(_store, kind, name, data, ext, credit=f"{artist} (Wikimedia Commons)", page=ii.get("descriptionurl") or "",
                                       source="Wikimedia Commons", license=lic, title=p.get("title", ""))
-        if rec and min(rec["w"], rec["h"]) >= 300:
+        if rec and min(rec["w"], rec["h"]) >= (MIN_SIDE if kind == "geography" else 300) and await _passes(judge, rec, subject):
             return rec
     return None
 
 
 # ---- public API --------------------------------------------------------------------------------------------------------
-async def picture(c: httpx.AsyncClient, kind: str, subject: str) -> dict | None:
+async def picture(c: httpx.AsyncClient, kind: str, subject: str, judge=None) -> dict | None:
+    """The picture for `subject`. With `judge` (motion.py's vision check), only one the vision model says shows the subject; a cached picture
+    found before the check existed is looked at once, and searched again if it fails."""
     key = f"{kind}|{' '.join(words(subject))}"
     hit, rec = _cached(key)
-    if hit:
+    if hit and (rec is None or not judge or rec.get("checked")):
         return rec
+    if hit and rec and judge and not rec.get("checked"):
+        if await _passes(judge, rec, subject):
+            _save(key, rec)
+            return rec
     try:
         if kind == "space":
-            rec = await _nasa(c, kind, subject, [subject, f"{subject} true color"])
-        elif kind == "geography":
-            rec = await _nasa(c, kind, subject, [subject, f"{subject} from space", f"{subject} astronaut photograph"])
+            rec = await _nasa(c, kind, subject, [subject, f"{subject} true color"], judge)
+        elif kind == "geography":                                 # a place on the ground: a real photo from Commons, else NASA's view from orbit
+            rec = (await _from_commons(c, kind, subject, [f"{subject} filetype:bitmap", f"{subject} landscape filetype:bitmap"], subject, judge=judge)
+                   or await _nasa(c, kind, subject, [subject, f"{subject} from space", f"{subject} astronaut photograph"], judge))
         elif kind == "body":
-            rec = await _from_commons(c, kind, subject, [f"{subject} anatomy", f"{subject} diagram", f"{subject} illustration"], subject)
+            rec = await _from_commons(c, kind, subject, [f"{subject} anatomy", f"{subject} diagram", f"{subject} illustration"], subject, judge=judge)
         else:
             return None
     except Exception:

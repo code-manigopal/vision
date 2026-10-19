@@ -1712,7 +1712,7 @@ class FootageGenerator(Crew):
         beats = job["beats"]
         try:
             async with self.client() as c:
-                got = await motion.plan_short(ctx["llm"], beats, kind(job), self.ch["outro"], c)
+                got = await motion.plan_short(ctx["llm"], beats, kind(job), self.ch["outro"], c, store=ctx.get("store"))
         except Exception as e:  # noqa: BLE001 - no plan: the footage Short
             return f"no scene plan ({str(e)[:80]}); stock footage"
         real = [sc for sc in got["plan"] if sc["type"] != "outro"]

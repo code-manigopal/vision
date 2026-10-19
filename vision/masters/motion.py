@@ -541,7 +541,40 @@ def ask(beats: list[dict], kind: str, icon_names: list[str]) -> str:
             '{"line": 1, "scenes": [...]}, ...]}.\n\nLines:\n' + listing)
 
 
-async def plan_short(llm, beats: list[dict], kind: str, outro: str, client) -> dict:
+LOOK_Q = ("A short {kind} video will show this picture while the narrator talks about \"{subject}\". Is it a fitting picture of {subject}: a real "
+          "photo{or_drawing} of the right kind of thing? You cannot always recognise the exact place or object, so judge the kind, not the name. Answer NO if "
+          "it mainly shows people, a logo, text or a poster, a map or a chart, machinery or buildings that are not {subject}, or a different kind of thing "
+          "(for example stars or a galaxy for a place on Earth, a rocket for a body part). Answer YES or NO first, then at most ten words.")
+LOOKS_PER_SUBJECT = 3                     # Cloudflare's free day is shared with the E-books Manager: at most three looks for one subject
+
+
+def judge_with(store, kind: str):
+    """The vision check for visuals.picture: True = it shows the subject, False = it does not (or three candidates were already refused),
+    None = it could not be looked at (no Cloudflare key, the free day used up): the title-checked picture stands."""
+    from ..services import cfai
+    looks: dict[str, int] = {}
+
+    async def judge(rec: dict, subject: str) -> bool | None:
+        looks[subject] = looks.get(subject, 0) + 1
+        if looks[subject] > LOOKS_PER_SUBJECT:
+            return False
+        try:
+            data = Path(rec["path"]).read_bytes()
+            answer = await cfai.look(store, data, LOOK_Q.format(kind=kind, subject=subject, or_drawing=" or a clear drawing" if kind == "body" else ""))
+        except Exception:  # noqa: BLE001 - could not look: the title check alone
+            return None
+        return verdict(answer)
+    return judge
+
+
+def verdict(answer: str) -> bool | None:
+    """YES / NO from the vision model's answer ("**Yes**, it shows...", "No, it is Neptune"); None when it says neither."""
+    m = re.search(r"\b(yes|no)\b", answer[:60], re.I)
+    return None if not m else m.group(1).lower() == "yes"
+    return judge
+
+
+async def plan_short(llm, beats: list[dict], kind: str, outro: str, client, store=None) -> dict:
     """{plan: the checked scenes, images, icons, credits (one line per picture), refused: proposed scenes the checks threw out}. No answer = an empty plan
     (timeline() then fills every line from its own words)."""
     from ..services import visuals
@@ -572,7 +605,7 @@ async def plan_short(llm, beats: list[dict], kind: str, outro: str, client) -> d
         elif kind == "geography" and not (_country(subj) or re.search(r"\b[A-Z][a-z]+", subj)):
             rec = None                                                  # "home" or "town" searched in NASA's library gives a star cluster: places by name only
         else:
-            rec = await visuals.picture(client, kind, subj)
+            rec = await visuals.picture(client, kind, subj, judge=judge_with(store, kind) if store is not None else None)
         if rec:
             images[subj] = Path(rec["path"])
             line = f"{rec.get('title') or subj}: {rec.get('credit') or rec.get('source')} ({rec.get('license') or 'see page'}), {rec.get('page')}"

@@ -63,7 +63,7 @@ def test_planner_checks_places_and_finds_pictures(monkeypatch, tmp_path):
     pic = tmp_path / "venus.jpg"
     pic.write_bytes(b"x")
 
-    async def picture(c, kind, subject):
+    async def picture(c, kind, subject, judge=None):
         return {"path": str(pic), "credit": "NASA", "page": "https://images.nasa.gov/x", "license": "Public domain", "title": subject} if subject == "Venus" else None
 
     async def icon(c, name):
@@ -107,7 +107,7 @@ def test_a_flag_is_the_named_countrys_own_flag(monkeypatch, tmp_path):
         asked.append(country)
         return {"path": str(tmp_path / "np.png"), "credit": "Commons", "page": "p", "license": "Public domain", "title": "Flag of Nepal"}
 
-    async def picture(c, kind, subject):
+    async def picture(c, kind, subject, judge=None):
         raise AssertionError("a flag is never searched for")
     monkeypatch.setattr(visuals, "flag", flag)
     monkeypatch.setattr(visuals, "picture", picture)
@@ -116,3 +116,30 @@ def test_a_flag_is_the_named_countrys_own_flag(monkeypatch, tmp_path):
                         {"line": 1, "scenes": [{"type": "photo", "image": "flag", "tag": "single flag"}]}]}
     got = asyncio.run(motion.plan_short(PlanLLM(answer), bs, "geography", "Follow", None))
     assert asked == ["Nepal"] and [s["image"] for s in got["plan"]] == ["flag of Nepal"]
+
+
+def test_the_vision_models_answer_is_read_as_yes_no_or_unsure():
+    assert motion.verdict("**Yes**, a mountain range from orbit.") is True
+    assert motion.verdict("No, it is a photo of Neptune, a planet.") is False
+    assert motion.verdict("The picture shows a river valley.") is None
+
+
+def test_the_judge_stops_after_three_looks_and_stands_aside_without_cloudflare(monkeypatch, tmp_path):
+    from vision.services import cfai
+    pic = tmp_path / "p.jpg"
+    pic.write_bytes(b"x")
+    answers = []
+
+    async def look(store, data, q, **kw):
+        answers.append(q)
+        return "No, it shows a logo."
+    monkeypatch.setattr(cfai, "look", look)
+    judge = motion.judge_with(object(), "space")
+    rec = {"path": str(pic)}
+    assert [asyncio.run(judge(rec, "Saturn")) for _ in range(4)] == [False] * 4 and len(answers) == 3
+    assert "Saturn" in answers[0] and "kind, not the name" in answers[0]
+
+    async def down(store, data, q, **kw):
+        raise cfai.CFError("no key")
+    monkeypatch.setattr(cfai, "look", down)
+    assert asyncio.run(motion.judge_with(object(), "space")(rec, "Saturn")) is None

@@ -1,6 +1,7 @@
 import asyncio
 import io
 import json
+from pathlib import Path
 
 import httpx
 from PIL import Image
@@ -133,3 +134,49 @@ def test_a_title_that_only_resembles_the_subject_is_refused():
     assert visuals.score("NASA insignia on the hangar", "hangar") is None                    # a logo for a thing
     assert visuals.score("Saturn true color", "Saturn") is not None
     assert visuals.score("Rocky Mountains", "mountain") is not None                          # a plural still counts
+
+
+def test_a_picture_the_judge_refuses_is_dropped_and_a_yes_is_remembered(tmp_path, monkeypatch):
+    setup(tmp_path, monkeypatch)
+    seen = []
+
+    async def no(rec, subject):
+        seen.append(rec["path"])
+        return False
+
+    async def yes(rec, subject):
+        seen.append(rec["path"])
+        return True
+    c = httpx.AsyncClient(transport=httpx.MockTransport(nasa_handler([])))
+    assert run(visuals.picture(c, "space", "Ceres", judge=no)) is None and not Path(seen[0]).exists()     # the only candidate refused: no picture
+    setup(tmp_path / "again", monkeypatch)
+    rec = run(visuals.picture(c, "space", "Ceres", judge=yes))
+    assert rec["checked"] is True
+    assert run(visuals.picture(c, "space", "Ceres", judge=no)) == rec and len(seen) == 2                 # checked once: not looked at again
+
+
+def test_a_place_is_a_real_photo_never_a_map_or_flag():
+    assert visuals.title_score("File:Kolyma-river 01.jpg", "Kolyma River", "geography") is not None
+    assert visuals.title_score("File:MapOfOymyakonRussia.png", "Oymyakon", "geography") is None
+    assert visuals.title_score("File:Oymyakon map.jpg", "Oymyakon", "geography") is None
+    assert visuals.title_score("File:Oymyakon banner Warmly dressed person.jpg", "Oymyakon", "geography") is None
+
+
+def test_cfai_look_uses_workers_ai_own_endpoint(monkeypatch, tmp_path):
+    from vision.services import cfai
+
+    class Kv(dict):
+        def kv_get(self, ns, k, default=None):
+            return self.get((ns, k), default)
+
+        def kv_put(self, ns, k, v):
+            self[(ns, k)] = v
+    monkeypatch.setattr(cfai, "secret", lambda n: "x")
+    sent = []
+
+    def h(req):
+        sent.append((str(req.url), json.loads(req.content)))
+        return httpx.Response(200, json={"result": {"response": "YES, Saturn.", "usage": {"neurons": 15.5}}})
+    out = run(cfai.look(Kv(), png(), "Is it Saturn?", client=httpx.AsyncClient(transport=httpx.MockTransport(h))))
+    assert out == "YES, Saturn." and sent[0][0].endswith("/run/" + cfai.LOOK)
+    assert sent[0][1]["prompt"] == "Is it Saturn?" and isinstance(sent[0][1]["image"], list)

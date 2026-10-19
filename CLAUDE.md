@@ -35,7 +35,7 @@ bash scripts/setup.sh                     # venv + deps + .env from template + c
 .venv/bin/python -m vision sfx            # add 3 sound effects per kind to assets/sfx/ (or: sfx whoosh 5)
 .venv/bin/python -m vision visa list      # Visa Watch accounts: add | list | update | pause | resume | remove | check <id>
 .venv/bin/python -m vision ebooks list    # E-books Manager: list | published <book> [ASIN] | redraw <book> <page>
-.venv/bin/python -m pytest -q             # 547 tests, all external services mocked
+.venv/bin/python -m pytest -q             # 553 tests, all external services mocked
 bash scripts/install_launchagent.sh       # auto-start at login + restart on crash
 tail -f logs/vision.log
 ```
@@ -307,7 +307,8 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   6.99-9.99 and royalty >= 1.75 from KDP's print-cost estimate) + Cover Designer (colour FLUX art with no text, every word set in code,
   spine from the page count, barcode box empty; waits for the listing's blurb) → approval `ebook_publish` (Shelf Manager raises it once per
   version) → Mani uploads to KDP himself (no KDP API; a bot on KDP breaks its terms), then `ebooks published <book>`. Groq has no vision
-  model on Mani's key (llama-4-scout gone), hence Cloudflare's. Drop-ins `inbox/ebooks/<book>/page-07.png` / `cover.png` replace a page or
+  model on Mani's key (llama-4-scout gone), hence Cloudflare's. `cfai.look` uses Workers AI's own `/run/<model>` endpoint with `prompt` and the JPEG's bytes
+  (the OpenAI-style endpoint answered 400 "Unable to add image" on the first live call, 2026-10-19). Drop-ins `inbox/ebooks/<book>/page-07.png` / `cover.png` replace a page or
   the cover art, rebuild and ask again (an older approval is answered "outdated"). Thresholds were calibrated on Mani's own Gemini book
   (`~/Downloads/Animals_Thematic_Coloring_Book_A4.pdf`, his quality bar). Gemini's image API is not free; Pollinations' terms unclear; the
   Gemini app is by hand only. Not built: edutainment/activity pages, story books, KDP sales CSV, dashboard Redraw button.
@@ -467,7 +468,13 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   scene, or longer than `MAX_SCENE` (3.2 s) with one, gets a filler (the latest photo with the line's key words, else those words: `_filler`). Fewer real scenes
   than half the lines (min 3) = the footage Short. **Asset Finder** (`services/visuals.py`): `picture(kind, subject)` space = NASA (hand-picked ids for the Sun
   and planets, `CURATED`, then search), body/geography = Wikimedia Commons (free licences only), cached in `data/visuals/` with credits; `flag`, `icon` (Tabler,
-  `ICONS`, MIT) in `assets/icons/`. At most 6 pictures per Short. The Editor renders it (`_motion_cut`: the sentence files joined into one voice track); any
+  `ICONS`, MIT) in `assets/icons/`. At most 6 pictures per Short. **A picture is refused rather than wrong (Mani, 2026-10-19: "are the footages related?"):**
+  titles must hold the subject as whole words; logos, launch sites, people at work, maps and charts are refused (`BAD`); a flag is the named country's own
+  Commons flag (`motion._country`; a bare "flag" gets none); geography searches only named places, Commons ground photos first (real photos, no SVG, no
+  maps/flags/crowds: `PLACE_UNLIKE`; share-alike licences stay refused, so many places have none), then NASA from orbit. Then the **vision check**
+  (`motion.judge_with`, Cloudflare's Llama 3.2 Vision via `cfai.look`, ~16 neurons a look, at most 3 looks a subject, `LOOK_Q` asks for the right KIND of
+  thing, since the model cannot name a mountain from orbit): NO = the file is dropped and the next candidate tried; YES is remembered (`checked` in the
+  index); no Cloudflare = the title check alone. The Editor renders it (`_motion_cut`: the sentence files joined into one voice track); any
   failure = the stock-footage cut (Footage Collector still runs for that). The record keeps `style`, `scenes` and the pictures' credits.
   `scripts/short_sample.py <kind> <channel> --motion` makes one.
   **No sexual content (Mani, 2026-10-18: "no more such contents"):** `SEXUAL` (sex, lust, fantasies, role-play, nude, one-night stand...) rejects a story

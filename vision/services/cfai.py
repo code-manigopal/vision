@@ -97,32 +97,32 @@ async def draw(store, prompt: str, w: int, h: int, seed: int, *, budget: int = F
     return base64.b64decode(img)
 
 
-def _jpeg(png: bytes, side: int = 768) -> str:
+def _jpeg(png: bytes, side: int = 768) -> bytes:
     from PIL import Image
     im = Image.open(io.BytesIO(png)).convert("RGB")
     im.thumbnail((side, side))
     b = io.BytesIO()
     im.save(b, "JPEG", quality=85)
-    return "data:image/jpeg;base64," + base64.b64encode(b.getvalue()).decode()
+    return b.getvalue()
 
 
 async def look(store, png: bytes, question: str, *, budget: int = FREE, client: httpx.AsyncClient | None = None) -> str:
-    """Ask the vision model about a picture; returns its text answer."""
+    """Ask the vision model about a picture (any format PIL reads); returns its text answer. Workers AI's own endpoint with `prompt` and the
+    JPEG's bytes: the OpenAI-style one answers 400 "Unable to add image" to an image_url message (found 2026-10-19, never run live before)."""
     if left(store, budget) < LOOK_COST:
         raise Spent(f"{used(store):.0f} of {budget} neurons used today")
-    body = {"model": LOOK, "max_tokens": 300, "temperature": 0,
-            "messages": [{"role": "user", "content": [{"type": "text", "text": question},
-                                                      {"type": "image_url", "image_url": {"url": _jpeg(png)}}]}]}
+    body = {"prompt": question, "image": list(_jpeg(png)), "max_tokens": 300, "temperature": 0}
     async with client or httpx.AsyncClient(timeout=120) as c:
-        r = await c.post(f"{_base()}/v1/chat/completions", headers=_h(), json=body)
+        r = await c.post(f"{_base()}/run/{LOOK}", headers=_h(), json=body)
         if r.status_code != 200 and "agree" in r.text.lower():
             # Meta's licence for this model is accepted once per account by sending "agree"
             await c.post(f"{_base()}/run/{LOOK}", headers=_h(), json={"prompt": "agree"})
-            r = await c.post(f"{_base()}/v1/chat/completions", headers=_h(), json=body)
+            r = await c.post(f"{_base()}/run/{LOOK}", headers=_h(), json=body)
     if r.status_code == 429:
         _refused(store)
         raise Spent("Cloudflare says the free allowance is used up; asking again in 30 minutes")
     if r.status_code != 200:
         raise CFError(f"look {r.status_code}: {r.text[:200]}")
-    _spend(store, LOOK_COST)
-    return ((r.json().get("choices") or [{}])[0].get("message") or {}).get("content") or ""
+    res = r.json().get("result") or {}
+    _spend(store, float((res.get("usage") or {}).get("neurons") or LOOK_COST))
+    return str(res.get("response") or "")
