@@ -157,9 +157,12 @@ def caption_png(text: str, out: Path, font_path: str | None = None, L: dict = UP
 
 def watermark_png(out: Path, name: str, logo: str | None = None) -> None:
     """The channel logo (or its name when there is no logo file), small and see-through."""
-    if logo and Path(logo).exists():
+    if logo and Path(logo).exists():                  # the channel's own mark: a little larger and stronger than a name
         img = Image.open(logo).convert("RGBA")
-        img.thumbnail((120, 120))
+        img.thumbnail((150, 150))
+        img.putalpha(img.getchannel("A").point(lambda a: int(a * 0.8)))
+        img.save(out)
+        return
     else:
         f = font(30)
         w = int(ImageDraw.Draw(Image.new("RGBA", (1, 1))).textlength(name, font=f)) + 16

@@ -1617,7 +1617,7 @@ class Editor(Crew):
         job["caption"] = " · ".join(x for x in (look["font_name"], look["fill"], look["highlight"]) if x) if look else ""
         plan = sfx_plan(job["beats"], volume=float(self.ch["sfx_volume"]), turn=turn) if self.ch["sfx"] else None
         out = await asyncio.to_thread(shorts_edit.assemble, Path(job["dir"]), job["beats"], channel=self.ch["name"],
-                                      logo=self.ch["logo"] or None, font_path=self.ch["caption_font"] or None,
+                                      logo=str(ROOT / self.ch["logo"]) if self.ch["logo"] else None, font_path=self.ch["caption_font"] or None,
                                       music=str(track[0]) if track else None, music_volume=float(self.ch["music_volume"]), wide=wide,
                                       motion=bool(self.ch["motion"]), style={k: v for k, v in look.items() if k != "font_name"} if look else None, sfx=plan)
         job["file"], job["seconds"], job["sfx"] = out["file"], out["seconds"], out.get("sfx", 0)

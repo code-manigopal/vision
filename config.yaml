@@ -207,7 +207,7 @@ masters:
           classics: [2776, 2518, 269, 38025]   # Project Gutenberg book ids: O. Henry, Tagore, Saki, Tolstoy (public domain); each story is retold once, with its citation
           classics_per_day: 1
           playlists: { classic: "Classic Stories", science: "Science Stories", motivational: "Motivational Stories", money: "Money Lessons" }   # story kind -> playlist (kinds: classic, original, viewer, real); created on the channel if missing
-          logo: ""                       # path to the channel logo (png); blank = the channel name as the watermark
+          logo: assets/brand/know-idk-things.png   # the channel logo (png with transparency, from the repo root) as the watermark, top right; blank = the channel name
           music: true                    # a quiet track from assets/bgm/<mood>/ under the narration (fill with: python -m vision bgm)
           music_volume: 0.12             # against the voice at 1.0
           motion: true                   # a slow zoom on stock clips so a still-looking clip moves

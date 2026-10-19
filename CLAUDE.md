@@ -426,7 +426,9 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   **Renamed (Mani, 2026-10-18): Confessions Everywhere is now Know IDK Things** (the channel covers science, money and stories, and will grow). Only the
   display name, Director name, outro and comment invitation changed (both ask "Have a story to share? Drop it in the comments", Mani's wording, so
   viewers' stories keep coming for `viewer_comments`); the id stays `confessions` (sign-in `youtube-confessions`, kv keys, inbox folder,
-  `backup_folder`), and its Drive folder was renamed in place to Vision/YouTube/Know IDK Things. Mani renames the channel and handle in YouTube Studio.
+  `backup_folder`), and its Drive folder was renamed in place to Vision/YouTube/Know IDK Things. Its logo (`assets/brand/`: the sticker
+  cut from its baked-in checkerboard as know-idk-things.png, plus Mani's round logo, banner and the original) is the watermark (`logo`, top right,
+  150 px at 80 %; a logo path is taken from the repo root). Mani renames the channel and handle in YouTube Studio.
   **No sexual content (Mani, 2026-10-18: "no more such contents"):** `SEXUAL` (sex, lust, fantasies, role-play, nude, one-night stand...) rejects a story
   from any source by rule before the model sees it; the screening prompt also rejects one where sex or sexual desire is any real part; a written script
   that matches is sent back to be rewritten. Strict on purpose (a harmless "aroused from sleep" also stops a story).
