@@ -143,3 +143,16 @@ def test_the_judge_stops_after_three_looks_and_stands_aside_without_cloudflare(m
         raise cfai.CFError("no key")
     monkeypatch.setattr(cfai, "look", down)
     assert asyncio.run(motion.judge_with(object(), "space")(rec, "Saturn")) is None
+
+
+def test_a_filler_reuses_a_photo_only_on_a_line_about_it():
+    assert motion._filler("The Alps rise above the lakes", "", "Swiss Alps")["type"] == "photo"
+    assert motion._filler("Rivers guide trade and daily life", "", "Swiss Alps")["type"] == "text"
+
+
+def test_a_compare_shows_pictures_only_when_both_sides_have_one():
+    line = "The Rhine runs between Germany and France."
+    one = motion.check({"type": "compare", "a": "Germany", "b": "France", "a_image": "flag of Germany"}, line, {"flag of Germany"}, set())
+    two = motion.check({"type": "compare", "a": "Germany", "b": "France", "a_image": "flag of Germany", "b_image": "flag of France"}, line,
+                       {"flag of Germany", "flag of France"}, set())
+    assert one["a_image"] is None and two["b_image"] == "flag of France"

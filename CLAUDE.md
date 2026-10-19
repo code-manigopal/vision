@@ -35,7 +35,7 @@ bash scripts/setup.sh                     # venv + deps + .env from template + c
 .venv/bin/python -m vision sfx            # add 3 sound effects per kind to assets/sfx/ (or: sfx whoosh 5)
 .venv/bin/python -m vision visa list      # Visa Watch accounts: add | list | update | pause | resume | remove | check <id>
 .venv/bin/python -m vision ebooks list    # E-books Manager: list | published <book> [ASIN] | redraw <book> <page>
-.venv/bin/python -m pytest -q             # 553 tests, all external services mocked
+.venv/bin/python -m pytest -q             # 557 tests, all external services mocked
 bash scripts/install_launchagent.sh       # auto-start at login + restart on crash
 tail -f logs/vision.log
 ```
@@ -465,13 +465,13 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   one strong-writer request (Nemotron first) returns scenes per line as JSON, never HTML; code keeps a scene only if (`motion.check`) every shown word is mostly
   the line's own, every figure is said in the line (digits or number words: `said_numbers`), its picture was found and its icons are known; the model's line
   numbers drift, so a scene that fails its line may land on a line within 2 that it is made of; the hook only on line 0; the outro is code's. A line with no
-  scene, or longer than `MAX_SCENE` (3.2 s) with one, gets a filler (the latest photo with the line's key words, else those words: `_filler`). Fewer real scenes
+  scene, or longer than `MAX_SCENE` (3.2 s) with one, gets a filler (the latest photo with the line's key words when the line names that photo's subject, else those words: `_filler`); a compare shows pictures only when both sides have one. Fewer real scenes
   than half the lines (min 3) = the footage Short. **Asset Finder** (`services/visuals.py`): `picture(kind, subject)` space = NASA (hand-picked ids for the Sun
   and planets, `CURATED`, then search), body/geography = Wikimedia Commons (free licences only), cached in `data/visuals/` with credits; `flag`, `icon` (Tabler,
   `ICONS`, MIT) in `assets/icons/`. At most 6 pictures per Short. **A picture is refused rather than wrong (Mani, 2026-10-19: "are the footages related?"):**
   titles must hold the subject as whole words; logos, launch sites, people at work, maps and charts are refused (`BAD`); a flag is the named country's own
   Commons flag (`motion._country`; a bare "flag" gets none); geography searches only named places, Commons ground photos first (real photos, no SVG, no
-  maps/flags/crowds: `PLACE_UNLIKE`; share-alike licences stay refused, so many places have none), then NASA from orbit. Then the **vision check**
+  maps/flags/crowds/troops: `PLACE_UNLIKE`, no black-and-white photo: `colourless`; share-alike licences stay refused, so many places have none), then NASA from orbit. Then the **vision check**
   (`motion.judge_with`, Cloudflare's Llama 3.2 Vision via `cfai.look`, ~16 neurons a look, at most 3 looks a subject, `LOOK_Q` asks for the right KIND of
   thing, since the model cannot name a mountain from orbit): NO = the file is dropped and the next candidate tried; YES is remembered (`checked` in the
   index); no Cloudflare = the title check alone. The Editor renders it (`_motion_cut`: the sentence files joined into one voice track); any

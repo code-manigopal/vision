@@ -144,7 +144,9 @@ def check(scene: dict, line: str, images: set[str], icons: set[str]) -> dict | N
         va, vb = [str(s.get(k) or "") for k in ("a_value", "b_value")]
         if not (va and vb and _figures(va + " " + vb) <= said_numbers(line)):
             va = vb = ""
-        return {"type": t, "a": s["a"], "b": s["b"], "a_image": img("a_image"), "b_image": img("b_image"), "a_value": va, "b_value": vb}
+        both = bool(img("a_image") and img("b_image"))                # one side with a picture and one without looks broken
+        return {"type": t, "a": s["a"], "b": s["b"], "a_image": img("a_image") if both else None, "b_image": img("b_image") if both else None,
+                "a_value": va, "b_value": vb}
     if t == "orbit":
         if not (text_ok(s.get("center"), line, 2) and text_ok(s.get("body"), line, 2)):
             return None
@@ -461,9 +463,11 @@ def keywords(text: str, n: int = 3, avoid: str = "") -> str:
 
 
 def _filler(beat_text: str, shown: str, last_image: str | None) -> dict:
-    """A second scene for a long line: the Short's latest photo again with the line's key words as a callout, else those words as text."""
+    """A second scene for a long line: the Short's latest photo again with the line's key words as a callout, but only when the line speaks of
+    that photo's subject (the Alps do not belong on a line about trade); else those words as text."""
     words = keywords(beat_text, 3, shown)
-    if last_image:
+    said = set(re.findall(r"[a-z]+", beat_text.lower()))
+    if last_image and any(w in said for w in re.findall(r"[a-z]+", last_image.lower()) if w not in STOP and len(w) > 2):
         return {"type": "photo", "image": last_image, "tag": words, "round": True}
     return {"type": "text", "lines": [words]}
 
@@ -543,7 +547,7 @@ def ask(beats: list[dict], kind: str, icon_names: list[str]) -> str:
 
 LOOK_Q = ("A short {kind} video will show this picture while the narrator talks about \"{subject}\". Is it a fitting picture of {subject}: a real "
           "photo{or_drawing} of the right kind of thing? You cannot always recognise the exact place or object, so judge the kind, not the name. Answer NO if "
-          "it mainly shows people, a logo, text or a poster, a map or a chart, machinery or buildings that are not {subject}, or a different kind of thing "
+          "it mainly shows people, soldiers or a historical event, a logo, text or a poster, a map or a chart, machinery or buildings that are not {subject}, or a different kind of thing "
           "(for example stars or a galaxy for a place on Earth, a rocket for a body part). Answer YES or NO first, then at most ten words.")
 LOOKS_PER_SUBJECT = 3                     # Cloudflare's free day is shared with the E-books Manager: at most three looks for one subject
 

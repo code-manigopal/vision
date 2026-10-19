@@ -91,8 +91,18 @@ def _size(data: bytes) -> tuple[int, int]:
         return im.size
 
 
+def colourless(data: bytes) -> bool:
+    """A black-and-white (or sepia) photo: almost no colour in it. Old photos of a place are mostly of events, not the place."""
+    from PIL import Image, ImageStat
+    with Image.open(io.BytesIO(data)) as im:
+        hsv = im.convert("RGB").resize((96, 96)).convert("HSV")
+        return ImageStat.Stat(hsv).mean[1] < 28                 # mean saturation of 0-255
+
+
 def _store(kind: str, name: str, data: bytes, ext: str, **meta) -> dict | None:
     try:
+        if kind == "geography" and colourless(data):
+            return None
         w, h = _size(data)
         d = ROOT_DIR / kind
         d.mkdir(parents=True, exist_ok=True)
@@ -224,7 +234,8 @@ LANG = re.compile(r"[-_ ](fa|ar|et|zh|ru|de|fr|es|it|ja|ko|pl|pt|tr|uk|he|hi|bn|
 
 PLACE_LIKE = ("view", "panorama", "aerial", "landscape", "from above", "skyline", "winter", "summer")
 PLACE_UNLIKE = ("map", "flag", "coat of arms", "logo", "locator", "location", "stamp", "painting", "drawing", "diagram", "chart", "plan", "sign", "poster",
-                "postcard", "museum", "interior", "portrait", "selfie", "people", "crowd", "festival", "election", "protest", "army", "military", "war")
+                "postcard", "museum", "interior", "portrait", "selfie", "people", "crowd", "festival", "election", "protest", "army", "military", "war",
+                "troops", "soldier", "navy", "marines", "battle", "bomb", "invasion", "wwi", "wwii", "world war", "refugee", "crossing")
 
 
 def title_score(title: str, subject: str, kind: str = "body") -> float | None:

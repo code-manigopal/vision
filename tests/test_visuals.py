@@ -180,3 +180,11 @@ def test_cfai_look_uses_workers_ai_own_endpoint(monkeypatch, tmp_path):
     out = run(cfai.look(Kv(), png(), "Is it Saturn?", client=httpx.AsyncClient(transport=httpx.MockTransport(h))))
     assert out == "YES, Saturn." and sent[0][0].endswith("/run/" + cfai.LOOK)
     assert sent[0][1]["prompt"] == "Is it Saturn?" and isinstance(sent[0][1]["image"], list)
+
+
+def test_a_black_and_white_photo_of_a_place_is_refused():
+    grey, colour = io.BytesIO(), io.BytesIO()
+    Image.new("RGB", (800, 800), (120, 120, 120)).save(grey, "JPEG")
+    Image.new("RGB", (800, 800), (40, 120, 200)).save(colour, "JPEG")
+    assert visuals.colourless(grey.getvalue()) and not visuals.colourless(colour.getvalue())
+    assert visuals.title_score("File:Rhine Crossing - US Navy ferrying troops across the Rhine River.jpg", "Rhine River", "geography") is None
