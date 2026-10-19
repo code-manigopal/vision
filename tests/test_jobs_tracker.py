@@ -140,13 +140,13 @@ def test_tracking_a_job_applied_elsewhere_reads_its_title_and_never_indeed(tmp_p
 
 def test_youtube_backups_move_the_old_top_level_folder_under_vision(tmp_path, monkeypatch):
     drive, client = fake_drive()
-    drive["folders"]["old"] = {"name": "confessions_everywhere_yt", "parents": ["root"]}
+    drive["folders"]["old"] = {"name": "old_channel_folder", "parents": ["root"]}
     drive["folders"]["oldS"] = {"name": "Shorts", "parents": ["old"]}
 
     async def go():
         async with client() as c:
-            return await gdrive.vision_path(c, "tok", "YouTube", "Know IDK Things", legacy="confessions_everywhere_yt"), \
-                   await gdrive.vision_path(c, "tok", "YouTube", "Know IDK Things", legacy="confessions_everywhere_yt")
+            return await gdrive.vision_path(c, "tok", "YouTube", "Know IDK Things", legacy="old_channel_folder"), \
+                   await gdrive.vision_path(c, "tok", "YouTube", "Know IDK Things", legacy="old_channel_folder")
 
     first, again = asyncio.run(go())
     assert first == again == "old" and drive["moved"] == ["old"]                   # moved and renamed once, with its Shorts inside

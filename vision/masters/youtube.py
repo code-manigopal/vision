@@ -5,7 +5,7 @@
         -> Uploader (unlisted) -> Analytics Manager (reports to the Director) -> YOU, on YouTube
 
 - Stories: Reddit's official API (REDDIT_CLIENT_ID / REDDIT_CLIENT_SECRET, asleep until the keys exist) and .txt files in
-  inbox/confessions/<channel id>/. Text files and Google Docs in the channel's Drive folder (`drive_folder`) are copied
+  inbox/stories/<channel id>/. Text files and Google Docs in the channel's Drive folder (`drive_folder`) are copied
   into that inbox first. Every story keeps its source URL. Quora is not used (no API, scraping blocked).
 - A story is screened (rules, then the model), rewritten in the third person with names and places removed, and
   split into timed beats for a 1-2 minute Short that ends on the channel's subscribe line.
@@ -44,17 +44,17 @@ GAP = 0.18                # pause after each beat, seconds
 UPLOAD = "https://www.googleapis.com/upload/youtube/v3/videos"
 API = "https://www.googleapis.com/youtube/v3"
 VIDEOS = API + "/videos"
-CHANNEL = {"id": "confessions", "name": "Know IDK Things", "director": "Know IDK Things Director",
-           "shorts_per_day": 1, "subreddits": ["confession", "offmychest", "TrueOffMyChest"], "seconds": [60, 120],
+CHANNEL = {"id": "knowidk", "name": "Know IDK Things", "director": "Know IDK Things Director",
+           "shorts_per_day": 1, "subreddits": ["offmychest", "TrueOffMyChest"], "seconds": [60, 120],
            "voice_engine": "edge", "voice": "en-US-GuyNeural", "voice_speed": 0.95, "pause": 0.32, "outro": "Subscribe to our channel for more interesting stories.",
            "outro_query": "city lights at night", "logo": "", "caption_font": "", "generator": {},
-           "privacy": "unlisted", "report_privacy": "approval", "category": "24", "synthetic_flag": True, "uploads_per_run": 4, "drive_folder": "", "voices": {}, "music": True, "music_volume": 0.12, "ending": "hopeful", "originals": False, "original_genres": ["confession"],
+           "privacy": "unlisted", "report_privacy": "approval", "category": "24", "synthetic_flag": True, "uploads_per_run": 4, "drive_folder": "", "voices": {}, "music": True, "music_volume": 0.12, "ending": "hopeful", "originals": False, "original_genres": ["life"],
            "publish_times": ["06:00", "12:00", "18:00", "00:00"], "create_after": "",
            "classics": [], "classics_per_day": 1, "playlists": {}, "viewer_comments": False, "cta": "", "long": {},
            "motion": True, "caption_styles": True, "sfx": True, "sfx_volume": 0.35, "quick": {},
            "double_down": True, "double_down_after": 12, "explore": 0.15, "trends": True, "trend_region": "US",
            "daily_mix": {}, "mix_auto": True, "mix_min_videos": 6, "mix_days": 28,
-           "keep_local": False, "backup_folder": "", "diagrams": [], "lessons": False, "lesson_shorts": False, "lesson_channels": [], "transcripts_per_day": 10, "lesson_model": "", "lesson_tamil_model": "qwen/qwen3.8-27b"}
+           "keep_local": False, "backup": False, "backup_folder": "", "diagrams": [], "lessons": False, "lesson_shorts": False, "lesson_channels": [], "transcripts_per_day": 10, "lesson_model": "", "lesson_tamil_model": "qwen/qwen3.8-27b"}
 # Original stories: a premise is built from one of each, so no two start from the same place (20 x 12 x 10 x 10 combinations).
 THEMES = ["a family secret", "a betrayal by a close friend", "a lie that grew too big", "a second chance that felt undeserved", "a debt never repaid",
           "an inheritance dispute", "a workplace mistake hidden for years", "a kindness kept secret", "a marriage on autopilot", "jealousy of a sibling",
@@ -160,7 +160,7 @@ def promises(title: str) -> bool:
 ANGLES = ["as a journey followed from start to finish", "as a mystery that people slowly solved", "as a day in the life of one creature or thing",
           "as the answer to a question a child might ask", "as a story of something happening right now, unseen"]
 GENRE_ASK = {
-    "confession": ("Invent premises for short confession-style stories: an ordinary adult did or hid something, and it comes into the open. One premise per numbered "
+    "life": ("Invent premises for short true-to-life stories: an ordinary adult did or hid something, and it comes into the open. One premise per numbered "
                    "line below, using that line's ingredients. Believable everyday life; adults only; no names or real places; nothing sexual, no self-harm, no "
                    "violent crime.", "2-3 sentences: who, what they did or hid, what forces it out, what is at stake"),
     "motivational": ("Invent premises for short motivational stories: an ordinary adult faces a real difficulty and gets through it by their own effort, a step at a "
@@ -174,8 +174,8 @@ GENRE_ASK = {
                 "well-established facts of the kind found in a school textbook or an encyclopedia; no numbers or dates unless they are famous and certain; nothing "
                 "speculative.", "the question it answers, then the 3-4 established facts it will tell, in order")}
 GENRE_WRITE = {
-    "confession": ("Write an original, fictional confession-style story from the premise below",
-                   "- Third person, told like something a person carried for years and finally admitted (\"she\", \"he\", \"they\"). Do not claim it is real "
+    "life": ("Write an original, fictional true-to-life story from the premise below",
+                   "- Third person, told like something a person carried for years and finally let out (\"she\", \"he\", \"they\"). Do not claim it is real "
                    "and do not say anyone shared or sent it.\n"
                    "- Believable, specific, everyday detail; build the tension step by step to the moment it comes out.\n"
                    "- Adults only. No personal names at all, and no real city, company or school. Nothing sexual, no self-harm, no violent crime.\n"),
@@ -197,7 +197,7 @@ GENRE_WRITE = {
                 "- Tell it as a story with a beginning, a turn and an end, in plain words a twelve-year-old follows; explain any term you use.\n"
                 "- No invented people or dialogue.\n")}
 TURNS = ["a message sent to the wrong person", "an old letter found by accident", "an overheard phone call", "a stranger who knew the truth",
-         "a photograph that should not exist", "a bank statement left open", "a child's innocent question", "a confession at the worst possible moment",
+         "a photograph that should not exist", "a bank statement left open", "a child's innocent question", "a secret told at the worst possible moment",
          "a reunion after ten years", "a diary returned by mistake"]
 MOODS = ("dark", "sad", "warm", "light", "dramatic")
 # A long video (wide, several minutes) beside the Shorts: channel option `long`, these are its defaults.
@@ -465,6 +465,11 @@ SCRAP_AFTER = 2 * 86400                  # a failed run's working folders are ke
 BACKUP_ACCOUNT = "drive-backup"          # the Google sign-in the backups go to (oauth provider "gdrive"): /auth/gdrive/login?account=drive-backup
 
 
+def backs_up(ch: dict) -> bool:
+    """Posted videos go to Drive: `backup: true`, or (the older way) a `backup_folder` name."""
+    return bool(ch.get("backup") or ch.get("backup_folder"))
+
+
 def backup_name(v: dict) -> str:
     """"2026-10-15 The Devotee by Rabindranath Tagore [abc123]": the day it went up, the title without hashtags, the YouTube id."""
     day = time.strftime("%Y-%m-%d", time.localtime(v.get("uploaded") or v.get("made") or time.time()))
@@ -475,9 +480,9 @@ def backup_name(v: dict) -> str:
 
 async def backup(ctx: dict, ch: dict, log: list[dict], client) -> str:
     """Copies each video YouTube has confirmed (see free_space) to Drive before its local copy goes: Vision/YouTube/<channel>/Shorts
-    or /Videos in the backup sign-in's Drive (`backup_folder` switches it on and names the older top-level folder moved in there), the video and its cover, each checked by size and MD5 (Mani, 2026-10-15: "this is for
+    or /Videos in the backup sign-in's Drive (`backup: true` switches it on; `backup_folder`, if set, also switches it on and names an older top-level folder moved in there once), the video and its cover, each checked by size and MD5 (Mani, 2026-10-15: "this is for
     backup... no more local saves"). No sign-in, a full Drive or an error = the local files stay and it is tried again next run."""
-    if not ch.get("backup_folder") or ch.get("keep_local"):
+    if not backs_up(ch) or ch.get("keep_local"):
         return ""
     todo = [v for v in log if v.get("status") in ON_YOUTUBE and v.get("video_id") and v.get("on_youtube", 0) >= (v.get("uploaded") or 0.1)
             and not v.get("drive") and not v.get("local_removed") and v.get("file") and Path(v["file"]).is_file()]
@@ -495,7 +500,7 @@ async def backup(ctx: dict, ch: dict, log: list[dict], client) -> str:
     try:
         async with client() as c:
             # Vision/YouTube/<channel name>; the channel's older top-level `backup_folder` is moved in there the first time
-            top = await gdrive.vision_path(c, token, "YouTube", ch["name"], legacy=ch["backup_folder"])
+            top = await gdrive.vision_path(c, token, "YouTube", ch["name"], legacy=ch.get("backup_folder") or None)
             subs: dict[str, str] = {}
             for v in todo:
                 sub_ = "Videos" if v.get("format") == "long" else "Shorts"
@@ -528,7 +533,7 @@ async def prune_drive(ctx: dict, ch: dict, log: list[dict], client) -> str:
     last month and those videos should be deleted from the drive"): the Drive copies of videos released before this month that
     videos.list has just seen public on YouTube go to the Drive's trash (emptied by Drive after 30 days). A video gone from
     YouTube keeps its copy: it is then the only one. kv `yt_state` `<channel>:drive_prune:<YYYY-MM>` marks the month done."""
-    if not ch.get("backup_folder"):
+    if not backs_up(ch):
         return ""
     store, month = ctx["store"], time.strftime("%Y-%m")
     mark = f"{ch['id']}:drive_prune:{month}"
@@ -576,7 +581,7 @@ def free_space(store, ch: dict, log: list[dict]) -> str:
         if d == root or not d.is_relative_to(root) or d.name.startswith("_"):
             continue
         used.add(d)
-        if ch.get("backup_folder") and not v.get("drive"):
+        if backs_up(ch) and not v.get("drive"):
             continue                           # backups are on: the local copy goes only after Drive holds a checked copy
         if v.get("status") in ON_YOUTUBE and v.get("video_id") and v.get("on_youtube", 0) >= (v.get("uploaded") or 0.1) and not v.get("local_removed"):
             if d.is_dir():
@@ -775,11 +780,11 @@ class Crew(SubAgent):
 
 
 class StoryScout(Crew):
-    name, tier, note = "Story Scout", "API", "finds one confession worth telling"
+    name, tier, note = "Story Scout", "API", "finds one story worth telling"
     _hot: set = set()               # today's most-watched words, set while an original is being chosen
 
     def _inbox(self) -> list[dict]:
-        folder = ROOT / "inbox" / "confessions" / self.ch["id"]
+        folder = ROOT / "inbox" / "stories" / self.ch["id"]
         out = []
         for f in sorted(folder.glob("*.txt")) if folder.exists() else []:
             lines = f.read_text(encoding="utf-8", errors="ignore").strip().splitlines()
@@ -800,7 +805,7 @@ class StoryScout(Crew):
             port = ctx["cfg"].vision.port if ctx.get("cfg") else 8765
             bus.notice(f"auth:{acct}", f"Sign in to YouTube for {ch['name']}", f"http://127.0.0.1:{port}/auth/youtube/login?account={acct}")
             return 0
-        inbox = ROOT / "inbox" / "confessions" / ch["id"]
+        inbox = ROOT / "inbox" / "stories" / ch["id"]
         new = 0
         try:
             async with self.client() as c:
@@ -874,7 +879,7 @@ class StoryScout(Crew):
     async def _short(self, ctx: dict) -> AgentResult:
         """Find the next Short's story: viewers' comments and Mani's own stories, then a classic, then an original. With a daily
         mix, the category with the most open slots decides: science and finance are originals of that kind; a story slot
-        takes a real story first, then a classic, then an original confession."""
+        takes a real story first, then a classic, then an original life story."""
         ch, store, bus = self.ch, ctx["store"], ctx["bus"]
         await self._trends(ctx)
         mix = mix_of(store, ch)
@@ -893,7 +898,7 @@ class StoryScout(Crew):
                     cands += await reddit.top(c, sub)
         elif not cands and not ch["originals"] and not ch["classics"]:
             bus.notice(f"youtube-source-{ch['id']}", f"{ch['name']} needs a story source: add REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET to .env, "
-                                                     f"or drop a .txt into inbox/confessions/{ch['id']}/" + (f" or a document into the Drive folder “{ch['drive_folder']}”" if ch["drive_folder"] else ""))
+                                                     f"or drop a .txt into inbox/stories/{ch['id']}/" + (f" or a document into the Drive folder “{ch['drive_folder']}”" if ch["drive_folder"] else ""))
             return AgentResult("wait", "NEEDS SOURCE", "No story to work from: nothing in the Drive folder or the inbox, and no Reddit keys")
         bus.clear_notice(f"youtube-source-{ch['id']}")
 
@@ -910,7 +915,7 @@ class StoryScout(Crew):
                 break
             checks += 1
             verdict = await ctx["llm"].json(
-                "You screen anonymous confessions before they are retold in a public video with every name and place removed. Retelling an anonymous "
+                "You screen anonymous personal stories before they are retold in a public video with every name and place removed. Retelling an anonymous "
                 "story is fine in itself. Reject it if it involves minors in any sexual or abusive context, self-harm, a serious crime, hate, "
                 "or a person who could still be identified after names and places are removed. Also reject it if sex, sexual desire, sexual fantasies "
                 "or a sexual encounter is any real part of it (the channel carries no sexual content at all). "
@@ -932,13 +937,13 @@ class StoryScout(Crew):
         if c:
             return AgentResult("done", "CLASSIC", f"“{c['title']}” by {c['author']}", {"source": ctx["job"]["source"]})
         if ch["originals"]:                         # no real story to tell today: an original one, from a premise never used before
-            p = await self._original(ctx, "confession" if cat == "story" else None)
+            p = await self._original(ctx, "life" if cat == "story" else None)
             if p:
                 return AgentResult("done", "INVENTED", f"An original {ctx['job']['genre']} story" + (" (a quick one)" if ctx["job"].get("quick") else "") + f": “{p['title'][:70]}”", {"source": ctx["job"]["source"]})
         return AgentResult("idle", "NOTHING NEW", f"No usable story among {len(cands)} candidates")
 
     async def _from_comments(self, ctx: dict) -> list[dict]:
-        """Confessions viewers left under the channel's own Shorts: the stories every video asks for."""
+        """Stories viewers left under the channel's own Shorts: the stories every video asks for."""
         ch, store = self.ch, ctx["store"]
         vids = [v for v in store.kv_list(LOG) if v.get("channel") == ch["id"] and v.get("video_id") and v.get("status") in ("public", "unlisted")][:20]
         if not ch["viewer_comments"] or not vids or not can_manage(ctx, ch):
@@ -1057,8 +1062,8 @@ class StoryScout(Crew):
     async def _original(self, ctx: dict, want: str | None = None) -> dict | None:
         ch, store = self.ch, ctx["store"]
         everything = [p for p in store.kv_list(PREMISES, limit=5000) if p.get("channel") == ch["id"]]
-        genres = [g for g in ch["original_genres"] if g in GENRE_ASK] or ["confession"]
-        told = {g: sum(p.get("used") and p.get("genre", "confession") == g for p in everything) for g in genres}
+        genres = [g for g in ch["original_genres"] if g in GENRE_ASK] or ["life"]
+        told = {g: sum(p.get("used") and p.get("genre", "life") == g for p in everything) for g in genres}
         log = [v for v in store.kv_list(LOG) if v.get("channel") == ch["id"]]
         insights = store.kv_get(STATE, f"{ch['id']}:insights") or {}
         learned = ch["double_down"] and insights.get("videos", 0) >= ch["double_down_after"]       # enough results to lean on
@@ -1066,10 +1071,10 @@ class StoryScout(Crew):
             genre = want
         elif learned:
             by_kind = insights.get("views_by_kind") or {}
-            genre = self._lean(genres, told, {g: by_kind["original" if g == "confession" else g] for g in genres if ("original" if g == "confession" else g) in by_kind})
+            genre = self._lean(genres, told, {g: by_kind["original" if g == "life" else g] for g in genres if ("original" if g == "life" else g) in by_kind})
         else:
             genre = min(genres, key=lambda g: told[g])             # the kind told least so far, so the kinds take turns
-        bank = [p for p in everything if p.get("genre", "confession") == genre]
+        bank = [p for p in everything if p.get("genre", "life") == genre]
         self._hot = trending_words(store.kv_get(STATE, f"{ch['id']}:trends")) if ch["trends"] else set()
         fresh = [p for p in bank if not p.get("used")] or await self._premises(ctx, bank, genre)
         if not fresh:
@@ -1162,7 +1167,7 @@ class StoryWriter(Crew):
         pad = 3 if quick else 20                                 # a quick story's range is narrow: keep its target inside it
         length = f"a {'-'.join(str(x) for x in quick_of(self.ch)['seconds'])} second video" if quick else "a 1-2 minute video"
         ending = ENDINGS.get(self.ch["ending"], ENDINGS["plain"])
-        head, rules = GENRE_WRITE.get(job.get("genre") or "confession", GENRE_WRITE["confession"])
+        head, rules = GENRE_WRITE.get(job.get("genre") or "life", GENRE_WRITE["life"])
         science, learning = job.get("genre") == "science", job.get("structure") in STRUCTURES
         shape = f"- Build it exactly like this: {STRUCTURES[job['structure']]}\n- {HOLD_BACK}\n" if learning else f"- {RETAIN_STORY}\n"
         opener = HOOKS["story"].get(job.get("hook") or "")
@@ -1184,7 +1189,7 @@ class StoryWriter(Crew):
                   f'Answer as {{"title": "under 70 characters, built around the story\'s own title", "story": "...", "hashtags": ["3 to 5 words, no #"], '
                   f'"mood": "the one word that fits the story best: {" | ".join(MOODS)}"}}.\n\n'
                   f"“{job['classic']['title']}” by {job['classic']['author']}:\n{job['raw'][:40000]}") if job.get("classic") else (
-                  f"Retell the confession below as a narrated story for {length}, {lo + pad}-{hi - pad} words.\n"
+                  f"Retell the personal story below as a narrated story for {length}, {lo + pad}-{hi - pad} words.\n"
                   "- Third person, as if retelling something shared anonymously (\"a woman\", \"he\", \"they\").\n"
                   "- The first sentence is a hook that makes someone stop scrolling.\n"
                   "- Keep the real events, feelings and outcome. You may add small build-ups and pauses for suspense, but no new events or facts.\n"
@@ -1192,7 +1197,7 @@ class StoryWriter(Crew):
                   "- Short spoken sentences. " + ENDINGS.get(self.ch["ending"], ENDINGS["plain"]) + " No call to subscribe.\n"
                   'Answer as {"title": "under 70 characters, no names", "story": "...", "hashtags": ["3 to 5 words, no #"], '
                   f'"mood": "the one word that fits the story best: {" | ".join(MOODS)}"}}.\n\n'
-                  f"Confession:\n{job['raw'][:6000]}")
+                  f"Story:\n{job['raw'][:6000]}")
         note = ""
         for _ in range(2):
             d = await ctx["llm"].json(prompt + note, tier="writer", max_tokens=2500)
@@ -1323,8 +1328,8 @@ class SEOStrategist(Crew):
     name, tier, note, blocking = "SEO Strategist", "CLOUD", "title, description and tags from real searches", False
 
     def seeds(self, job: dict) -> list[str]:
-        what = {"science": "science explained", "money": "personal finance tips", "motivational": "motivational story", "classic": "short story", "viewer": "confession story",
-                "real": "confession story", "original": "confession story"}[kind(job)]
+        what = {"science": "science explained", "money": "personal finance tips", "motivational": "motivational story", "classic": "short story", "viewer": "true-to-life story",
+                "real": "true-to-life story", "original": "true-to-life story"}[kind(job)]
         mine = " ".join(w for w in re.findall(r"[A-Za-z]{4,}", job.get("title", "")) if w.lower() not in STOP)
         out = [what, " ".join(mine.split()[:3])]
         if job.get("classic"):
@@ -1839,7 +1844,7 @@ class Uploader(Crew):
 
 
 async def post_invitation(c: httpx.AsyncClient, auth: dict, ch: dict, video_id: str) -> bool:
-    """The channel's own comment under a video, inviting viewers' confessions. Only a public or unlisted video can take it."""
+    """The channel's own comment under a video, inviting viewers' stories. Only a public or unlisted video can take it."""
     try:
         r = await c.post(API + "/commentThreads", params={"part": "snippet"}, headers=auth,
                          json={"snippet": {"videoId": video_id, "topLevelComment": {"snippet": {"textOriginal": ch["cta"]}}}})

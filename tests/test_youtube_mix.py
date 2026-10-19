@@ -27,7 +27,7 @@ def test_mix_comes_from_the_weekly_resplit_else_the_setting(tmp_path):
     store = Store(tmp_path / "t.db")
     ch = youtube.channel({"daily_mix": MIX})
     assert youtube.mix_of(store, ch) == MIX and youtube.mix_of(store, youtube.channel({})) == {}
-    store.kv_put(youtube.STATE, "confessions:mix", {"mix": {"science": 1, "story": 1, "money": 2}, "at": time.time()})
+    store.kv_put(youtube.STATE, "knowidk:mix", {"mix": {"science": 1, "story": 1, "money": 2}, "at": time.time()})
     assert youtube.mix_of(store, ch) == {"science": 1, "story": 1, "money": 2}
     assert youtube.mix_of(store, youtube.channel({"daily_mix": MIX, "mix_auto": False})) == MIX
 
@@ -71,13 +71,13 @@ def test_the_scout_fills_the_open_slot(tmp_path, monkeypatch):
     monkeypatch.setattr(youtube.StoryScout, "_classic", lambda self, ctx, long=False: asyncio.sleep(0, None))
     monkeypatch.setattr(youtube.StoryScout, "_inbox", lambda self: [])
     monkeypatch.setattr(youtube.reddit, "configured", lambda: False)
-    made = lambda kind, n: [store.kv_put(youtube.LOG, f"{kind}{i}", {"channel": "confessions", "kind": kind, "made": time.time(), "status": "public", "title": kind, "seconds": 9})
+    made = lambda kind, n: [store.kv_put(youtube.LOG, f"{kind}{i}", {"channel": "knowidk", "kind": kind, "made": time.time(), "status": "public", "title": kind, "seconds": 9})
                             for i in range(n)]
     res = asyncio.run(scout._short({"store": store, "bus": bus}))
     assert wanted == ["science"] and res.data["category"] == "science"
     made("science", 2)
     asyncio.run(scout._short({"store": store, "bus": bus}))
-    assert wanted[-1] == "confession"                                          # the story slot: no real story or classic, so an original confession
+    assert wanted[-1] == "life"                                          # the story slot: no real story or classic, so an original life story
     made("original", 1)
     asyncio.run(scout._short({"store": store, "bus": bus}))
     assert wanted[-1] == "money"
@@ -91,7 +91,7 @@ def test_analytics_are_read_scored_and_the_mix_resplit_once_a_week(tmp_path, mon
     old = time.time() - 5 * 86400
     kinds = ["science"] * 6 + ["real"] * 6 + ["money"] * 6
     for i, k in enumerate(kinds):
-        store.kv_put(youtube.LOG, f"v{i}", {"channel": "confessions", "kind": k, "status": "public", "video_id": f"id{i}", "made": old, "uploaded": old,
+        store.kv_put(youtube.LOG, f"v{i}", {"channel": "knowidk", "kind": k, "status": "public", "video_id": f"id{i}", "made": old, "uploaded": old,
                                             "publish_at": old, "title": f"{k} {i}", "seconds": 60})
     stats = {"science": (200, 70), "real": (30, 40), "money": (900, 80)}
 
@@ -118,11 +118,11 @@ def test_analytics_are_read_scored_and_the_mix_resplit_once_a_week(tmp_path, mon
 
     monkeypatch.setattr(oauth, "granted", lambda account: "https://www.googleapis.com/auth/youtube.force-ssl")   # an older sign-in
     res = asyncio.run(am().run({"store": store, "bus": bus}))
-    assert "youtube-analytics-confessions" in bus.state["notices"] and "analytics wait for a sign-in" in res.summary
+    assert "youtube-analytics-knowidk" in bus.state["notices"] and "analytics wait for a sign-in" in res.summary
 
     monkeypatch.setattr(oauth, "granted", lambda account: "youtube.force-ssl yt-analytics.readonly")
     res = asyncio.run(am().run({"store": store, "bus": bus}))
-    assert "youtube-analytics-confessions" not in bus.state["notices"]
+    assert "youtube-analytics-knowidk" not in bus.state["notices"]
     assert store.kv_get(youtube.LOG, "v0")["analytics"]["avg_pct"] == 70.0
     assert youtube.mix_of(store, ch) == {"science": 1, "story": 1, "money": 2}                   # finance is watched best
     assert "daily mix 1 science / 1 story / 2 finance" in res.summary and "watched: finance 80.0% of 900 views/Short" in res.summary
@@ -133,7 +133,7 @@ def test_analytics_are_read_scored_and_the_mix_resplit_once_a_week(tmp_path, mon
     assert len(sent) == 1 and "the daily mix is now 1 science / 1 story / 2 finance (was 2 science / 1 story / 1 finance)" in sent[0]
 
     stats["science"] = (5000, 90)                                                                    # within the week: no new re-split
-    store.kv_put(youtube.STATE, "confessions:analytics_at", {"at": 0})
+    store.kv_put(youtube.STATE, "knowidk:analytics_at", {"at": 0})
     asyncio.run(am().run({"store": store, "bus": bus}))
     assert youtube.mix_of(store, ch) == {"science": 1, "story": 1, "money": 2}
 
@@ -141,7 +141,7 @@ def test_analytics_are_read_scored_and_the_mix_resplit_once_a_week(tmp_path, mon
 def test_latest_is_the_last_made_not_the_last_saved(tmp_path, monkeypatch):
     store = Store(tmp_path / "t.db")
     for k, made in (("new", 200), ("old", 100)):                 # "old" saved last
-        store.kv_put(youtube.LOG, k, {"channel": "confessions", "kind": "real", "status": "ready", "made": made, "title": k, "seconds": 9})
+        store.kv_put(youtube.LOG, k, {"channel": "knowidk", "kind": "real", "status": "ready", "made": made, "title": k, "seconds": 9})
     res = asyncio.run(youtube.AnalyticsManager(youtube.channel({})).run({"store": store, "bus": EventBus()}))
     assert "latest “new”" in res.summary
 

@@ -30,7 +30,7 @@ OUT = ROOT / "data" / "shorts" / "_sample"
 
 async def main(kind: str) -> None:
     cfg = load_config()
-    raw = next(c for c in cfg.master("youtube").options["channels"] if c.get("id") == "confessions")
+    raw = next(c for c in cfg.master("youtube").options["channels"] if c.get("id") == "knowidk")
     ch = youtube.channel({**raw, "daily_mix": {kind: 1}, "mix_auto": False, "diagrams": [kind], "trends": False, "viewer_comments": False,
                           "drive_folder": "", "classics": [] if kind != "story" else raw.get("classics", []), "quick": {"per_day": 0}})
     OUT.mkdir(parents=True, exist_ok=True)

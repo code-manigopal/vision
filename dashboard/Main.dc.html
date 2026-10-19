@@ -904,7 +904,7 @@ div:has(>.barglow){height:8px!important;background:rgba(255,255,255,.07)!importa
     <div class="panel" style="flex-grow: 1; background: rgba(13,15,20,0.82); border: 1px solid #262A33; padding: 10px 16px; display: flex; flex-direction: column; gap: 10px; border-radius: 8px; overflow: visible">
       <div style="display: flex; justify-content: space-between">
         <div style="display: flex; align-items: center; gap: 12px"><span style="font-family: 'Michroma', sans-serif; font-size: 11px; letter-spacing: 2px; color: #FBCA03">24H TIMELINE</span>
-          <span style="font-family: 'JetBrains Mono', monospace; font-size: 9px; color: #9A8F76; display: flex; gap: 10px"><span><span style="color: #1f9d55">◆</span> Mani Market</span><span><span style="color: #AA0505">◆</span> Confessions</span><span><span style="color: #FBCA03">◆</span> both / other</span><span><span style="color: #67C7EB">◆</span> Telegram</span></span></div>
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 9px; color: #9A8F76; display: flex; gap: 10px"><span><span style="color: #1f9d55">◆</span> Mani Market</span><span><span style="color: #AA0505">◆</span> Know IDK Things</span><span><span style="color: #FBCA03">◆</span> both / other</span><span><span style="color: #67C7EB">◆</span> Telegram</span></span></div>
         <div style="display: flex; align-items: center; gap: 8px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #C9C0AC">
           <span style="color: #B97D10">{{schedTxt}}</span>
           <span style="width: 7px; height: 7px; border-radius: 50%; background: #67C7EB; box-shadow: 0 0 6px #67C7EB"></span>
@@ -1699,7 +1699,7 @@ class Component extends DCLogic {
     }
   }
   pickMaster(t) {
-    if (t.includes('film') || t.includes('video') || t.includes('movie') || t.includes('youtube') || t.includes('shorts') || t.includes('confession')) return 'youtube';
+    if (t.includes('film') || t.includes('video') || t.includes('movie') || t.includes('youtube') || t.includes('shorts') || t.includes('know idk')) return 'youtube';
     if (t.includes('trad') || t.includes('forex') || t.includes('oanda')) return 'trading';
     if (t.includes('job') || t.includes('resume') || t.includes('career')) return 'jobs';
     if (t.includes('web') || t.includes('site') || t.includes('design')) return 'web';
@@ -2158,7 +2158,7 @@ class Component extends DCLogic {
     // Connected: real data or an honest "waiting", never the sample values (those are for the unconnected preview).
     const CON = !!(s.liveUp && s.live);
     // ---- 24H TIMELINE: one diamond per fixed-time job (gold = a master's run, blue = a Telegram brief), by the Mac's clock ----
-    const tlDemo = [['06:00', 'brief', 'Morning brief (Telegram)'], ['07:02', 'run', 'Demo run', 'manimarket', '16:32 IST'], ['12:00', 'run', 'Demo run', 'both'], ['18:00', 'brief', 'Evening brief (Telegram)'], ['23:00', 'run', 'Demo run', 'confessions']]
+    const tlDemo = [['06:00', 'brief', 'Morning brief (Telegram)'], ['07:02', 'run', 'Demo run', 'manimarket', '16:32 IST'], ['12:00', 'run', 'Demo run', 'both'], ['18:00', 'brief', 'Evening brief (Telegram)'], ['23:00', 'run', 'Demo run', 'knowidk']]
       .map((x, i) => { const [h, mi] = x[0].split(':').map(Number); const t = new Date(d); t.setHours(h, mi, 0, 0); if (t < d) t.setDate(t.getDate() + 1); return { at: t.getTime() / 1000, local: x[0], kind: x[1], label: x[2] + ' (demo)', channel: x[3] || '', zone_local: x[4] || '' }; });
     const tlItems = CON ? (s.sched && s.sched.items ? s.sched.items : []) : tlDemo;
     const tlNext = tlItems.filter((x) => x.at * 1000 > d.getTime()).sort((a, b) => a.at - b.at)[0];
@@ -2167,7 +2167,7 @@ class Component extends DCLogic {
       const [h, mi] = String(x.local).split(':').map(Number), mins = h * 60 + mi, pct = mins / 1440 * 100;
       const row = pct - tlLast[0] >= 2.5 ? 0 : pct - tlLast[1] >= 2.5 ? 1 : (tlLast[0] <= tlLast[1] ? 0 : 1);
       tlLast[row] = pct;
-      const isNext = tlNext === x, past = mins < tlNow && !isNext, col = x.kind === 'brief' ? '#67C7EB' : ({ manimarket: '#1f9d55', confessions: '#AA0505', both: '#FBCA03' })[x.channel] || '#FBCA03';
+      const isNext = tlNext === x, past = mins < tlNow && !isNext, col = x.kind === 'brief' ? '#67C7EB' : ({ manimarket: '#1f9d55', knowidk: '#AA0505', both: '#FBCA03' })[x.channel] || '#FBCA03';
       const key = x.local + '|' + x.label;
       return { key, hpct: Math.max(12, Math.min(88, pct)).toFixed(2) + '%', left: pct.toFixed(2) + '%', top: row ? '23px' : '4px', col, op: past ? '0.4' : '1', ring: isNext ? '1px solid #FBCA03' : 'none', time: x.local,
         name: x.label, when: x.local + (x.zone_local ? ' · ' + x.zone_local.replace(' ', ' ') : '') + (past ? ' · tomorrow' : ''),

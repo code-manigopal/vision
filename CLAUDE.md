@@ -35,7 +35,7 @@ bash scripts/setup.sh                     # venv + deps + .env from template + c
 .venv/bin/python -m vision sfx            # add 3 sound effects per kind to assets/sfx/ (or: sfx whoosh 5)
 .venv/bin/python -m vision visa list      # Visa Watch accounts: add | list | update | pause | resume | remove | check <id>
 .venv/bin/python -m vision ebooks list    # E-books Manager: list | published <book> [ASIN] | redraw <book> <page>
-.venv/bin/python -m pytest -q             # 512 tests, all external services mocked
+.venv/bin/python -m pytest -q             # 513 tests, all external services mocked
 bash scripts/install_launchagent.sh       # auto-start at login + restart on crash
 tail -f logs/vision.log
 ```
@@ -149,7 +149,7 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
 - Music: `dashboard/audio/inspired.mp3` during the boot roll call, fading into `roadside.mp3` as a quiet loop
   that ducks while VISION speaks or listens. Switch in the voice menu (`vision-music` in localStorage).
 - Power button: confirmation → `/api/shutdown` → the roll call in reverse → standby screen; "Power on" calls `/api/boot`.
-- 24H timeline (Mani, 2026-10-14): one diamond per fixed-time job from `/api/schedule` (fetched on connect and every 10 min; `run_at` entries may read `"07:02 Asia/Kolkata | label | channel"`), placed by the Mac's clock, colour by channel (Mani Market green, Confessions red, both gold, Telegram briefs blue), hover card with name and time (and IST for a zoned run); the next one is outlined, later-today-already-passed ones dimmed; connected without the schedule it says "schedule: waiting", preview shows a labelled demo.
+- 24H timeline (Mani, 2026-10-14): one diamond per fixed-time job from `/api/schedule` (fetched on connect and every 10 min; `run_at` entries may read `"07:02 Asia/Kolkata | label | channel"`), placed by the Mac's clock, colour by channel (Mani Market green, Know IDK Things red, both gold, Telegram briefs blue), hover card with name and time (and IST for a zoned run); the next one is outlined, later-today-already-passed ones dimmed; connected without the schedule it says "schedule: waiting", preview shows a labelled demo.
 - Chronograph look (Mani's choice, 2026-10-12): one CSS block at the end of the `<style>` in Main.dc.html restyles the HUD
   (still tick-mark dial round the emblem, one thin red arc, bracket-corner panels, segmented bars, diamond status marks,
   underline tabs, no glow). Delete that block to get the earlier look back.
@@ -313,7 +313,8 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   Gemini app is by hand only. Not built: edutainment/activity pages, story books, KDP sales CSV, dashboard Redraw button.
 - **One Vision folder in Drive (Mani, 2026-10-18):** everything VISION keeps in kamanikagopal's Drive sits under `Vision/` (`gdrive.TOP`,
   `gdrive.vision_path`): `Vision/YouTube/<channel name>/{Shorts,Videos}` and `Vision/Jobs/<package folder>`. A channel's older top-level
-  `backup_folder` (confessions_everywhere_yt, mani_market_yt) is moved in and renamed the first time (`legacy`), nothing re-uploaded.
+  `backup_folder` (an older top-level folder, e.g. mani_market_yt) is moved in and renamed the first time (`legacy`), nothing re-uploaded.
+  `backup: true` switches backups on without one (`youtube.backs_up`).
 - **Job tracker (Mani, 2026-10-18, like LinkedIn's My Jobs):** approving a package sets `approved` (not applied: dashboard and Telegram say
   Approved); Mani marks it applied (that date starts the follow-ups), then interview, offer, rejected or archived (`jobs.TRACK`, `NEXT`,
   `set_status`, history kept on the record), on the desk's card buttons or Telegram /jobs. An "application received" email moves an approved
@@ -322,7 +323,7 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   size and MD5) and only then is `data/applications/<folder>` deleted (`local_removed`; the desk links "Files in Drive"); approval tries it
   at once, the Application Tracker again each run. Rejected packages stay on the Mac. `legacy_approved` turns the jobs the old code marked applied on approval (applied, no `history`) into approved; ran live 2026-10-18 (21 jobs, 84 files to Drive).
 - **Video backups to Drive (Mani, 2026-10-15: "this is for backup... no more local saves"):** each channel's `backup_folder`
-  (`confessions_everywhere_yt`, `mani_market_yt`) in kamanikagopal@gmail.com's Drive, sub-folders `Shorts` / `Videos`, files named
+  (now under Vision/YouTube/<channel name>) in kamanikagopal@gmail.com's Drive, sub-folders `Shorts` / `Videos`, files named
   `youtube.backup_name` ("2026-10-15 <title without hashtags> [<video id>].mp4" + " cover.jpg"). `youtube.backup` runs in the Analytics
   Manager / Market Analytics after videos.list has confirmed the video; each file is uploaded resumable (`gdrive.upload`) and checked by size
   and MD5; only then may `free_space` delete the local folder. Own sign-in `drive-backup`, oauth provider `gdrive`, scope `drive.file` (it sees
@@ -346,19 +347,19 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   hand.) A private video with a `publishAt` counts as `scheduled`, whether VISION or Mani scheduled it. Analytics Manager checks each uploaded Short
   (status, views, likes, comments), clears the notice once it is public or deleted, and its report feeds the briefs.
   Sign-in per channel: `/auth/youtube/login?account=youtube-<channel id>` (oauth provider `youtube`, same Google app).
-  Stories come from `inbox/confessions/<channel id>/*.txt` (first line may be the source URL); the Scout first copies new
+  Stories come from `inbox/stories/<channel id>/*.txt` (first line may be the source URL); the Scout first copies new
   Docs and .txt files from the channel's Google Drive folder (`drive_folder`, `services/gdrive.py`, read-only, same sign-in
   as YouTube, fetched ids in kv `yt_drive`) into that inbox. Reddit's official API is wired in but asleep: Reddit now makes
   new accounts register for API access before an app can be created, and a monetised channel may be refused;
   **Quora is out** (no API). With `originals: true`, when no real story is waiting the Scout takes a premise from its bank
   (kv `yt_premises`; refilled in batches by the model from code-picked ingredients THEMES x SETTINGS x TELLERS x TURNS, each
-  premise used once, near-duplicates dropped) and the Writer writes an original, fictional confession-style story: never
+  premise used once, near-duplicates dropped) and the Writer writes an original, fictional true-to-life story: never
   framed as real or as "someone shared", marked `original` in the log, "This story is fiction." in the description.
   Other sources, in the Scout's order: long comments under the channel's own Shorts (`viewer_comments`, kind `viewer`) →
   Drive/inbox/Reddit → one classic a day (`classics`: Project Gutenberg book ids, `services/gutenberg.py` cuts a book at its
   capitalised headings into `data/classics/<id>/`; retold faithfully with the author's ending, citation spoken as the last
-  line and in the description; used stories in kv `yt_classics`) → originals. Every Short carries the invitation to leave a
-  confession: the spoken `outro`, the `cta` line in the description and the channel's own comment (the API cannot pin it;
+  line and in the description; used stories in kv `yt_classics`) → originals. Every Short carries the invitation to share a
+  story: the spoken `outro`, the `cta` line in the description and the channel's own comment (the API cannot pin it;
   Mani pins by hand). `playlists` maps a story kind to a playlist (classics → "Classic Stories"), created if missing.
   Playlists and comments need the `youtube.force-ssl` permission: `can_manage()` checks the sign-in's recorded scope and
   raises a "sign in again" notice without stopping uploads. VISION never deletes a video.
@@ -382,7 +383,7 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   YouTube caps uploads per channel per rolling day (hit on 2026-10-06 after about ten in 24 hours, deleted ones included;
   error `uploadLimitExceeded`). The Uploader treats it as a wait, not a fault: a notice, the Shorts stay `ready` and go up on
   a later run; and the Scout makes no new Shorts while `shorts_per_day` or more are waiting (label BACKLOG).
-  Originals come in kinds that take turns (`original_genres`): confession, motivational, and science (48 subjects across
+  Originals come in kinds that take turns (`original_genres`): life, motivational, and science (48 subjects across
   space, earth, forests, oceans in `SCIENCE`; a subject isn't repeated while others are unused). Each kind has its own
   premise request and writing rules (`GENRE_ASK`, `GENRE_WRITE`); science must stay with established facts and leaves
   out any number it isn't sure of, but **nothing checks its facts**. Kinds `science` and `motivational` have their own playlists.
@@ -423,10 +424,12 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   asks the model, line by line, for one cue from `CUES` (riser, impact, heartbeat, drone, tick, ding, whoosh, pop, coin,
   notification; only kinds the library holds) or "none", most lines none; `sfx_plan` places each at its line, keeps them at
   least 4 s apart and about one per 8 s, and never adds any on its own (`sfx`, `sfx_volume`). No model answer = no effects. The record keeps `caption` and `sfx`; both show on the desk.
-  **Renamed (Mani, 2026-10-18): Confessions Everywhere is now Know IDK Things** (the channel covers science, money and stories, and will grow). Only the
-  display name, Director name, outro and comment invitation changed (both ask "Have a story to share? Drop it in the comments", Mani's wording, so
-  viewers' stories keep coming for `viewer_comments`); the id stays `confessions` (sign-in `youtube-confessions`, kv keys, inbox folder,
-  `backup_folder`), and its Drive folder was renamed in place to Vision/YouTube/Know IDK Things. Its logo (`assets/brand/`: the sticker
+  **Know IDK Things (Mani, 2026-10-18; the channel covers science, money and stories, and will grow):** channel id `knowidk` (sign-in
+  `youtube-knowidk`, kv keys `knowidk:...`, inbox `inbox/stories/knowidk/`, Drive inbox "Know IDK Things Inbox" in knowidkthings@gmail.com's Drive,
+  work folders `data/shorts/knowidk/`; `scripts/migrate_knowidk.py` moved the older data over). The outro and comment invitation both ask
+  "Have a story to share? Drop it in the comments" (Mani's wording, so viewers' stories keep coming for `viewer_comments`). The original story kind
+  is `life` (a true-to-life story: an ordinary adult did or hid something and it comes out). Mani's rule: no word for the channel's former theme
+  anywhere in VISION. Its Drive backups are in Vision/YouTube/Know IDK Things. Its logo (`assets/brand/`: the sticker
   cut from its baked-in checkerboard as know-idk-things.png, plus Mani's round logo, banner and the original) is the watermark (`logo`, top right,
   150 px at 80 %; a logo path is taken from the repo root). A copy of all four is in Drive, Vision/YouTube/Know IDK Things/Brand (2026-10-18). Mani renames the channel and handle in YouTube Studio.
   **No sexual content (Mani, 2026-10-18: "no more such contents"):** `SEXUAL` (sex, lust, fantasies, role-play, nude, one-night stand...) rejects a story
@@ -434,7 +437,7 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   that matches is sent back to be rewritten. Strict on purpose (a harmless "aroused from sleep" also stops a story).
   **Daily mix and YouTube Analytics (Mani, 2026-10-18: "daily two videos are of science, one from stories and one for finance"):** `daily_mix`
   `{science: 2, story: 1, money: 1}` replaces `shorts_per_day` for the channel: the Scout fills the category with most slots still open
-  (`next_category`, `made_by_category`; story = real, viewer, classic or an original confession, never motivational; science/money = an
+  (`next_category`, `made_by_category`; story = real, viewer, classic or an original life story, never motivational; science/money = an
   original of that kind, `_original(ctx, want)`); a real story that finds the story slot used waits for tomorrow. The Analytics Manager reads
   YouTube Analytics API v2 (`services/yt_analytics.py`, scope `yt-analytics.readonly`: one more YouTube sign-in, notice
   `youtube-analytics-<channel>`; "YouTube Analytics API" must be enabled on the Google app) at most every 6 h for public Shorts 2+ days out:
@@ -456,7 +459,7 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   **Quick Shorts** (`quick`, `QUICK`: 20-35 s, ends on its own outro, `per_day` 1, 0 = off): only an original story can be one (Scout sets
   `job["quick"]`), counted among the day's Shorts; `word_range(ch, quick=True)`; insights keep `views_by_length` (quick vs regular).
   **Double down** (`double_down`, `double_down_after` 12, `explore` 0.15): `choose(options, told, views, floor)` gives each option a floor share
-  and the rest by average views; the Scout uses it for the original kind (`views_by_kind`, a confession counts as "original") and the learning
+  and the rest by average views; the Scout uses it for the original kind (`views_by_kind`, a life story counts as "original") and the learning
   pattern (`views_by_structure`) once insights have enough public videos, else the least-told as before; the floor is held to 70%/options so
   seven patterns still lean.
   Background music is a library on disk, `assets/bgm/<mood>/` (git-ignored), filled by `python -m vision bgm [mood] [count]`
@@ -473,7 +476,7 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   and `build/ audio/ footage/` of an unrecorded run untouched for 2 days; ready/awaiting/review/stale/deleted keep theirs. `keep_local: true` keeps all. Footage Generator is a provider slot (`services/genmedia.py`, `generator:` per
   channel), off until a provider is named. Writing uses `llm.writer_model` on Groq (reasoning models need large max_tokens).
 - Mani Market Tamil (`masters/market_crew.py`, a second channel `manimarket` under the YouTube Manager: `crew: market` in the channel's options makes
-  `youtube.build_agents` give it its own Director and crew instead of the Confessions one; the first Director is a `Lead` that adds a line for each other
+  `youtube.build_agents` give it its own Director and crew instead of the Know IDK Things one; the first Director is a `Lead` that adds a line for each other
   channel to the master's report). One quarterly-results video a night in Tanglish over slides. Crew: Results Scout (PLAN) → Market Analyst (DATA) → Tanglish
   Writer (SCRIPT) → Voice Clone (VOICE) → Slide Editor (EDIT) → Market Uploader (UPLOAD) → Market Analytics (REPORT, the Director's reporter); a failing member
   does not block the rest (the Uploader must still schedule what Mani approved), each idles when the job lacks the earlier part. Rules, keep them: **reported
@@ -684,7 +687,7 @@ The long lesson opens on the disclaimer card as ever, has a fixed opening line, 
 | Web Designer | live | GOOGLE_MAPS_API_KEY, CLOUDFLARE_API_TOKEN + ACCOUNT_ID, optional PEXELS_API_KEY / PIXABAY_API_KEY |
 | World Watch (news, weather, flights, traffic) | live | TOMTOM_API_KEY for traffic; optional OPENSKY creds (a free account lifts flights from about 100 to 1,000 snapshots a day) |
 | Trading Desk | live | OANDA practice token + account |
-| YouTube Manager (+ Mani Market Tamil) | live (upload mocked only, never run against YouTube) | GROQ_API_KEY, PEXELS_API_KEY (the .env line has no usable value), REDDIT_CLIENT_ID/SECRET or .txt stories in inbox/confessions/confessions; GOOGLE_CLIENT_ID/SECRET with YouTube Data API v3 and Google Drive API enabled and redirect `http://127.0.0.1:8765/auth/youtube/callback`, then the YouTube sign-in. Mani Market Tamil: its own YouTube sign-in (`/auth/youtube/login?account=youtube-manimarket`), `vault/voice/ref-tight.wav` + `ref.txt` and the IndicF5 model for the cloned voice, headless Chrome (selenium) for the slides, LM Studio's `lms` tool |
+| YouTube Manager (+ Mani Market Tamil) | live (upload mocked only, never run against YouTube) | GROQ_API_KEY, PEXELS_API_KEY (the .env line has no usable value), REDDIT_CLIENT_ID/SECRET or .txt stories in inbox/stories/knowidk; GOOGLE_CLIENT_ID/SECRET with YouTube Data API v3 and Google Drive API enabled and redirect `http://127.0.0.1:8765/auth/youtube/callback`, then the YouTube sign-in. Mani Market Tamil: its own YouTube sign-in (`/auth/youtube/login?account=youtube-manimarket`), `vault/voice/ref-tight.wav` + `ref.txt` and the IndicF5 model for the cloned voice, headless Chrome (selenium) for the slides, LM Studio's `lms` tool |
 | E-books Manager | live (never run for real yet) | CLOUDFLARE_API_TOKEN with Workers AI + CLOUDFLARE_ACCOUNT_ID (set), GROQ_API_KEY; uploads each approved book to KDP by hand |
 | Visa Watch | live (never run signed in) | add the account on its desk, then sign in to the portal himself in the window it opens (again whenever the session runs out); the Keychain prompt allowed once |
 | Telegram | live | TELEGRAM_BOT_TOKEN, then /start → TELEGRAM_CHAT_ID |
@@ -700,7 +703,7 @@ The long lesson opens on the disclaimer card as ever, has a fixed opening line, 
    `report_data`); approvals panel already live.
 5. Nightly backup of `data/` and `vault/`; a 05:30 health check (LM Studio, tokens, Telegram).
 6. YouTube Manager: first real upload done 2026-10-05 (Drive → Short → unlisted, counted as a Short). Open: Mani tuning the
-   mood → voice table by ear (samples in `data/shorts/_voices/`), collecting confessions from comments on the channel's own videos,
+   mood → voice table by ear (samples in `data/shorts/_voices/`), collecting stories from comments on the channel's own videos,
    crew progress in vision.log.
 
 Canvas design of the dashboard: https://claude.ai/artifact/46JvfVBsfsbd5f8FSqaYVf

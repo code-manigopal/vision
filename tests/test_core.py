@@ -277,16 +277,16 @@ def test_api_schedule(monkeypatch):
     app = create_app(boot_on_start=False, schedules=False, telegram_on=False, voice_on=False)
     with TestClient(app) as c:
         orch = app.state.orch
-        orch.cfg.masters["youtube"].run_at = ["05:00 | Confessions Shorts | confessions", "07:02 Asia/Kolkata | Pre-market Short | manimarket"]
+        orch.cfg.masters["youtube"].run_at = ["05:00 | Know IDK Things Shorts | knowidk", "07:02 Asia/Kolkata | Pre-market Short | manimarket"]
         orch.cfg.masters["world"].run_at = ["12:00"]
         mac = ZoneInfo(orch.cfg.vision.timezone)
         now = datetime(2026, 10, 14, 0, 30, tzinfo=mac)
         items = orch.schedule(now=now)
         by = {(i["master"], i["label"]): i for i in items}
-        assert by[("youtube", "Confessions Shorts")]["local"] == "05:00"
+        assert by[("youtube", "Know IDK Things Shorts")]["local"] == "05:00"
         pre = by[("youtube", "Pre-market Short")]                         # 07:02 IST is 21:32 EDT
         assert pre["local"] == "21:32" and pre["kind"] == "run" and pre["channel"] == "manimarket" and pre["zone_local"] == "07:02 IST"
-        assert by[("youtube", "Confessions Shorts")]["channel"] == "confessions" and "zone_local" not in by[("youtube", "Confessions Shorts")]
+        assert by[("youtube", "Know IDK Things Shorts")]["channel"] == "knowidk" and "zone_local" not in by[("youtube", "Know IDK Things Shorts")]
         assert by[("world", orch.by_id["world"].name)]["local"] == "12:00"   # no label: the master's name
         briefs = [i for i in items if i["kind"] == "brief"]
         assert [(b["local"], b["label"]) for b in briefs] == [("06:00", "Morning brief (Telegram)"), ("18:00", "Evening brief (Telegram)")]
