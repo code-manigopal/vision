@@ -21,6 +21,7 @@ from typing import Any
 
 import httpx
 
+from . import groq_budget
 from ..config import Config, secret
 
 log = logging.getLogger("vision.llm")
@@ -73,18 +74,23 @@ class LLM:
         raise LLMUnavailable("No model available: start LM Studio's server, or add ANTHROPIC_API_KEY and llm.cloud_model")
 
     # ---------- plain text ----------
-    async def complete(self, prompt: str, *, system: str = "", tier: str = "local", max_tokens: int = 800, temperature: float = 0.3, model: str | None = None) -> str:
+    async def complete(self, prompt: str, *, system: str = "", tier: str = "local", max_tokens: int = 800, temperature: float = 0.3, model: str | None = None,
+                       who: str = "", cap: int = 0, light: bool = False) -> str:
+        """`who` / `cap`: the caller (a channel) and its share of Groq's daily tokens (services/groq_budget.py). `light` marks a small structured step
+        a channel may send to the local model (youtube.OwnWriter); here it changes nothing."""
         msgs = [{"role": "user", "content": prompt}]
-        out = await self.chat(msgs, system=system, tier=tier, max_tokens=max_tokens, temperature=temperature, model=model)
+        out = await self.chat(msgs, system=system, tier=tier, max_tokens=max_tokens, temperature=temperature, model=model, who=who, cap=cap)
         return out["text"]
 
-    async def json(self, prompt: str, *, system: str = "", tier: str = "local", max_tokens: int = 800, model: str | None = None) -> Any:
-        text = await self.complete(prompt + "\n\nReply with JSON only, no prose.", system=system, tier=tier, max_tokens=max_tokens, temperature=0, model=model)
+    async def json(self, prompt: str, *, system: str = "", tier: str = "local", max_tokens: int = 800, model: str | None = None,
+                   who: str = "", cap: int = 0, light: bool = False) -> Any:
+        text = await self.complete(prompt + "\n\nReply with JSON only, no prose.", system=system, tier=tier, max_tokens=max_tokens, temperature=0, model=model,
+                                   who=who, cap=cap)
         return parse_json(text)
 
     # ---------- chat with tools (OpenAI-style tool schemas) ----------
     async def chat(self, messages: list[dict], *, system: str = "", tools: list[dict] | None = None, tier: str = "local",
-                   max_tokens: int = 800, temperature: float = 0.3, model: str | None = None) -> dict:
+                   max_tokens: int = 800, temperature: float = 0.3, model: str | None = None, who: str = "", cap: int = 0) -> dict:
         """`model` names another model on the hosted writer tier (Groq keeps a separate daily allowance per model). Returns {"text": str, "tool_calls": [{"id", "name", "args"}], "raw_assistant": message to append}."""
         which = await self.pick(tier)
         if which == "local":
@@ -94,11 +100,17 @@ class LLM:
             extra = {"reasoning_effort": self.cfg.llm.writer_reasoning} if self.cfg.llm.writer_reasoning else {}
             if "qwen" in (model or ""):                  # Qwen3 takes "none" or "default", not "low": left on, its hidden thinking uses the whole answer
                 extra = {"reasoning_effort": "none"}
+            name = model or self.cfg.llm.writer_model
+            need = max_tokens + sum(len(str(m.get("content") or "")) for m in messages) // 4 + len(system) // 4
+            stop = groq_budget.why_not(name, need, who, cap, daily=getattr(self.cfg.llm, "groq_daily_tokens", groq_budget.DAILY) or groq_budget.DAILY)
+            if stop:                                     # never spend the last of the free allowance (a refused request mid-Short wastes the rest)
+                raise LLMUnavailable(stop)
             return await self._openai(messages, system, tools, max_tokens, temperature, base=self.cfg.llm.writer_base_url,
-                                      model=model or self.cfg.llm.writer_model, key=secret("GROQ_API_KEY"), extra=extra)
+                                      model=name, key=secret("GROQ_API_KEY"), extra=extra, who=who)
         return await self._anthropic(messages, system, tools, max_tokens, temperature)
 
-    async def _openai(self, messages, system, tools, max_tokens, temperature, *, base: str | None = None, model: str | None = None, key: str | None = None, extra: dict | None = None) -> dict:
+    async def _openai(self, messages, system, tools, max_tokens, temperature, *, base: str | None = None, model: str | None = None, key: str | None = None, extra: dict | None = None,
+                      who: str = "") -> dict:
         body: dict[str, Any] = {"model": model or self.cfg.llm.local_model or "local-model", "max_tokens": max_tokens, "temperature": temperature,
                                 "messages": ([{"role": "system", "content": system}] if system else []) + _to_openai(messages)}
         if tools:
@@ -118,7 +130,9 @@ class LLM:
         r.raise_for_status()
         body_out = r.json()
         if key:
-            self.used += int((body_out.get("usage") or {}).get("total_tokens") or 0)
+            spent = int((body_out.get("usage") or {}).get("total_tokens") or 0)
+            self.used += spent
+            groq_budget.record(body["model"], spent, who)
         msg = body_out["choices"][0]["message"]
         calls = [{"id": tc.get("id") or f"call_{i}", "name": tc["function"]["name"],
                   "args": parse_json(tc["function"].get("arguments") or "{}") or {}}

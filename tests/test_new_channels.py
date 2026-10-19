@@ -46,3 +46,34 @@ def test_build_gives_new_channels_their_own_director_and_keeps_the_lead():
     ag = youtube.build_agents({"channels": [{}, {"id": "cosmicroadster", "name": "Cosmic Roadster", "director": "Cosmic Roadster Director",
                                                   "writer_model": "openai/gpt-oss-20b"}]}, Config())
     assert isinstance(ag["Know IDK Things Director"], youtube.Lead) and isinstance(ag["Cosmic Roadster Director"], youtube.ChannelDirector)
+
+
+def test_groq_budget_stops_before_the_free_limit_and_at_a_channels_share():
+    from vision.services import groq_budget
+    groq_budget.record("openai/gpt-oss-20b", 100_000, "cosmicroadster")
+    assert groq_budget.why_not("openai/gpt-oss-20b", 15_000, "cosmicroadster", cap=60_000)                 # past its own share
+    assert not groq_budget.why_not("openai/gpt-oss-20b", 15_000, "knowbodythings", cap=60_000)
+    groq_budget.record("openai/gpt-oss-20b", 80_000, "knowbodythings")
+    assert "nearly used" in groq_budget.why_not("openai/gpt-oss-20b", 15_000, "knowbodythings", cap=0)     # 95 % of the model's day
+    assert not groq_budget.why_not("openai/gpt-oss-120b", 15_000)                                          # every model has its own day
+
+
+def test_light_steps_go_local_first_and_fall_back_to_groq():
+    calls = []
+
+    class LLM:
+        def __init__(self, up):
+            self.up = up
+
+        async def local_available(self):
+            return self.up
+
+        async def json(self, prompt, **kw):
+            calls.append((kw.get("tier"), kw.get("model"), kw.get("who")))
+            return ["a"] if kw.get("tier") == "local" and self.up else ["g"]
+
+    w = youtube.OwnWriter(LLM(True), "openai/gpt-oss-20b", "cosmicroadster", 60_000, "local")
+    assert asyncio.run(w.json("x", tier="writer", light=True)) == ["a"] and calls[-1][0] == "local"
+    w = youtube.OwnWriter(LLM(False), "openai/gpt-oss-20b", "cosmicroadster", 60_000, "local")
+    assert asyncio.run(w.json("x", tier="writer", light=True)) == ["g"] and calls[-1] == ("writer", "openai/gpt-oss-20b", "cosmicroadster")
+    assert asyncio.run(w.json("x", tier="writer")) == ["g"]                    # a script is never sent to the local model

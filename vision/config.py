@@ -44,6 +44,7 @@ class LLMConfig(BaseModel):
     cloud_model: str = ""
     writer_base_url: str = "https://api.groq.com/openai/v1"
     writer_model: str = ""
+    groq_daily_tokens: int = 200000   # Groq's free tokens a day per model; VISION stops at 95 % of it (services/groq_budget.py)
     writer_reasoning: str = ""      # low | medium | high for a hosted reasoning model; blank = not sent
 
 

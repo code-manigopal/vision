@@ -938,6 +938,11 @@ class StoryScout(Crew):
         ch, store = self.ch, ctx["store"]
         L, now = long_of(ch), time.strftime("%H:%M")
         shorts, longs = made_today(store, ch, "short"), made_today(store, ch, "long")
+        if ch.get("writer_model") and ch.get("groq_daily_cap"):      # a new channel: no Short is started without Groq room for a whole one
+            from ..services import groq_budget
+            stop = groq_budget.why_not(ch["writer_model"], 15000, ch["id"], int(ch["groq_daily_cap"]))
+            if stop:
+                return AgentResult("idle", "WRITER BUDGET", stop)
         mix = mix_of(store, ch)
         short_due = (next_category(mix, made_by_category(store, ch)) is not None) if mix else shorts < ch["shorts_per_day"]
         long_due = bool(L["enabled"]) and longs < L["per_day"]
@@ -1383,7 +1388,7 @@ class KeywordGenerator(Crew):
                 got = await ctx["llm"].json(
                     "For each numbered line of this story give one stock-footage search of 2-4 words: a concrete thing a camera could film that fits the "
                     "line (\"woman staring out rainy window\", not \"sadness\"). No names, no text on screen. "
-                    f'Answer as a JSON list of exactly {len(batch)} strings, in order.\n\n{listing}', tier="writer", max_tokens=1800)
+                    f'Answer as a JSON list of exactly {len(batch)} strings, in order.\n\n{listing}', tier="writer", max_tokens=1800, light=True)
             except Exception:
                 pass                              # no model: plain keywords from the line itself
             ok = isinstance(got, list) and len(got) == len(batch)
@@ -1414,7 +1419,7 @@ class KeywordGenerator(Crew):
                     "This narration will have a few sound effects. For each numbered line name the one sound the moment truly calls for, or \"none\". "
                     f"Most lines need none: a sound belongs only where it makes a listener feel that moment more. At most {max(1, len(batch) // 5)} "
                     "lines in all, and never two lines in a row. Choose only from: " + "; ".join(f"{k} ({CUES[k]})" for k in kinds) + ". "
-                    f'Answer as a JSON list of exactly {len(batch)} strings, in order.\n\n{listing}', tier="writer", max_tokens=1200)
+                    f'Answer as a JSON list of exactly {len(batch)} strings, in order.\n\n{listing}', tier="writer", max_tokens=1200, light=True)
             except Exception:
                 pass                              # no model: no sound effects, which is always safe
             if not (isinstance(got, list) and len(got) == len(batch)):
@@ -1480,7 +1485,7 @@ class SEOStrategist(Crew):
             + ("Being watched most on YouTube today and touching this video's subject (its angle may shape a tag or the title only if it truly "
                "connects; never force it, never name a channel or a person): " + "; ".join(watching) + "\n" if watching else "")
             + 'Answer as {"title": "...", "lead": "...", "tags": ["..."], "hashtags": ["..."]}.\n\n'
-            f"Working title: {before}\nKind: {kind(job)}\nHow it opens:\n{' '.join(job['script'].split()[:150])}", tier="writer", max_tokens=900)
+            f"Working title: {before}\nKind: {kind(job)}\nHow it opens:\n{' '.join(job['script'].split()[:150])}", tier="writer", max_tokens=900, light=True)
         if not isinstance(d, dict):
             return AgentResult("done", "KEPT", f"No packaging from the model; the writer's title stands: “{before}”")
         title = " ".join(str(d.get("title") or "").split()).strip("\"“” ")
@@ -1659,7 +1664,7 @@ class FootageGenerator(Crew):
             return ""
         most = 2 if group == "story" else max(1, round(len(beats) * 0.4))     # a story keeps its footage: a scene or two at most
         try:
-            got = await ctx["llm"].json(scenes.ask([b["text"] for b in beats], {group}, most), tier="writer", max_tokens=1500)
+            got = await ctx["llm"].json(scenes.ask([b["text"] for b in beats], {group}, most), tier="writer", max_tokens=1500, light=True)
         except Exception:  # noqa: BLE001 - no answer: footage only
             return ""
         picked, used = [], set()
@@ -2208,35 +2213,50 @@ class Lead(Director):
 
 class OwnWriter:
     """The LLM as a channel with its own Groq model sees it: a "writer" request without a model goes to `model` (each Groq model has its own
-    daily allowance, so the new channels do not use up Know IDK Things' writer). Everything else passes through."""
+    daily allowance, so the new channels do not use up Know IDK Things' writer), counted against the channel's own share `cap` (tokens a UTC
+    day, services/groq_budget.py). With `light` ("local"), a small structured step (footage searches, sound cues, diagram picks, SEO tags:
+    calls marked light=True) goes to the local model first and to Groq only if that fails (Mani, 2026-10-19: the hybrid)."""
 
-    def __init__(self, llm, model: str) -> None:
-        self._llm, self._model = llm, model
+    def __init__(self, llm, model: str, who: str = "", cap: int = 0, light: str = "") -> None:
+        self._llm, self._model, self._who, self._cap, self._light = llm, model, who, cap, light
 
     def __getattr__(self, name):
         return getattr(self._llm, name)
 
+    def _kw(self, kw: dict) -> dict:
+        if kw.get("tier") == "writer":
+            kw.setdefault("model", self._model)
+            if kw["model"] is None:
+                kw["model"] = self._model
+            kw.update(who=self._who, cap=self._cap)
+        return kw
+
     async def json(self, prompt: str, **kw):
-        if kw.get("tier") == "writer" and not kw.get("model"):
-            kw["model"] = self._model
-        return await self._llm.json(prompt, **kw)
+        if kw.pop("light", False) and self._light == "local" and kw.get("tier") == "writer":
+            try:
+                if await self._llm.local_available():
+                    got = await self._llm.json(prompt, **{**kw, "tier": "local", "model": None})
+                    if got not in (None, [], {}):
+                        return got
+            except Exception:  # noqa: BLE001 - the local model is a convenience: Groq answers instead
+                pass
+        return await self._llm.json(prompt, **self._kw(kw))
 
     async def complete(self, prompt: str, **kw):
-        if kw.get("tier") == "writer" and not kw.get("model"):
-            kw["model"] = self._model
-        return await self._llm.complete(prompt, **kw)
+        kw.pop("light", None)
+        return await self._llm.complete(prompt, **self._kw(kw))
 
 
 class ChannelDirector(Director):
     """A Director whose crew writes with the channel's own Groq model (`writer_model`)."""
 
-    def __init__(self, name: str, writer_model: str = "", **kw) -> None:
+    def __init__(self, name: str, writer_model: str = "", who: str = "", cap: int = 0, light: str = "", **kw) -> None:
         super().__init__(name, **kw)
-        self.writer_model = writer_model
+        self.writer_model, self.who, self.cap, self.light = writer_model, who, cap, light
 
     async def run(self, ctx: dict) -> AgentResult:
         if self.writer_model and ctx.get("llm"):
-            ctx = {**ctx, "llm": OwnWriter(ctx["llm"], self.writer_model)}
+            ctx = {**ctx, "llm": OwnWriter(ctx["llm"], self.writer_model, self.who, self.cap, self.light)}
         return await super().run(ctx)
 
 
@@ -2250,7 +2270,8 @@ def build_agents(options: dict, cfg) -> dict[str, SubAgent]:
         else:
             d = dict(crew=crew(ch), reporter="Analytics Manager", again=more_today(ch))
         out[ch["director"]] = (Lead(ch["director"], peers=chs[1:], note=f"runs {ch['name']}", **d) if n == 0 and len(chs) > 1
-                               else ChannelDirector(ch["director"], writer_model=ch.get("writer_model") or "", note=f"runs {ch['name']}", **d) if ch.get("writer_model")
+                               else ChannelDirector(ch["director"], writer_model=ch.get("writer_model") or "", who=ch["id"], cap=int(ch.get("groq_daily_cap") or 0),
+                                                    light=ch.get("light_tier") or "", note=f"runs {ch['name']}", **d) if ch.get("writer_model")
                                else Director(ch["director"], note=f"runs {ch['name']}", **d))
     return out
 

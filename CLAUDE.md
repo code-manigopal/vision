@@ -35,7 +35,7 @@ bash scripts/setup.sh                     # venv + deps + .env from template + c
 .venv/bin/python -m vision sfx            # add 3 sound effects per kind to assets/sfx/ (or: sfx whoosh 5)
 .venv/bin/python -m vision visa list      # Visa Watch accounts: add | list | update | pause | resume | remove | check <id>
 .venv/bin/python -m vision ebooks list    # E-books Manager: list | published <book> [ASIN] | redraw <book> <page>
-.venv/bin/python -m pytest -q             # 528 tests, all external services mocked
+.venv/bin/python -m pytest -q             # 530 tests, all external services mocked
 bash scripts/install_launchagent.sh       # auto-start at login + restart on crash
 tail -f logs/vision.log
 ```
@@ -447,6 +447,12 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   templates; body = compare, flow, cycle, number, myth, checklist (`BODY_ADVICE` refuses advice words); geography = compare, number, flow and `map`
   (`masters/maps.py`: Natural Earth 1:110m countries, public domain, in `assets/maps/` (git-ignored, `maps.fetch`); highlighted countries must be named in the
   spoken line; the camera eases to them, they turn gold with name tags). Their Gmail inboxes go into the Email Manager only after all channels are made.
+  **Groq budget and the hybrid (Mani, 2026-10-19: "make sure groq free limit not exhausted"):** `services/groq_budget.py` counts every Groq answer's
+  tokens per model and per caller in `data/groq_usage.json` (one UTC day; tests point it at a temp file in conftest) and `llm.chat` refuses a writer request
+  that would pass 95 % of `llm.groq_daily_tokens` (200,000) for that model, or a channel's `groq_daily_cap` (LLMUnavailable, a wait). A new channel's Scout
+  starts no Short without ~15,000 tokens of room (label WRITER BUDGET). Caps: Cosmic Roadster and Know Body Things 60,000 each on gpt-oss-20b, Camping on
+  Satellites 50,000 on qwen (the rest stays for Mani Market's lessons). `light_tier: local`: the four small JSON steps (footage searches, sound cues, SEO tags,
+  diagram picks; calls marked `light=True`) go to LM Studio first and to Groq only if it is down or answers nothing; scripts and premises always use Groq.
   **No sexual content (Mani, 2026-10-18: "no more such contents"):** `SEXUAL` (sex, lust, fantasies, role-play, nude, one-night stand...) rejects a story
   from any source by rule before the model sees it; the screening prompt also rejects one where sex or sexual desire is any real part; a written script
   that matches is sent back to be rewritten. Strict on purpose (a harmless "aroused from sleep" also stops a story).

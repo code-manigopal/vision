@@ -233,6 +233,8 @@ masters:
           name: Cosmic Roadster
           director: Cosmic Roadster Director
           writer_model: openai/gpt-oss-20b       # its own Groq model (own daily allowance)
+          groq_daily_cap: 60000          # its share of that model's free tokens a UTC day; no Short starts without room for one (services/groq_budget.py)
+          light_tier: local              # footage searches, sound cues, SEO and diagram picks on the local model first, Groq if that fails
           daily_mix: {space: 2}           # Shorts only, 2 a day to start
           mix_auto: false
           originals: true
@@ -267,6 +269,8 @@ masters:
           name: Know Body Things
           director: Know Body Things Director
           writer_model: openai/gpt-oss-20b       # its own Groq model (own daily allowance)
+          groq_daily_cap: 60000          # its share of that model's free tokens a UTC day; no Short starts without room for one (services/groq_budget.py)
+          light_tier: local              # footage searches, sound cues, SEO and diagram picks on the local model first, Groq if that fails
           daily_mix: {body: 2}           # Shorts only, 2 a day to start
           mix_auto: false
           originals: true
@@ -300,6 +304,8 @@ masters:
           name: Camping on Satellites
           director: Camping on Satellites Director
           writer_model: qwen/qwen3.8-27b       # its own Groq model (own daily allowance)
+          groq_daily_cap: 50000          # its share of that model's free tokens a UTC day; no Short starts without room for one (services/groq_budget.py)
+          light_tier: local              # footage searches, sound cues, SEO and diagram picks on the local model first, Groq if that fails
           daily_mix: {geography: 2}           # Shorts only, 2 a day to start
           mix_auto: false
           originals: true
