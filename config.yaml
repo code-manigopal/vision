@@ -182,7 +182,7 @@ masters:
           backup_folder: confessions_everywhere_yt   # on: each posted video (and its cover) is copied to Drive, Vision/YouTube/<channel name>/Shorts or /Videos (this older top-level folder is moved in there once), checked, then removed from the Mac; sign in once at /auth/gdrive/login?account=drive-backup
           director: Confessions Everywhere Director
           shorts_per_day: 4              # a run keeps making Shorts, one after another, until the day's number is reached or the stories run out
-          diagrams: []                   # kinds whose Shorts may have animated diagram scenes (HyperFrames): science, money, story; off until Mani approves the samples
+          diagrams: [science, money, story]   # kinds whose Shorts may have animated diagram scenes (HyperFrames); approved by Mani 2026-10-18
           daily_mix: {science: 2, story: 1, money: 1}   # Mani, 2026-10-18: the day's Shorts by category (story = real, classic or original confession; money = finance); replaces shorts_per_day
           mix_auto: true                 # once a week the Analytics Manager re-splits the slots by YouTube Analytics (share watched x views + subscribers, last 28 days), at least 1 each; false = keep daily_mix
           subreddits: [confession, offmychest, TrueOffMyChest]   # needs REDDIT_CLIENT_ID / REDDIT_CLIENT_SECRET; or drop .txt files in inbox/confessions/confessions/
@@ -242,7 +242,7 @@ masters:
           free_memory: true              # clone only: LM Studio's model is unloaded while the voice is made, then loaded again
           short_voice_speed: 1.2         # clone only: Shorts are spoken a little slower than long videos (which stay at 1.3, the pace Mani approved)
           reword: false                  # false = the template wording is what Mani approved, said as written | true = the writer model may rephrase lines (numbers are guarded)
-          animated: false                # true = the slides move with the voice (HyperFrames: count-ups, bars, rows lit as they are spoken); needs `python -m vision hyperframes`; off until Mani approves the samples
+          animated: true                 # the slides move with the voice and the presenter points and reacts (HyperFrames); needs `python -m vision hyperframes`; approved by Mani 2026-10-18
           captions: true                 # English captions burned into every video and Short (and captions.srt beside it); written by code beside each Tamil line, no model
           make_after: "23:00"            # a video is started only between these hours (a manual run ignores them)
           make_before: "02:30"           # ends before 03:00 so its voice (cloned model, ~5 GB) never runs beside Confessions' long video (Mani, 2026-10-14)

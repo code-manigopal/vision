@@ -434,8 +434,8 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   `mix_auto: true`: once a week `resplit` shares the same total by score, at least 1 each, a category with under `mix_min_videos` (6) measured
   Shorts keeps its slots; kept in kv `yt_state` `<channel>:mix`, a change is logged and sent to Telegram (a `reminder` event) with the figures.
   The report's "latest" is the last made (it followed the store's save order and flipped).
-  **Animated diagrams (Mani, 2026-10-18; `masters/scenes.py`, HyperFrames):** channel option `diagrams` (kinds: science, money, story; config [] until
-  Mani approves the samples). The Footage Generator asks the model which lines a diagram explains better than footage (at most 40 % of a Short's
+  **Animated diagrams (Mani, 2026-10-18; `masters/scenes.py`, HyperFrames):** channel option `diagrams` (kinds: science, money, story; all three on
+  in config, Mani approved the samples 2026-10-18). The Footage Generator asks the model which lines a diagram explains better than footage (at most 40 % of a Short's
   lines, never line 0 or the outro; a story at most 2) and for a template + short labels as JSON, never HTML; `scenes.check` keeps a scene only if
   the template is known for that kind, labels are short and every figure on it is one the spoken line says (finance: nothing matching `PROMISE` /
   `TOLD_PROMISE`, a growth curve has no figures and always says "Illustration, not a promise", breakdown shares only when the line gives them all
@@ -545,7 +545,7 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   (`nse.PARSER`, bump it when a parser change can turn "no figures" into figures; no `parser` key counts as old) is ignored (`market_crew.done_at`), so ICICIPRULI Q2 FY27 is filmed on the next
   run; the same goes for "too few ratios" analysis skips.
   **Animated slides and presenter (HyperFrames, Mani 2026-10-18; `services/hyperframes.py`, `masters/slides_motion.py`):** channel option `animated`
-  (config false until Mani approves the samples). `slides.assemble(..., motion={"deck", channel, source, tag, top})` renders the whole slides track as
+  (config true: Mani approved the samples, 2026-10-18). `slides.assemble(..., motion={"deck", channel, source, tag, top})` renders the whole slides track as
   one HyperFrames page timed by each line's seconds: table rows come in on their line (cells fade only: a transformed `<tr>` breaks the table), the
   spoken row is lit (rows already shown dimmed), this year's figure counts up from last year's in steps that end on the deck's own text exactly
   (`steps`, keeps commas/Indian grouping, never a figure the deck lacks; "n/a" is shown, not counted), the change chip appears after, last year and this
