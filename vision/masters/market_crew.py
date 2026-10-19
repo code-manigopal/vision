@@ -683,8 +683,10 @@ class SlideEditor(MCrew):
         pngs, faces = got[0], got[1]
         if plan and len(got) > 2:
             caps = {"plan": plan, "pngs": got[2]}
+        # channel option `animated`: the slides move with the voice (HyperFrames, slides_motion); any trouble and the pictures are used as before
+        motion = {"deck": job["deck"], "channel": self.ch["name"], **frame} if self.ch.get("animated") else None
         return await asyncio.to_thread(slides.assemble, work, pngs, lines, job["spoken"], work / "final.mp4", faces=faces, pause=PAUSE, captions=caps,
-                                       **({"size": slides.TALL} if tall else {}))
+                                       **({"size": slides.TALL} if tall else {}), motion=motion)
 
     async def cover(self, job: dict, name: str, symbol: str = "", label: str = "") -> tuple[str, dict | None]:
         """thumb.jpg for a long video: the hook from its own figures on the channel's slide look, with the company's Commons logo when it has one (services/logos.py).

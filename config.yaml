@@ -241,6 +241,7 @@ masters:
           free_memory: true              # clone only: LM Studio's model is unloaded while the voice is made, then loaded again
           short_voice_speed: 1.2         # clone only: Shorts are spoken a little slower than long videos (which stay at 1.3, the pace Mani approved)
           reword: false                  # false = the template wording is what Mani approved, said as written | true = the writer model may rephrase lines (numbers are guarded)
+          animated: false                # true = the slides move with the voice (HyperFrames: count-ups, bars, rows lit as they are spoken); needs `python -m vision hyperframes`; off until Mani approves the samples
           captions: true                 # English captions burned into every video and Short (and captions.srt beside it); written by code beside each Tamil line, no model
           make_after: "23:00"            # a video is started only between these hours (a manual run ignores them)
           make_before: "02:30"           # ends before 03:00 so its voice (cloned model, ~5 GB) never runs beside Confessions' long video (Mani, 2026-10-14)

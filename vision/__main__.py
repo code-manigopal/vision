@@ -2,6 +2,7 @@
 Quick checks:   python -m vision check      (validates config and keys, no server)
                 python -m vision traffic "Toronto"
                 python -m vision bgm [mood] [count]   (fetch background music into assets/bgm/)
+                python -m vision hyperframes          (GSAP + fonts for the animated pages, and a check)
                 python -m vision fonts                (fetch the ten caption fonts and Nunito Sans into assets/fonts/)
                 python -m vision sfx [kind] [count]   (fetch sound effects into assets/sfx/)
                 python -m vision visa add|list|update|pause|resume|remove|check   (Visa Watch accounts)
@@ -69,6 +70,13 @@ def main() -> int:
         load_config()
         print(ebooks.cli(args[1:]))
         return 0
+    if args[:1] == ["hyperframes"]:    # python -m vision hyperframes: GSAP and the fonts the animated pages use, then a check
+        from .services import fonts, hyperframes
+        got = asyncio.run(hyperframes.fetch()) + asyncio.run(fonts.fetch())
+        print("fetched: " + (", ".join(got) or "nothing new"))
+        print(f"Node 22+: {'yes' if hyperframes.node_ok() else 'NO (brew install node)'} · GSAP: {'yes' if (hyperframes.HOME / 'gsap.min.js').is_file() else 'MISSING'}"
+              f" · ready: {'yes' if hyperframes.ready() else 'no'}")
+        return
     if args[:1] == ["fonts"]:    # python -m vision fonts: download the caption fonts to assets/fonts/
         from .services import fonts
         for n in asyncio.run(fonts.fetch()):

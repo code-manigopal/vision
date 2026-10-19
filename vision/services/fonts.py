@@ -31,7 +31,10 @@ _F = {"Anton": ("Anton-Regular.ttf", "ofl/anton", "SIL OFL 1.1"),
       "Abril Fatface": ("AbrilFatface-Regular.ttf", "ofl/abrilfatface", "SIL OFL 1.1")}
 FONTS = [{"name": n, "file": f, "url": f"{BASE}{p}/{f}", "license": lic} for n, (f, p, lic) in _F.items()]
 # not a caption face: Mani Market Tamil's small disclaimer line on its Shorts (variable font; the slide page loads it from this file)
-UI = [{"name": "Nunito Sans", "file": "NunitoSans.ttf", "url": BASE + "ofl/nunitosans/NunitoSans%5BYTLC,opsz,wdth,wght%5D.ttf", "license": "SIL OFL 1.1"}]
+UI = [{"name": "Nunito Sans", "file": "NunitoSans.ttf", "url": BASE + "ofl/nunitosans/NunitoSans%5BYTLC,opsz,wdth,wght%5D.ttf", "license": "SIL OFL 1.1"},
+      # the slides' faces, as files for HyperFrames pages (which load nothing from the internet)
+      {"name": "Baloo Thambi 2", "file": "BalooThambi2.ttf", "url": BASE + "ofl/baloothambi2/BalooThambi2%5Bwght%5D.ttf", "license": "SIL OFL 1.1"},
+      {"name": "JetBrains Mono", "file": "JetBrainsMono.ttf", "url": BASE + "ofl/jetbrainsmono/JetBrainsMono%5Bwght%5D.ttf", "license": "SIL OFL 1.1"}]
 ALL = FONTS + UI
 
 _L = lambda font, fill, highlight: {"font": font, "fill": fill, "highlight": highlight}

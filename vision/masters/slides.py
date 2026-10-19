@@ -502,10 +502,12 @@ def _png_list(entries: list[tuple[Path, float]], out: Path) -> Path:
 
 
 def assemble(work: Path, pngs: list[Path], lines: list[dict], spoken: list[Path], out: Path, faces: dict | None = None, pause: float = 0.15,
-             size: tuple[int, int] = (W, H), captions: dict | None = None) -> Path:
+             size: tuple[int, int] = (W, H), captions: dict | None = None, motion: dict | None = None) -> Path:
     """Join the pictures and the spoken lines into the video. `spoken` holds one audio file per line; a line with `hold` stays at least that many seconds.
     `captions` = {"plan": caption_plan(lines), "pngs": the strips pictures() gave back}: each line's chunks are timed across that line's own audio, laid over the
-    video, and written beside it as an .srt (captions.srt next to final.mp4). Left out, the video is made exactly as before."""
+    video, and written beside it as an .srt (captions.srt next to final.mp4). Left out, the video is made exactly as before.
+    `motion` = {"deck": deck, **the page's frame (channel, source, tag, top)}: the slides are rendered animated by HyperFrames (slides_motion) in place of
+    the pictures; if that cannot be done the pictures are used, as before. The presenter and captions go on top either way."""
     wavs, secs = [], []
     for i, a in enumerate(spoken):                      # every line as a wav with its pause, so its length is exact
         wavs.append(work / f"l{i:03d}.wav")
@@ -515,27 +517,41 @@ def assemble(work: Path, pngs: list[Path], lines: list[dict], spoken: list[Path]
     voice = work / "voice.wav"
     run(["-f", "concat", "-safe", "0", "-i", str(work / "voice.txt"), "-c", "copy", str(voice)])
     n, args, graph, at, last = len(lines), [], [], 0.0, "0:v"
-    for i, png in enumerate(pngs):                      # each picture stays for its line, plus the wipe into the next
-        args += ["-loop", "1", "-framerate", str(FPS), "-t", f"{secs[i] + (WIPE if i < n - 1 else 0):.3f}", "-i", str(png)]
-    for i in range(1, n):                               # a new slide fades in; a new thing on the same slide is wiped in
-        at += secs[i - 1]
-        kind = "wiperight" if lines[i]["slide"] == lines[i - 1]["slide"] else "fade"
-        graph.append(f"[{last}][{i}:v]xfade=transition={kind}:duration={WIPE}:offset={at:.3f}[x{i}]")
-        last = f"x{i}"
+    moving = None
+    if motion:
+        from ..services.hyperframes import RenderFailed
+        from . import slides_motion
+        try:
+            moving = slides_motion.render(motion["deck"], lines, secs, work / "motion.mp4", tall=size == TALL,
+                                          **{k: v for k, v in motion.items() if k in ("channel", "source", "tag", "top")})
+        except RenderFailed as e:
+            print(f"animated slides not used: {e}")
+    if moving:
+        args += ["-i", str(moving)]
+        v_in = 1
+    else:
+        v_in = n
+        for i, png in enumerate(pngs):                      # each picture stays for its line, plus the wipe into the next
+            args += ["-loop", "1", "-framerate", str(FPS), "-t", f"{secs[i] + (WIPE if i < n - 1 else 0):.3f}", "-i", str(png)]
+        for i in range(1, n):                               # a new slide fades in; a new thing on the same slide is wiped in
+            at += secs[i - 1]
+            kind = "wiperight" if lines[i]["slide"] == lines[i - 1]["slide"] else "fade"
+            graph.append(f"[{last}][{i}:v]xfade=transition={kind}:duration={WIPE}:offset={at:.3f}[x{i}]")
+            last = f"x{i}"
     args += ["-i", str(voice)]
     if faces:
         args += ["-f", "concat", "-safe", "0", "-i", str(_face_list(mouths(voice), faces, work / "face.txt"))]
-        graph.append(f"[{n + 1}:v]fps={FPS}[face];[{last}][face]overlay={size[0] - FACE - 40}:{size[1] - FACE}:eof_action=repeat[p]")
+        graph.append(f"[{v_in + 1}:v]fps={FPS}[face];[{last}][face]overlay={size[0] - FACE - 40}:{size[1] - FACE}:eof_action=repeat[p]")
         last = "p"
     if captions:
         timed = [list(zip(chunks, caption_times(chunks, probe(a), secs[i]))) if chunks else [] for i, (chunks, a) in enumerate(zip(captions["plan"], spoken))]
         strips = captions["pngs"]
         entries = [(strips[c], d) if line else (strips[""], secs[i]) for i, line in enumerate(timed) for c, d in (line or [("", 0)])]
         args += ["-f", "concat", "-safe", "0", "-i", str(_png_list(entries, work / "captions.txt"))]
-        graph.append(f"[{n + 1 + (1 if faces else 0)}:v]fps={FPS},format=rgba[cap];[{last}][cap]overlay=0:{CAP[size == TALL]['top']}:eof_action=repeat[c]")
+        graph.append(f"[{v_in + 1 + (1 if faces else 0)}:v]fps={FPS},format=rgba[cap];[{last}][cap]overlay=0:{CAP[size == TALL]['top']}:eof_action=repeat[c]")
         last = "c"
         _srt(timed, secs, out.with_name("captions.srt" if out.name == "final.mp4" else out.stem + ".srt"))
     graph.append(f"[{last}]format=yuv420p[v]")
-    run([*args, "-filter_complex", ";".join(graph), "-map", "[v]", "-map", f"{n}:a", "-t", f"{sum(secs):.3f}", "-r", str(FPS),
+    run([*args, "-filter_complex", ";".join(graph), "-map", "[v]", "-map", f"{v_in}:a", "-t", f"{sum(secs):.3f}", "-r", str(FPS),
          "-c:v", "libx264", "-crf", "20", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", str(out)])
     return out
