@@ -95,3 +95,24 @@ def test_build_names_assets_by_their_real_extension(tmp_path):
     page, assets = motion.build(plan, [], kind="body", seconds=10.4, images={}, icons={}, voice=tmp_path / "v.wav",
                                 music=tmp_path / "song.ogg", sfx={"whoosh": tmp_path / "w.wav"})
     assert "assets/music.ogg" in page and "music.ogg" in assets and "whoosh.wav" in assets
+
+
+def test_a_flag_is_the_named_countrys_own_flag(monkeypatch, tmp_path):
+    from vision.masters import maps
+    from vision.services import visuals
+    monkeypatch.setattr(maps, "known", lambda name: {"nepal": "Nepal"}.get(name.lower()))
+    asked = []
+
+    async def flag(c, country):
+        asked.append(country)
+        return {"path": str(tmp_path / "np.png"), "credit": "Commons", "page": "p", "license": "Public domain", "title": "Flag of Nepal"}
+
+    async def picture(c, kind, subject):
+        raise AssertionError("a flag is never searched for")
+    monkeypatch.setattr(visuals, "flag", flag)
+    monkeypatch.setattr(visuals, "picture", picture)
+    bs = [{"text": "Nepal has the only flag that is not a rectangle.", "dur": 3.0}, {"text": "A single flag.", "dur": 2.0}]
+    answer = {"lines": [{"line": 0, "scenes": [{"type": "photo", "image": "flag of Nepal", "tag": "Nepal flag"}]},
+                        {"line": 1, "scenes": [{"type": "photo", "image": "flag", "tag": "single flag"}]}]}
+    got = asyncio.run(motion.plan_short(PlanLLM(answer), bs, "geography", "Follow", None))
+    assert asked == ["Nepal"] and [s["image"] for s in got["plan"]] == ["flag of Nepal"]

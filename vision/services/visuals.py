@@ -29,7 +29,9 @@ MIN_SIDE = 600
 GAP = 1.0
 STOP = {"the", "a", "an", "of", "and", "in", "on", "from", "to", "for", "with", "how", "why", "what", "is", "are", "human"}
 GOOD = ("global", "full", "view", "true color", "true colour", "natural color", "enhanced color", "portrait", "juno", "hubble", "cassini", "webb")
-BAD = ("voyager", "pioneer", "galileo", "black and white", "filter", "infrared", "ultraviolet", "spectr", "artist", "concept", "illustration", "diagram", "chart", "conference", "briefing", "launch", "team")
+BAD = ("voyager", "pioneer", "galileo", "black and white", "filter", "infrared", "ultraviolet", "spectr", "artist", "concept", "illustration", "diagram", "chart", "conference", "briefing", "launch", "team",
+       "logo", "insignia", "emblem", "meatball", "patch", "seal", "poster", "banner", "flag", "sign", "tower", "pad", "facility", "building", "ceremony", "award",
+       "test stand", "install", "painting", "designer", "engineer", "technician", "worker", "employee", "mockup", "replica", "model")
 NO_PERSON = re.compile(r"patient|surgery|surgeon|operation|autopsy|corpse|cadaver", re.I)
 OK_LICENCE = re.compile(r"^(public domain|pd\b|pd-|cc0|cc[- ]by[- ](1\.0|2\.0|2\.5|3\.0|4\.0)\b)", re.I)
 IMG_EXT = ("jpg", "jpeg", "png", "webp")
@@ -114,10 +116,11 @@ def score(title: str, subject: str) -> float | None:
     """None when the title lacks a significant word of the subject; else a points total (higher is better)."""
     t = title.lower()
     need = words(subject)
-    if need and not all(w in t for w in need):
+    if need and not all(re.search(rf"\b{re.escape(w)}(s|es)?\b", t) for w in need):    # whole words: "fabric" is not in "fabrication"
         return None
-    s = sum(2 for g in GOOD if g in t) - sum(4 for b in BAD if re.search(rf"\b{b}", t))
-    return s - len(t) / 400
+    if any(re.search(rf"\b{b}", t) for b in BAD) and not any(re.search(rf"\b{b}", subject.lower()) for b in BAD):
+        return None                                     # a logo, a launch tower or a chart for "oxygen tank": no picture rather than a wrong one
+    return sum(2 for g in GOOD if g in t) - len(t) / 400
 
 
 async def _nasa_candidates(c: httpx.AsyncClient, subject: str) -> list[tuple[float, dict]]:

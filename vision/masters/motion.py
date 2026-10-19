@@ -501,7 +501,7 @@ def render(page: str, assets: dict[str, Path], out: Path) -> Path:
 # ---------- the Scene Planner ----------
 SHAPES = {
     "hook": '{"type": "hook", "title": "2-5 words from the line, a question if it is one", "hot": "one word of the title", "image": "the thing it is about"}',
-    "photo": '{"type": "photo", "image": "the real thing to show, e.g. Saturn / human heart / Nile River", "tag": "2-4 words from the line", "round": true for a planet or moon}',
+    "photo": '{"type": "photo", "image": "the real thing to show, e.g. Saturn / human heart / Nile River / flag of Nepal", "tag": "2-4 words from the line", "round": true for a planet or moon}',
     "text": '{"type": "text", "lines": ["1-3 words", "1-3 words"], "hot": "the key word"}',
     "number": '{"type": "number", "value": "a figure the line says, digits and unit, e.g. 460°C", "label": "2-5 words from the line"}',
     "gauge": '{"type": "gauge", "value": "a figure the line says", "label": "2-4 words"}',
@@ -512,6 +512,21 @@ SHAPES = {
     "icons": '{"type": "icons", "icons": ["2-4 icons from the list"], "labels": ["1-2 words each"]}',
     "map": '{"type": "map", "highlight": ["countries the line names"], "label": "2-5 words"}',
 }
+
+
+def _country(subject: str) -> str | None:
+    """The country a subject such as "flag of Nepal" names, as the map data spells it; None for a bare "flag"."""
+    from . import maps
+    toks = re.findall(r"[A-Za-z]+", re.sub(r"\bflags?\b|\bof\b|\bthe\b", " ", subject, flags=re.I))
+    for n in range(len(toks), 0, -1):                                   # "South Africa" before "Africa"
+        for i in range(len(toks) - n + 1):
+            try:
+                hit = maps.known(" ".join(toks[i:i + n]))
+            except Exception:  # noqa: BLE001 - no map data: no flag
+                return None
+            if hit:
+                return hit
+    return None
 
 
 def ask(beats: list[dict], kind: str, icon_names: list[str]) -> str:
@@ -551,7 +566,11 @@ async def plan_short(llm, beats: list[dict], kind: str, outro: str, client) -> d
     images: dict[str, Path] = {}
     credits: list[str] = []
     for subj in subjects[:6]:                                           # at most six pictures to find for one Short
-        rec = await visuals.picture(client, kind, subj)
+        if re.search(r"\bflags?\b", subj, re.I):                        # a flag is the country's own flag from Commons, never a search hit
+            country = _country(subj)
+            rec = await visuals.flag(client, country) if country else None
+        else:
+            rec = await visuals.picture(client, kind, subj)
         if rec:
             images[subj] = Path(rec["path"])
             line = f"{rec.get('title') or subj}: {rec.get('credit') or rec.get('source')} ({rec.get('license') or 'see page'}), {rec.get('page')}"

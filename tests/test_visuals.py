@@ -125,3 +125,11 @@ def test_icon_refuses_unknown(tmp_path, monkeypatch):
 
 def test_a_main_body_gets_its_hand_picked_photo_first():
     assert visuals.curated("Jupiter's Great Red Spot") == "PIA02873" and visuals.curated("Ceres") is None
+
+
+def test_a_title_that_only_resembles_the_subject_is_refused():
+    assert visuals.score("HALO fabrication - 2022", "fabric") is None                       # whole words only
+    assert visuals.score("Liquid oxygen tank installed at A-3 Test Stand", "oxygen tank") is None
+    assert visuals.score("NASA insignia on the hangar", "hangar") is None                    # a logo for a thing
+    assert visuals.score("Saturn true color", "Saturn") is not None
+    assert visuals.score("Rocky Mountains", "mountain") is not None                          # a plural still counts
