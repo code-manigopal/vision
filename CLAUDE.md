@@ -35,7 +35,7 @@ bash scripts/setup.sh                     # venv + deps + .env from template + c
 .venv/bin/python -m vision sfx            # add 3 sound effects per kind to assets/sfx/ (or: sfx whoosh 5)
 .venv/bin/python -m vision visa list      # Visa Watch accounts: add | list | update | pause | resume | remove | check <id>
 .venv/bin/python -m vision ebooks list    # E-books Manager: list | published <book> [ASIN] | redraw <book> <page>
-.venv/bin/python -m pytest -q             # 533 tests, all external services mocked
+.venv/bin/python -m pytest -q             # 547 tests, all external services mocked
 bash scripts/install_launchagent.sh       # auto-start at login + restart on crash
 tail -f logs/vision.log
 ```
@@ -457,6 +457,19 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   `llm.chat`, +4,000 max_tokens for its thinking), at most `openrouter_daily_requests` (45; a free key allows ~50) a UTC day counted in the same ledger, then
   the channel's Groq model. Chosen after a test (2026-10-19): Nemotron wrote an accurate Uranus script, qwen's geography script had two factual errors,
   the local 8B model wrote 83 choppy words with a wrong fact.
+  **Animated style, `style: motion` (Mani, 2026-10-19; built, OFF until he approves the samples; the channels keep the footage style meanwhile):** every
+  second of a Short is an animated scene (`masters/motion.py` over HyperFrames, 1080x1920): scene types hook, photo, text, number, gauge, compare, orbit, flow,
+  split, icons, map (geography only), outro; per-kind themes (space, body, geography), a moving background, word-by-word captions (`shorts_edit.timed_chunks`),
+  a flash and whoosh on each cut, an impact on reveals, music at 0.12, the channel's logo. **Scene Planner** (`motion.plan_short`, in the Footage Generator):
+  one strong-writer request (Nemotron first) returns scenes per line as JSON, never HTML; code keeps a scene only if (`motion.check`) every shown word is mostly
+  the line's own, every figure is said in the line (digits or number words: `said_numbers`), its picture was found and its icons are known; the model's line
+  numbers drift, so a scene that fails its line may land on a line within 2 that it is made of; the hook only on line 0; the outro is code's. A line with no
+  scene, or longer than `MAX_SCENE` (3.2 s) with one, gets a filler (the latest photo with the line's key words, else those words: `_filler`). Fewer real scenes
+  than half the lines (min 3) = the footage Short. **Asset Finder** (`services/visuals.py`): `picture(kind, subject)` space = NASA (hand-picked ids for the Sun
+  and planets, `CURATED`, then search), body/geography = Wikimedia Commons (free licences only), cached in `data/visuals/` with credits; `flag`, `icon` (Tabler,
+  `ICONS`, MIT) in `assets/icons/`. At most 6 pictures per Short. The Editor renders it (`_motion_cut`: the sentence files joined into one voice track); any
+  failure = the stock-footage cut (Footage Collector still runs for that). The record keeps `style`, `scenes` and the pictures' credits.
+  `scripts/short_sample.py <kind> <channel> --motion` makes one.
   **No sexual content (Mani, 2026-10-18: "no more such contents"):** `SEXUAL` (sex, lust, fantasies, role-play, nude, one-night stand...) rejects a story
   from any source by rule before the model sees it; the screening prompt also rejects one where sex or sexual desire is any real part; a written script
   that matches is sent back to be rewritten. Strict on purpose (a harmless "aroused from sleep" also stops a story).

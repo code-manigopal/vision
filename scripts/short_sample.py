@@ -5,6 +5,7 @@
     .venv/bin/python scripts/short_sample.py money
     .venv/bin/python scripts/short_sample.py story
     .venv/bin/python scripts/short_sample.py space cosmicroadster        (any channel: kind, then its id)
+    .venv/bin/python scripts/short_sample.py space cosmicroadster --motion   (the fully animated style, `style: motion`; -> ...-motion.mp4)
 
 Uses a throwaway database (data/shorts/_sample/sample.db), so nothing is counted, marked used, uploaded or scheduled; the channel's
 own settings from config.yaml, with the day's mix set to the one kind asked for and its animated diagrams switched on. Needs
@@ -29,11 +30,11 @@ from vision.services.llm import LLM  # noqa: E402
 OUT = ROOT / "data" / "shorts" / "_sample"
 
 
-async def main(kind: str, channel_id: str = "knowidk") -> None:
+async def main(kind: str, channel_id: str = "knowidk", style: str = "") -> None:
     cfg = load_config()
     raw = next(c for c in cfg.master("youtube").options["channels"] if c.get("id") == channel_id)
     ch = youtube.channel({**raw, "daily_mix": {kind: 1}, "mix_auto": False, "diagrams": [kind], "trends": False, "viewer_comments": False,
-                          "drive_folder": "", "classics": [] if kind != "story" else raw.get("classics", []), "quick": {"per_day": 0}})
+                          "drive_folder": "", **({"style": style} if style else {}), "classics": [] if kind != "story" else raw.get("classics", []), "quick": {"per_day": 0}})
     OUT.mkdir(parents=True, exist_ok=True)
     db = OUT / "sample.db"
     db.unlink(missing_ok=True)
@@ -47,11 +48,14 @@ async def main(kind: str, channel_id: str = "knowidk") -> None:
             if res.status == "error" or (agent.name == "Story Scout" and not ctx.get("job")):
                 return
     job = ctx["job"]
-    dest = OUT / f"short-{channel_id + '-' if channel_id != 'knowidk' else ''}{kind}.mp4"
+    dest = OUT / f"short-{channel_id + '-' if channel_id != 'knowidk' else ''}{kind}{'-' + style if style else ''}.mp4"
     shutil.copyfile(job["file"], dest)
     shutil.rmtree(job["dir"], ignore_errors=True)       # its working folder is under the channel's own; the sample keeps only the copy
-    print(f"\n{dest}  ({job['seconds']} s)  diagrams: {job.get('diagrams')}")
+    print(f"\n{dest}  ({job['seconds']} s)  diagrams: {job.get('diagrams')}  style: {job.get('style', 'footage')}")
+    for sc in (job.get("motion") or {}).get("plan", []):
+        print("  ", sc["beat"], sc["type"], {k: v for k, v in sc.items() if v and k not in ("beat", "type")})
 
 
 if __name__ == "__main__":                              # short_sample.py <kind> [channel id]: e.g. "space cosmicroadster"
-    asyncio.run(main(sys.argv[1] if len(sys.argv) > 1 else "science", sys.argv[2] if len(sys.argv) > 2 else "knowidk"))
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    asyncio.run(main(args[0] if args else "science", args[1] if len(args) > 1 else "knowidk", "motion" if "--motion" in sys.argv else ""))

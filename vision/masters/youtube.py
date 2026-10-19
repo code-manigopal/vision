@@ -51,7 +51,7 @@ CHANNEL = {"id": "knowidk", "name": "Know IDK Things", "director": "Know IDK Thi
            "privacy": "unlisted", "report_privacy": "approval", "category": "24", "synthetic_flag": True, "uploads_per_run": 4, "drive_folder": "", "voices": {}, "music": True, "music_volume": 0.12, "ending": "hopeful", "originals": False, "original_genres": ["life"],
            "publish_times": ["06:00", "12:00", "18:00", "00:00"], "create_after": "",
            "classics": [], "classics_per_day": 1, "playlists": {}, "viewer_comments": False, "cta": "", "long": {},
-           "motion": True, "caption_styles": True, "sfx": True, "sfx_volume": 0.35, "quick": {},
+           "motion": True, "style": "footage", "caption_styles": True, "sfx": True, "sfx_volume": 0.35, "quick": {},
            "double_down": True, "double_down_after": 12, "explore": 0.15, "trends": True, "trend_region": "US",
            "daily_mix": {}, "mix_auto": True, "mix_min_videos": 6, "mix_days": 28,
            "keep_local": False, "backup": False, "backup_folder": "", "diagrams": [], "lessons": False, "lesson_shorts": False, "lesson_channels": [], "transcripts_per_day": 10, "lesson_model": "", "lesson_tamil_model": "qwen/qwen3.8-27b"}
@@ -539,8 +539,10 @@ def save_record(store, ch: dict, job: dict) -> None:
         "chapters": [{"t": round(sum(x["dur"] for x in job["beats"][:n])), "heading": b["heading"]} for n, b in enumerate(job["beats"]) if b.get("heading")],
         "screenplay": [{"text": b["text"], "seconds": round(b["dur"], 2), "query": b["query"], "footage": (b.get("visual") or {}).get("page", ""),
                         **({"cue": b["cue"]} if b.get("cue") else {})} for b in job["beats"]],
-        "credits": sorted({b["visual"]["credit"] for b in job["beats"] if b.get("visual") and b["visual"].get("source") != "diagram"}),     # our own scenes need no credit
-        "diagrams": job.get("diagrams", [])})
+        "credits": (job["motion"]["credits"] if job.get("style") == "motion" else
+                    sorted({b["visual"]["credit"] for b in job["beats"] if b.get("visual") and b["visual"].get("source") != "diagram"})),     # our own scenes need no credit
+        "diagrams": job.get("diagrams", []), "style": job.get("style", "footage"),
+        "scenes": [{k: v for k, v in sc.items() if k in ("beat", "type", "image")} for sc in (job.get("motion") or {}).get("plan", [])] if job.get("style") == "motion" else []})
     store.kv_put(SEEN, job["key"], {"state": "done"})
 
 
@@ -1699,10 +1701,29 @@ class FootageGenerator(Crew):
         job["diagrams"] = [{"line": i, "template": sc["template"]} for i, sc in picked]
         return f"{len(picked)} animated diagram{'s' if len(picked) > 1 else ''} ({', '.join(sc['template'] for _, sc in picked)})"
 
+    async def _motion(self, ctx: dict, job: dict) -> str:
+        """`style: motion`: every second of the Short is an animated scene (motion.py). The model plans the scenes, code checks every word and
+        figure against its line and finds the pictures (services/visuals.py); the Editor renders them. Nothing usable = the stock cut."""
+        from . import motion
+        beats = job["beats"]
+        try:
+            async with self.client() as c:
+                got = await motion.plan_short(ctx["llm"], beats, kind(job), self.ch["outro"], c)
+        except Exception as e:  # noqa: BLE001 - no plan: the footage Short
+            return f"no scene plan ({str(e)[:80]}); stock footage"
+        real = [sc for sc in got["plan"] if sc["type"] != "outro"]
+        if len(real) < max(3, len([b for b in beats if b.get("kind") != "outro"]) // 2):
+            return f"scene plan too thin ({len(real)} scenes, {len(got['refused'])} refused); stock footage"
+        job["motion"] = {"plan": got["plan"], "images": {k: str(v) for k, v in got["images"].items()}, "icons": {k: str(v) for k, v in got["icons"].items()},
+                         "credits": got["credits"], "refused": len(got["refused"])}
+        return f"{len(real)} scenes planned, {len(got['images'])} pictures" + (f", {len(got['refused'])} refused by the checks" if got["refused"] else "")
+
     async def run(self, ctx: dict) -> AgentResult:
         job = ctx.get("job")
         if not job:
             return self.idle()
+        if self.ch.get("style") == "motion" and job.get("format") != "long" and ctx.get("llm"):
+            return AgentResult("done", "SCENES", await self._motion(ctx, job))
         drawn = await self._scenes(ctx, job)
         missing = [b for b in job["beats"] if not b.get("visual")]
         spec = self.ch.get("generator") or {}
@@ -1727,7 +1748,7 @@ class Editor(Crew):
         job = ctx.get("job")
         if not job:
             return self.idle()
-        if not any(b.get("visual") for b in job["beats"]):
+        if not any(b.get("visual") for b in job["beats"]) and not job.get("motion"):
             raise RuntimeError("no footage for any beat")
         track = None
         if self.ch["music"] and job.get("mood"):       # a track from the mood's folder, moving on one each time the mood comes up
@@ -1740,6 +1761,20 @@ class Editor(Crew):
         if look and wide:
             look["position"] = "lower"                  # a wide frame keeps its captions low
         job["caption"] = " · ".join(x for x in (look["font_name"], look["fill"], look["highlight"]) if x) if look else ""
+        note = ""
+        if job.get("motion"):
+            try:
+                out = await self._motion_cut(job, track, turn)
+                job.update(file=out["file"], seconds=out["seconds"], sfx=out["sfx"], style="motion", caption="animated")
+                save_record(ctx["store"], self.ch, job)
+                for part in ("build", "footage", "audio"):
+                    shutil.rmtree(Path(job["dir"]) / part, ignore_errors=True)
+                return AgentResult("done", "ANIMATED", f"{out['seconds']} s animated Short, {out['shots']} scenes, {out['captions']} captions, {out['sfx']} sound effects"
+                                   + (", with music" if track else ", no music"))
+            except Exception as e:  # noqa: BLE001 - the animated cut failed: the stock-footage cut instead
+                note = f" (animated cut failed: {str(e)[:80]})"
+                if not any(b.get("visual") for b in job["beats"]):
+                    raise RuntimeError("animated cut failed and no footage for any beat" + note) from e
         plan = sfx_plan(job["beats"], volume=float(self.ch["sfx_volume"]), turn=turn) if self.ch["sfx"] else None
         out = await asyncio.to_thread(shorts_edit.assemble, Path(job["dir"]), job["beats"], channel=self.ch["name"],
                                       logo=str(ROOT / self.ch["logo"]) if self.ch["logo"] else None, font_path=self.ch["caption_font"] or None,
@@ -1753,7 +1788,34 @@ class Editor(Crew):
         save_record(ctx["store"], self.ch, job)
         what = f"{clock(out['seconds'])} long video, {out['shots']} shots" + (", thumbnail made" if job.get("thumb") else ", no thumbnail") if wide else f"{out['seconds']} s Short"
         font = f" in {look['font_name']}" if look else ""
-        return AgentResult("done", "CUT", f"{what}, {out['captions']} captions{font}, {job['sfx']} sound effects" + (", with music" if track else ", no music"))
+        return AgentResult("done", "CUT", f"{what}, {out['captions']} captions{font}, {job['sfx']} sound effects" + (", with music" if track else ", no music") + note)
+
+    async def _motion_cut(self, job: dict, track, turn: int) -> dict:
+        """The animated Short (motion.py over HyperFrames): one voice track from the sentence files, captions word by word, the planned scenes."""
+        from . import motion
+        build = Path(job["dir"]) / "build"
+        build.mkdir(parents=True, exist_ok=True)
+        beats, t, files = job["beats"], 0.0, []
+        for b in beats:
+            b["start"] = t
+            t += b["dur"]
+            if b.get("audio") and (not files or files[-1] != b["audio"]):
+                files.append(b["audio"])
+        voice = build / "voice.wav"
+        (build / "voice.txt").write_text("".join(f"file '{f}'\n" for f in files))
+        await asyncio.to_thread(shorts_edit.run, ["ffmpeg", "-y", "-v", "error", "-f", "concat", "-safe", "0", "-i", str(build / "voice.txt"), "-c", "copy", str(voice)])
+        seconds = round(t + 0.4, 2)
+        chunks = shorts_edit.timed_chunks(beats, 18, 3)
+        m = job["motion"]
+        plan = motion.timeline(m["plan"], beats, seconds)
+        effects = {k: p for k in ("whoosh", "impact") if (p := sfx.pick(k, turn))} if self.ch["sfx"] else {}
+        page, assets = motion.build(plan, chunks, kind=kind(job), seconds=seconds, images={k: Path(v) for k, v in m["images"].items()},
+                                    icons={k: Path(v) for k, v in m["icons"].items()}, voice=voice, music=track[0] if track else None, sfx=effects,
+                                    logo=ROOT / self.ch["logo"] if self.ch["logo"] else None)
+        out = await asyncio.to_thread(motion.render, page, assets, Path(job["dir"]) / "final.mp4")
+        cuts = sum(1 for k in range(1, len(plan)) if "whoosh" in effects)
+        hits = sum(1 for sc in plan if sc["type"] in ("number", "gauge", "hook") and "impact" in effects)
+        return {"file": str(out), "seconds": seconds, "shots": len(plan), "captions": len(chunks), "sfx": cuts + hits}
 
     async def _thumbnail(self, job: dict) -> str:
         """The cover for a long video: a photo for the story (else a frame of the video itself) with the writer's few words on it."""
