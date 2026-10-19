@@ -144,3 +144,11 @@ def test_latest_is_the_last_made_not_the_last_saved(tmp_path, monkeypatch):
         store.kv_put(youtube.LOG, k, {"channel": "confessions", "kind": "real", "status": "ready", "made": made, "title": k, "seconds": 9})
     res = asyncio.run(youtube.AnalyticsManager(youtube.channel({})).run({"store": store, "bus": EventBus()}))
     assert "latest “new”" in res.summary
+
+
+def test_no_sexual_story_from_any_source():
+    """Mani, 2026-10-18: "no more such contents"."""
+    for t in ["the most intense, rough, and honest sex they'd ever shared", "a day of unbridled lust", "she told him her fantasies", "they role-played it"]:
+        assert youtube.SEXUAL.search(t), t
+    for t in ["the Moon keeps one face toward Earth", "Sussex", "a fantasy novel", "he cheated on the exam"]:
+        assert not youtube.SEXUAL.search(t), t

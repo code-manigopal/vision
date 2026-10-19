@@ -212,6 +212,9 @@ ENDINGS = {"plain": "End on the outcome or the thought it leaves.",
                       "forward. You may add one or two closing sentences of reflection for that, but no new events."}
 UNSAFE = re.compile(r"\b(suicid\w*|kill(?:ed|ing)? (?:myself|himself|herself|him|her|them)|self[- ]harm\w*|rap(?:e|ed|es|ing|ist)|molest\w*|"
                     r"sexual(?:ly)? (?:assault|abus)\w*|incest\w*|underage|pedo\w*|child abuse|overdos\w*|murder\w*)\b", re.I)
+# Mani, 2026-10-18 ("no more such contents"): no story about sex, sexual desire or sexual fantasies, real or invented, whatever the source
+SEXUAL = re.compile(r"\b(sex(?:ual(?:ly)?|y)?|lust\w*|horny|orgasm\w*|kink\w*|naked|nude|threesome|erotic\w*|porn\w*|foreplay|arous\w*|"
+                    r"one[- ]night stand|slept with|sleeping with|hook(?:ed)? up|role[- ]?play\w*|seduc\w*|libido|fantasi(?:es|ze\w*)|in bed together)\b", re.I)
 STOP = set("a an and are as at be but by for from had has have he her his i in is it its me my of on or our she so that the their them "
            "they this to was we were what when which who with you your had been not no one would could there then than into out up".split())
 
@@ -900,16 +903,17 @@ class StoryScout(Crew):
             seen = store.kv_get(SEEN, key) or {}
             if seen.get("state") in ("done", "rejected") or seen.get("tries", 0) >= 2 or p["nsfw"] or not 300 <= len(p["text"]) <= 7000:
                 continue
-            if UNSAFE.search(p["title"] + " " + p["text"]):
-                store.kv_put(SEEN, key, {"state": "rejected", "why": "screened out by rule"})
+            if UNSAFE.search(p["title"] + " " + p["text"]) or SEXUAL.search(p["title"] + " " + p["text"]):
+                store.kv_put(SEEN, key, {"state": "rejected", "why": "screened out by rule" + (" (sexual content)" if SEXUAL.search(p["title"] + " " + p["text"]) else "")})
                 continue
             if checks >= 4:
                 break
             checks += 1
             verdict = await ctx["llm"].json(
                 "You screen anonymous confessions before they are retold in a public video with every name and place removed. Retelling an anonymous "
-                "story is fine in itself. Reject it only if it involves minors in any sexual or abusive context, self-harm, a serious crime, hate, "
-                "or a person who could still be identified after names and places are removed. "
+                "story is fine in itself. Reject it if it involves minors in any sexual or abusive context, self-harm, a serious crime, hate, "
+                "or a person who could still be identified after names and places are removed. Also reject it if sex, sexual desire, sexual fantasies "
+                "or a sexual encounter is any real part of it (the channel carries no sexual content at all). "
                 'Answer as {"ok": true or false, "why": "a few words"}.\n\nStory:\n' + p["text"][:5000], tier="writer", max_tokens=900)
             if not isinstance(verdict, dict) or not isinstance(verdict.get("ok"), bool):    # no answer: not used now, tried once more next run
                 store.kv_put(SEEN, key, {"state": "unclear", "tries": seen.get("tries", 0) + 1})
@@ -1198,7 +1202,7 @@ class StoryWriter(Crew):
                 note = ("\n\nYour last answer promised or suggested an amount, a speed or a certainty of earning. Write it again with no such promise: "
                         "what it costs, how long it takes and what can go wrong, as JSON.")
                 continue
-            if job.get("original") and UNSAFE.search(story):
+            if (job.get("original") and UNSAFE.search(story)) or SEXUAL.search(story):
                 note = "\n\nYour last story touched something it must not (sexual content, self-harm or violent crime). Write it again without that, as JSON."
                 continue
             if lo <= n <= hi:

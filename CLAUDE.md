@@ -35,7 +35,7 @@ bash scripts/setup.sh                     # venv + deps + .env from template + c
 .venv/bin/python -m vision sfx            # add 3 sound effects per kind to assets/sfx/ (or: sfx whoosh 5)
 .venv/bin/python -m vision visa list      # Visa Watch accounts: add | list | update | pause | resume | remove | check <id>
 .venv/bin/python -m vision ebooks list    # E-books Manager: list | published <book> [ASIN] | redraw <book> <page>
-.venv/bin/python -m pytest -q             # 511 tests, all external services mocked
+.venv/bin/python -m pytest -q             # 512 tests, all external services mocked
 bash scripts/install_launchagent.sh       # auto-start at login + restart on crash
 tail -f logs/vision.log
 ```
@@ -423,6 +423,9 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   asks the model, line by line, for one cue from `CUES` (riser, impact, heartbeat, drone, tick, ding, whoosh, pop, coin,
   notification; only kinds the library holds) or "none", most lines none; `sfx_plan` places each at its line, keeps them at
   least 4 s apart and about one per 8 s, and never adds any on its own (`sfx`, `sfx_volume`). No model answer = no effects. The record keeps `caption` and `sfx`; both show on the desk.
+  **No sexual content (Mani, 2026-10-18: "no more such contents"):** `SEXUAL` (sex, lust, fantasies, role-play, nude, one-night stand...) rejects a story
+  from any source by rule before the model sees it; the screening prompt also rejects one where sex or sexual desire is any real part; a written script
+  that matches is sent back to be rewritten. Strict on purpose (a harmless "aroused from sleep" also stops a story).
   **Daily mix and YouTube Analytics (Mani, 2026-10-18: "daily two videos are of science, one from stories and one for finance"):** `daily_mix`
   `{science: 2, story: 1, money: 1}` replaces `shorts_per_day` for the channel: the Scout fills the category with most slots still open
   (`next_category`, `made_by_category`; story = real, viewer, classic or an original confession, never motivational; science/money = an
