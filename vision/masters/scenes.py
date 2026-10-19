@@ -204,7 +204,8 @@ def ask(lines: list[str], kinds: set[str], most: int) -> str:
     numbered = "\n".join(f"{i}. {t}" for i, t in enumerate(lines))
     return ("This is the script of a vertical YouTube Short, one numbered line per shot. Most shots show stock footage. Pick at most "
             f"{most} lines (never line 0) where a simple animated diagram would explain the line better than footage, using only these templates:\n"
-            f"{tmpl}\n\nRules: labels are 1-4 plain words; use a figure only if that same line says it; skip a line rather than force a diagram.\n"
+            f"{tmpl}\n\n" + ("When a line names countries, show them with the map template rather than compare. " if "geography" in kinds else "")
+            + "Rules: labels are 1-4 plain words; use a figure only if that same line says it; skip a line rather than force a diagram.\n"
             'Answer as {"scenes": [{"line": 3, "template": "...", ...}]}.\n\nScript:\n' + numbered)
 
 

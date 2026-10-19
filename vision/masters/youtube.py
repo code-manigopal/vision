@@ -1290,6 +1290,7 @@ class StoryWriter(Crew):
         prompt = (f"{head}, narrated for {length}, {lo + pad}-{hi - pad} words.\n"
                   "- The first sentence is a hook that makes someone stop scrolling (never say \"stop scrolling\" or speak to the scrolling itself).\n"
                   + shape + rules + ("- It will be read aloud: no brackets, no labels such as \"Step 1:\"; let the story flow from one point to the next.\n"
+                                     + "- The narrator never says \"I\" or \"we found\": tell it as a narrator, about the subject.\n"
                                      if job.get("genre") in ("space", "body", "geography") else
                                      "- It will be read aloud: no brackets, no labels such as \"Step 1:\"; say \"first\", \"then\", \"and the most useful one\".\n") +
                   "- Short spoken sentences. " + close + " No call to subscribe.\n"
