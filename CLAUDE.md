@@ -35,7 +35,7 @@ bash scripts/setup.sh                     # venv + deps + .env from template + c
 .venv/bin/python -m vision sfx            # add 3 sound effects per kind to assets/sfx/ (or: sfx whoosh 5)
 .venv/bin/python -m vision visa list      # Visa Watch accounts: add | list | update | pause | resume | remove | check <id>
 .venv/bin/python -m vision ebooks list    # E-books Manager: list | published <book> [ASIN] | redraw <book> <page>
-.venv/bin/python -m pytest -q             # 563 tests, all external services mocked
+.venv/bin/python -m pytest -q             # 564 tests, all external services mocked
 bash scripts/install_launchagent.sh       # auto-start at login + restart on crash
 tail -f logs/vision.log
 ```
@@ -466,8 +466,8 @@ approval_decided, telegram, brief, reminder, wake, system, power`.
   the line's own, every figure is said in the line (digits or number words: `said_numbers`), its picture was found and its icons are known; the model's line
   numbers drift, so a scene that fails its line may land on a line within 2 that it is made of; the hook only on line 0; the outro is code's. A line with no
   scene, or longer than `MAX_SCENE` (3.2 s) with one, gets a filler (the latest photo with the line's key words when the line names that photo's subject, else those words: `_filler`); a compare shows pictures only when both sides have one. Fewer real scenes
-  than half the lines (min 3) = the footage Short. **Asset Finder** (`services/visuals.py`): `picture(kind, subject)` space = NASA (hand-picked ids for the Sun
-  and planets, `CURATED`, then search), body/geography = Wikimedia Commons (free licences only), cached in `data/visuals/` with credits; `flag`, `icon` (Tabler,
+  than half the lines (min 3) = the footage Short. **Asset Finder** (`services/visuals.py`): `picture(kind, subject)` space = NASA (hand-picked ids for the Sun,
+  planets, Pluto, the Moon, the ISS and a spacewalking astronaut, `CURATED` / `CURATED_PHRASES`, then search), body/geography = Wikimedia Commons (free licences only), cached in `data/visuals/` with credits; `flag`, `icon` (Tabler,
   `ICONS`, MIT) in `assets/icons/`. At most 6 pictures per Short. **A picture is refused rather than wrong (Mani, 2026-10-19: "are the footages related?"):**
   titles must hold the subject as whole words; logos, launch sites, people at work, maps and charts are refused (`BAD`); a flag is the named country's own
   Commons flag (`motion._country`; a bare "flag" gets none); geography searches only named places, Commons ground photos first (real photos, no SVG, no

@@ -188,3 +188,9 @@ def test_a_black_and_white_photo_of_a_place_is_refused():
     Image.new("RGB", (800, 800), (40, 120, 200)).save(colour, "JPEG")
     assert visuals.colourless(grey.getvalue()) and not visuals.colourless(colour.getvalue())
     assert visuals.title_score("File:Rhine Crossing - US Navy ferrying troops across the Rhine River.jpg", "Rhine River", "geography") is None
+
+
+def test_hand_picked_photos_cover_the_main_bodies_and_the_station():
+    assert visuals.curated("Pluto") == "PIA19857" and visuals.curated("the Moon") == "as11-44-6667"
+    assert visuals.curated("International Space Station") == visuals.curated("ISS") == "iss056e201248"
+    assert visuals.curated("astronauts") == "iss059e002710" and visuals.curated("train station") is None

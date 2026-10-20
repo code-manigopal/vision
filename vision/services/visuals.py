@@ -156,11 +156,15 @@ async def _nasa_candidates(c: httpx.AsyncClient, subject: str) -> list[tuple[flo
 CURATED = {"sun": "GSFC_20171208_Archive_e001936", "mercury": "PIA10398", "venus": "S91-50688", "earth": "GSFC_20171208_Archive_e001386",
            "mars": "PIA00407", "jupiter": "PIA02873", "saturn": "PIA05983", "uranus": "PIA18182", "neptune": "PIA01492", "io": "PIA01063",
            "pluto": "PIA19857", "moon": "as11-44-6667"}
+# several words: the whole phrase must be in the subject ("space station", not a lone "station")
+CURATED_PHRASES = {"space station": "iss056e201248", "iss": "iss056e201248", "astronaut": "iss059e002710", "spacewalk": "iss061e065379"}
 
 
 def curated(subject: str) -> str | None:
     mine = set(words(subject))
-    return next((nid for name, nid in CURATED.items() if name in mine), None)
+    hit = next((nid for name, nid in CURATED.items() if name in mine), None)
+    joined = " ".join(words(subject))
+    return hit or next((nid for name, nid in CURATED_PHRASES.items() if re.search(rf"\b{name}s?\b", joined)), None)
 
 
 async def _passes(judge, rec: dict, subject: str) -> bool:
