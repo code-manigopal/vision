@@ -187,3 +187,13 @@ def test_on_a_warp_or_pulse_cut_the_old_scene_steps_aside(tmp_path):
     for kind in ("space", "body"):
         page, _ = motion.build(plan, [], kind=kind, seconds=10.4, images={}, icons={}, voice=tmp_path / "v.wav")
         assert 'tl.to("#m1", {opacity: 0, duration: 0.18}' in page
+
+
+def test_the_planner_asks_again_when_the_first_answer_is_empty():
+    class Flaky(PlanLLM):
+        async def json(self, prompt, **kw):
+            self.prompts.append(kw["max_tokens"])
+            return None if len(self.prompts) == 1 else {"lines": [{"line": 0, "scenes": [{"type": "text", "lines": ["Venus burns"]}]}]}
+    llm = Flaky(None)
+    got = asyncio.run(motion.plan_short(llm, beats(), "space", "Follow", None))
+    assert llm.prompts == [6000, 6000] and [s["type"] for s in got["plan"]] == ["text", "outro"]

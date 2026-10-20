@@ -681,10 +681,15 @@ async def plan_short(llm, beats: list[dict], kind: str, outro: str, client, stor
     """{plan: the checked scenes, images, icons, credits (one line per picture), refused: proposed scenes the checks threw out}. No answer = an empty plan
     (timeline() then fills every line from its own words)."""
     from ..services import visuals
-    try:
-        got = await llm.json(ask(beats, kind, list(visuals.ICONS)), tier="writer", max_tokens=3000)
-    except Exception:  # noqa: BLE001 - no planner: the timeline's fallback scenes
-        got = None
+    got = None
+    for _ in range(2):                    # one more try: a free model can be busy for a moment, and the fallback then answers instead
+        try:
+            # 6,000: Groq's reasoning models spend most of 3,000 thinking and answered nothing (2026-10-20)
+            got = await llm.json(ask(beats, kind, list(visuals.ICONS)), tier="writer", max_tokens=6000)
+        except Exception:  # noqa: BLE001 - no planner: the timeline's fallback scenes
+            got = None
+        if isinstance(got, dict) and (got.get("lines") or got.get("scenes")):
+            break
     raw = []
     for entry in ((got or {}).get("lines") or []) if isinstance(got, dict) else []:
         if isinstance(entry, dict) and isinstance(entry.get("line"), int):
