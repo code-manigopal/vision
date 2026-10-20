@@ -154,7 +154,8 @@ async def _nasa_candidates(c: httpx.AsyncClient, subject: str) -> list[tuple[flo
 # The best NASA photo of the main bodies, picked by eye (2026-10-19): searched titles alone gave a black-and-white Jupiter and a Saturn chart.
 # A subject naming one of these words gets that photo first; anything else is searched as before.
 CURATED = {"sun": "GSFC_20171208_Archive_e001936", "mercury": "PIA10398", "venus": "S91-50688", "earth": "GSFC_20171208_Archive_e001386",
-           "mars": "PIA00407", "jupiter": "PIA02873", "saturn": "PIA05983", "uranus": "PIA18182", "neptune": "PIA01492", "io": "PIA01063"}
+           "mars": "PIA00407", "jupiter": "PIA02873", "saturn": "PIA05983", "uranus": "PIA18182", "neptune": "PIA01492", "io": "PIA01063",
+           "pluto": "PIA19857", "moon": "as11-44-6667"}
 
 
 def curated(subject: str) -> str | None:

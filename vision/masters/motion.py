@@ -241,6 +241,8 @@ class Comp:
         inner = getattr(self, "_" + sc["type"])(sc, sid, start, dur)
         self.body.append(f'<div id="{sid}" class="sc clip" data-start="{start:.3f}" data-duration="{dur + 0.25:.3f}">{inner}</div>')
         cut, prev = self.t.get("cut", "flash"), getattr(self, "prev", None)
+        if cut in ("warp", "pulse") and not first and prev:  # the old scene steps aside, so two never show at once
+            self.js.append(f'tl.to("#{prev}", {{opacity: 0, duration: 0.18}}, {start:.3f});')
         if cut == "warp" and not first:                     # space: the new scene rushes in out of a blur, a cool flash
             self.tw(f"#{sid}", {"opacity": 0, "scale": 1.7, "filter": "blur(16px)"}, {"opacity": 1, "scale": 1, "filter": "blur(0px)", "duration": 0.42, "ease": "expo.out"}, start)
             self.js.append(f'tl.fromTo("#flash", {{opacity: 0.35}}, {{opacity: 0, duration: 0.25, immediateRender: false}}, {start:.3f});')
@@ -321,7 +323,7 @@ class Comp:
 
     def _count(self, sel, value, s, over):
         m = re.match(r"^(.*?)(\d[\d,]*(?:\.\d+)?)(.*)$", value)
-        if not m:
+        if not m or re.fullmatch(r"(1[0-9]{3}|20[0-9]{2})s?", value.strip()):        # a year appears; counting up to 2005 looks silly
             self.js.append(f'tl.set({json.dumps(sel)}, {{textContent: {json.dumps(value)}}}, {s:.3f});')
             return
         pre, digits, post = m.groups()

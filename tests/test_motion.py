@@ -170,3 +170,20 @@ def test_each_channel_kind_has_its_own_look(tmp_path):
     assert "#topo" in pages["geography"] and "x: -1080" in pages["geography"]  # contour map, the old scene slides away
     assert "#ecg" in pages["body"] and '"#ring"' in pages["body"]              # heartbeat trace, pulse ring on a cut
     assert "#tw0" in pages["space"] and "blur(16px)" in pages["space"]         # twinkling stars, warp-in
+
+
+def test_a_year_appears_and_a_figure_counts_up():
+    comp = motion.Comp(motion.THEMES["space"], {}, {})
+    comp._count("#n", "2006", 0, 1.0)
+    assert len(comp.js) == 1 and '"2006"' in comp.js[0]
+    comp.js.clear()
+    comp._count("#n", "460°C", 0, 1.0)
+    assert len(comp.js) == 22 and '"460\\u00b0C"' in comp.js[-1]
+
+
+def test_on_a_warp_or_pulse_cut_the_old_scene_steps_aside(tmp_path):
+    plan = motion.timeline([{"type": "text", "lines": ["Venus"], "beat": 0}, {"type": "text", "lines": ["everywhere"], "beat": 2},
+                            {"type": "outro", "text": "Follow", "beat": 3}], beats(), 10.4)
+    for kind in ("space", "body"):
+        page, _ = motion.build(plan, [], kind=kind, seconds=10.4, images={}, icons={}, voice=tmp_path / "v.wav")
+        assert 'tl.to("#m1", {opacity: 0, duration: 0.18}' in page
