@@ -236,6 +236,7 @@ masters:
           groq_daily_cap: 60000          # its share of that model's free tokens a UTC day; no Short starts without room for one (services/groq_budget.py)
           light_tier: local              # footage searches, sound cues and diagram picks on the local model first, Groq if that fails
           script_writer: openrouter      # premises and scripts: NVIDIA Nemotron (free, OpenRouter) first, its Groq model if that is busy or out of free requests
+          style: motion                  # Mani, 2026-10-20: every second animated in the channel's own look (masters/motion.py); stock footage if a render fails
           daily_mix: {space: 2}           # Shorts only, 2 a day to start
           mix_auto: false
           originals: true
@@ -273,6 +274,7 @@ masters:
           groq_daily_cap: 60000          # its share of that model's free tokens a UTC day; no Short starts without room for one (services/groq_budget.py)
           light_tier: local              # footage searches, sound cues and diagram picks on the local model first, Groq if that fails
           script_writer: openrouter      # premises and scripts: NVIDIA Nemotron (free, OpenRouter) first, its Groq model if that is busy or out of free requests
+          style: motion                  # Mani, 2026-10-20: every second animated in the channel's own look (masters/motion.py); stock footage if a render fails
           daily_mix: {body: 2}           # Shorts only, 2 a day to start
           mix_auto: false
           originals: true
@@ -309,6 +311,7 @@ masters:
           groq_daily_cap: 50000          # its share of that model's free tokens a UTC day; no Short starts without room for one (services/groq_budget.py)
           light_tier: local              # footage searches, sound cues and diagram picks on the local model first, Groq if that fails
           script_writer: openrouter      # premises and scripts: NVIDIA Nemotron (free, OpenRouter) first, its Groq model if that is busy or out of free requests
+          style: motion                  # Mani, 2026-10-20: every second animated in the channel's own look (masters/motion.py); stock footage if a render fails
           daily_mix: {geography: 2}           # Shorts only, 2 a day to start
           mix_auto: false
           originals: true

@@ -17,6 +17,36 @@ from logging.handlers import RotatingFileHandler
 from .config import ROOT, load_config, secret
 
 
+import re
+
+# A secret in a URL never reaches the log: query values of key/token/secret/password parameters, and Telegram's /bot<token>/ path
+# (2026-10-20: older lines held the TomTom key from geocode URLs; an HTTP error's message names the URL it failed on).
+SECRET_QS = re.compile(r"(?i)\b((?:api[_-]?)?key|(?:access[_-]|refresh[_-]|id[_-])?token|secret|client[_-]secret|password|apikey|sig|signature)=([^&\s\"'<>]+)")
+BOT_PATH = re.compile(r"/bot\d+:[A-Za-z0-9_-]+")
+
+
+def redact(text: str) -> str:
+    return BOT_PATH.sub("/bot<hidden>", SECRET_QS.sub(lambda m: f"{m.group(1)}=<hidden>", text))
+
+
+class Redact(logging.Filter):
+    """Masks secrets in a log line after formatting its arguments (and in an exception's text)."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        try:
+            msg = record.getMessage()
+        except Exception:  # noqa: BLE001 - a broken format string: leave the record as it is
+            return True
+        clean = redact(msg)
+        if clean != msg:
+            record.msg, record.args = clean, None
+        if record.exc_info and not record.exc_text:
+            record.exc_text = logging.Formatter().formatException(record.exc_info)
+        if record.exc_text:
+            record.exc_text = redact(record.exc_text)
+        return True
+
+
 def _logging() -> None:
     (ROOT / "logs").mkdir(exist_ok=True)
     fmt = logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -24,9 +54,12 @@ def _logging() -> None:
     fh.setFormatter(fmt)
     sh = logging.StreamHandler()
     sh.setFormatter(fmt)
+    for h in (fh, sh):
+        h.addFilter(Redact())
     logging.basicConfig(level=logging.INFO, handlers=[fh, sh])
     logging.getLogger("apscheduler").setLevel(logging.WARNING)
     logging.getLogger("httpx").setLevel(logging.WARNING)   # its INFO lines print full URLs, incl. the Telegram bot token
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 
 def check() -> int:
