@@ -63,7 +63,7 @@ def web(yt):
             return httpx.Response(200, json=[{"date": "30-SEP-2026", "pr_and_prgrp": "55.5", "public_val": "44.5"}])
         if "corporates-corporateActions" in u:
             return httpx.Response(200, json=[{"exDate": (datetime.now() - timedelta(days=100)).strftime("%d-%b-%Y"), "subject": "Dividend - Rs 6 Per Share"}])
-        if "finance/chart/SAMPLE.NS" in u:
+        if "finance/chart/SAMPLE.NS" in u or "finance/chart/OTHER.NS" in u:     # the analysis Scout picks either, by a hash of the release date
             return httpx.Response(200, json=chart())
         if yt.get("logo") and "commons.wikimedia.org" in u:                # the company's logo from Wikimedia Commons (mocked)
             if req.url.params.get("list") == "search":
